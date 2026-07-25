@@ -322,11 +322,15 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
             </Badge>
             <span className="text-muted-foreground max-sm:hidden">·</span>
             <span className="min-w-0 font-medium text-foreground">
-              {data.transaction_type === "bp_gift"
-                ? "BP Gift"
+              {data.transaction_type?.startsWith("bp_gift")
+                ? data.event_name ||
+                  data.transaction_type
+                    .replace(/^bp_/, "")
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (c) => c.toUpperCase())
                 : data.transaction_type.replace(/_/g, " ")}
             </span>
-            {data.module === "believe_points" && data.transaction_type !== "bp_gift" ? (
+            {data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift") ? (
               <>
                 <span className="text-muted-foreground">·</span>
                 <span className="min-w-0 max-w-full truncate sm:max-w-[min(100%,220px)]" title={data.from_name ?? ""}>
@@ -466,7 +470,9 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
             <p className="text-lg font-semibold capitalize text-foreground">{moduleLabel(data.module)}</p>
             <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Transaction</p>
             <p className="font-mono text-sm text-primary">
-              {data.transaction_type === "bp_gift" ? "BP Gift" : data.transaction_type}
+              {data.transaction_type?.startsWith("bp_gift")
+                ? data.event_name || data.transaction_type
+                : data.transaction_type}
             </p>
             <p className="text-xs text-muted-foreground">Type of activity (purchase, donation, etc.)</p>
           </div>
@@ -481,33 +487,31 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
 
         <div className={cn(
           "grid min-w-0 gap-3 sm:gap-4",
-          data.module === "believe_points" && data.transaction_type !== "bp_gift" ? "" : "lg:grid-cols-2",
+          data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift") ? "" : "lg:grid-cols-2",
         )}>
           <div className="min-w-0 rounded-xl border border-border/50 bg-background/80 p-3 shadow-sm sm:p-4">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <User className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              {data.module === "believe_points" && data.transaction_type !== "bp_gift"
+              {data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift")
                 ? "Purchaser"
                 : `From (${data.from_type})`}
             </div>
-            {!(data.module === "believe_points" && data.transaction_type !== "bp_gift") && (
+            {!(data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift")) && (
               <p className="mb-2 text-[10px] text-muted-foreground">
-                {data.transaction_type === "bp_gift" ? "Sender" : "Payer"}
+                {data.transaction_type?.startsWith("bp_gift") ? "Sender" : "Payer"}
               </p>
             )}
             <p className="break-words text-base font-semibold text-foreground">{data.from_name ?? "—"}</p>
             <p className="break-all text-sm text-muted-foreground">{data.from_email ?? "—"}</p>
             {data.from_id != null && <p className="mt-1 font-mono text-[11px] text-muted-foreground">User ID {data.from_id}</p>}
           </div>
-          {(data.module !== "believe_points" || data.transaction_type === "bp_gift") && (
+          {(data.module !== "believe_points" || data.transaction_type?.startsWith("bp_gift")) && (
             <div className="min-w-0 rounded-xl border border-border/50 bg-background/80 p-3 shadow-sm sm:p-4">
               <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                 To ({data.to_type})
               </div>
-              <p className="mb-2 text-[10px] text-muted-foreground">
-                {data.transaction_type === "bp_gift" ? "Recipient" : "Recipient"}
-              </p>
+              <p className="mb-2 text-[10px] text-muted-foreground">Recipient</p>
               <p className="break-words text-base font-semibold text-foreground">{data.to_name ?? "—"}</p>
               <p className="break-all text-sm text-muted-foreground">{data.to_email ?? "—"}</p>
               {data.to_id != null && <p className="mt-1 font-mono text-[11px] text-muted-foreground">ID {data.to_id}</p>}

@@ -305,7 +305,8 @@ class UnifiedLedgerPresenter
             'believe_points_purchase' => 'believe_points',
             'believe_points_wallet_transfer' => 'believe_points',
             'bp_settlement' => 'believe_points',
-            'bp_gift_hold', 'bp_gift_claim', 'bp_gift_hold_refund', 'bp_gift_email_changed' => 'believe_points',
+            'bp_gift_hold', 'bp_gift_claim', 'bp_gift_hold_refund', 'bp_gift_email_changed',
+            'bp_gift', 'bp_gift_sent', 'bp_gift_claimed', 'bp_gift_cancelled', 'bp_gift_expired', 'bp_gift_refunded' => 'believe_points',
             'order' => $base === 'MerchantHubOfferRedemption'
                 ? 'merchant_hub'
                 : ($this->isGiftCardPurchaseContext($t)
@@ -457,6 +458,12 @@ class UnifiedLedgerPresenter
             'believe_points_purchase',
             'believe_points_wallet_transfer',
             'bp_settlement',
+            'bp_gift',
+            'bp_gift_sent',
+            'bp_gift_claimed',
+            'bp_gift_cancelled',
+            'bp_gift_expired',
+            'bp_gift_refunded',
             'bp_gift_hold',
             'bp_gift_claim',
             'bp_gift_hold_refund',
@@ -747,7 +754,14 @@ class UnifiedLedgerPresenter
             return 'bp_settlement';
         }
         if ($this->isBelievePointGiftTransaction($t)) {
-            return 'bp_gift';
+            return match ((string) $t->type) {
+                'bp_gift_sent' => 'bp_gift_sent',
+                'bp_gift_claimed' => 'bp_gift_claimed',
+                'bp_gift_cancelled' => 'bp_gift_cancelled',
+                'bp_gift_expired' => 'bp_gift_expired',
+                'bp_gift_refunded' => 'bp_gift_refunded',
+                default => 'bp_gift_sent',
+            };
         }
 
         return 'believe_points_purchase';
@@ -757,9 +771,15 @@ class UnifiedLedgerPresenter
     {
         $meta = is_array($t->meta) ? $t->meta : [];
         $source = (string) ($meta['source'] ?? '');
+        $txnId = (string) $t->transaction_id;
 
         return in_array($t->type, [
             'bp_gift',
+            'bp_gift_sent',
+            'bp_gift_claimed',
+            'bp_gift_cancelled',
+            'bp_gift_expired',
+            'bp_gift_refunded',
             'bp_gift_hold',
             'bp_gift_claim',
             'bp_gift_hold_refund',
@@ -767,13 +787,17 @@ class UnifiedLedgerPresenter
         ], true)
             || in_array($source, [
                 'bp_gift',
+                'bp_gift_sent',
+                'bp_gift_claimed',
+                'bp_gift_cancelled',
+                'bp_gift_expired',
+                'bp_gift_refunded',
                 'bp_gift_hold',
                 'bp_gift_claim',
                 'bp_gift_hold_refund',
                 'bp_gift_email_changed',
             ], true)
-            || str_starts_with((string) $t->transaction_id, 'bp_gift:')
-            || str_starts_with((string) $t->transaction_id, 'bp_gift_legacy:');
+            || str_starts_with($txnId, 'bp_gift');
     }
 
     private function donationTransactionType(Transaction $t, ?string $donationPerspective): string
@@ -1053,9 +1077,13 @@ class UnifiedLedgerPresenter
         }
 
         return match ((string) $t->type) {
-            'bp_gift_hold' => (string) ($t->status === Transaction::STATUS_PENDING ? 'pending' : ($t->status === Transaction::STATUS_CANCELLED ? 'cancelled' : 'claimed')),
-            'bp_gift_claim' => 'claimed',
-            'bp_gift_hold_refund' => str_contains(strtolower((string) ($meta['refund_reason'] ?? '')), 'expir') ? 'expired' : 'cancelled',
+            'bp_gift_sent', 'bp_gift_hold' => $t->status === Transaction::STATUS_PENDING ? 'pending' : 'claimed',
+            'bp_gift_claimed', 'bp_gift_claim' => 'claimed',
+            'bp_gift_cancelled' => 'cancelled',
+            'bp_gift_expired' => 'expired',
+            'bp_gift_refunded', 'bp_gift_hold_refund' => str_contains(strtolower((string) ($meta['refund_reason'] ?? '')), 'expir')
+                ? 'expired'
+                : 'cancelled',
             'bp_gift_email_changed' => 'pending',
             default => (string) $t->status,
         };
@@ -1104,7 +1132,7 @@ class UnifiedLedgerPresenter
         if ($senderName === null && isset($meta['from_name'])) {
             $senderName = (string) $meta['from_name'];
         }
-        if (($recipientName === null || $recipientName === '') && $t->type === 'bp_gift_claim') {
+        if (($recipientName === null || $recipientName === '') && in_array($t->type, ['bp_gift_claim', 'bp_gift_claimed'], true)) {
             $recipientName = $walletUser->name;
             $recipientId = (int) $walletUser->id;
             $recipientEmail = $walletUser->email;

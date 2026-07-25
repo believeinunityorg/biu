@@ -14,6 +14,26 @@ use App\Support\UnifiedLedgerType;
  */
 final class BelievePointGiftAdminLedgerService
 {
+    /**
+     * Upsert admin ledger rows for an invite based on its current status (for sync/backfill).
+     */
+    public static function syncFromInvite(BelievePointGiftInvite $invite): void
+    {
+        $invite->loadMissing('sender', 'recipient', 'gift');
+
+        match ($invite->status) {
+            BelievePointGiftInvite::STATUS_PENDING => self::recordHold($invite),
+            BelievePointGiftInvite::STATUS_CLAIMED => self::recordClaim($invite),
+            BelievePointGiftInvite::STATUS_CANCELLED,
+            BelievePointGiftInvite::STATUS_EXPIRED => self::recordHoldRefund(
+                $invite,
+                round((float) $invite->amount, 2),
+                $invite->status === BelievePointGiftInvite::STATUS_CANCELLED ? 'cancelled' : 'expired',
+            ),
+            default => null,
+        };
+    }
+
     public static function recordHold(BelievePointGiftInvite $invite): void
     {
         $invite->loadMissing('sender', 'recipient');

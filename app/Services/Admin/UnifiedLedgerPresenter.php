@@ -328,6 +328,7 @@ class UnifiedLedgerPresenter
                 'MerchantHubOfferRedemption' => 'merchant_hub',
                 'MerchantHubReferralReward' => 'merchant_hub',
                 'BelievePointGiftInvite' => 'believe_points',
+                'SupporterBelievePointGift' => 'believe_points',
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
             default => match ($base) {
@@ -338,6 +339,7 @@ class UnifiedLedgerPresenter
                 'MerchantHubOfferRedemption' => 'merchant_hub',
                 'MerchantHubReferralReward' => 'merchant_hub',
                 'BelievePointGiftInvite' => 'believe_points',
+                'SupporterBelievePointGift' => 'believe_points',
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
         };

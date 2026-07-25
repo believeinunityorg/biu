@@ -90,7 +90,7 @@ class UnifiedLedgerPresenter
             'platform_payout_amount' => $sellingPayouts['platform'],
             'supporter_payout_amount' => $sellingPayouts['supporter'],
             'currency' => $t->currency ?? 'USD',
-            'status' => $t->status,
+            'status' => $this->resolveDisplayStatus($t),
             'provider' => $provider,
             'reference' => $reference,
             'organization_id' => $ledgerReport['organization_id'] ?? null,
@@ -744,8 +744,32 @@ class UnifiedLedgerPresenter
         if (($meta['source'] ?? '') === 'bp_settlement' || $t->type === 'bp_settlement') {
             return 'bp_settlement';
         }
+        if ($this->isBelievePointGiftTransaction($t)) {
+            return 'bp_gift';
+        }
 
         return 'believe_points_purchase';
+    }
+
+    private function isBelievePointGiftTransaction(Transaction $t): bool
+    {
+        $meta = is_array($t->meta) ? $t->meta : [];
+        $source = (string) ($meta['source'] ?? '');
+
+        return in_array($t->type, [
+            'bp_gift',
+            'bp_gift_hold',
+            'bp_gift_claim',
+            'bp_gift_hold_refund',
+            'bp_gift_email_changed',
+        ], true)
+            || in_array($source, [
+                'bp_gift',
+                'bp_gift_hold',
+                'bp_gift_claim',
+                'bp_gift_hold_refund',
+                'bp_gift_email_changed',
+            ], true);
     }
 
     private function donationTransactionType(Transaction $t, ?string $donationPerspective): string
@@ -938,6 +962,9 @@ class UnifiedLedgerPresenter
 
         if (($module === 'believe_points' || $module === 'reward') && $walletUser) {
             $rowMeta = is_array($t->meta) ? $t->meta : [];
+            if ($this->isBelievePointGiftTransaction($t)) {
+                return $this->resolveBelievePointGiftParties($t, $walletUser, $rowMeta);
+            }
             $isWalletTransfer = in_array($rowMeta['source'] ?? '', ['bp_redemption', 'bridge_wallet_transfer', 'believe_points_wallet_transfer'], true)
                 || in_array($t->type, ['bp_redemption', 'bridge_wallet_transfer', 'believe_points_wallet_transfer'], true);
             $isBridgeMoneyTransfer = ($rowMeta['source'] ?? '') === 'bridge_wallet_transfer'
@@ -1004,6 +1031,91 @@ class UnifiedLedgerPresenter
         }
 
         return array_merge($defaultFrom, $defaultTo);
+    }
+
+    /**
+     * Prefer gift lifecycle status (pending / claimed / cancelled / expired) for Gift BP rows.
+     */
+    private function resolveDisplayStatus(Transaction $t): string
+    {
+        if (! $this->isBelievePointGiftTransaction($t)) {
+            return (string) $t->status;
+        }
+
+        $meta = is_array($t->meta) ? $t->meta : [];
+        $giftStatus = strtolower(trim((string) ($meta['gift_status'] ?? '')));
+        if (in_array($giftStatus, ['pending', 'claimed', 'cancelled', 'expired'], true)) {
+            return $giftStatus;
+        }
+
+        return match ((string) $t->type) {
+            'bp_gift_hold' => (string) ($t->status === Transaction::STATUS_PENDING ? 'pending' : ($t->status === Transaction::STATUS_CANCELLED ? 'cancelled' : 'claimed')),
+            'bp_gift_claim' => 'claimed',
+            'bp_gift_hold_refund' => str_contains(strtolower((string) ($meta['refund_reason'] ?? '')), 'expir') ? 'expired' : 'cancelled',
+            'bp_gift_email_changed' => 'pending',
+            default => (string) $t->status,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}
+     */
+    private function resolveBelievePointGiftParties(Transaction $t, User $walletUser, array $meta): array
+    {
+        $senderId = isset($meta['sender_id']) ? (int) $meta['sender_id'] : null;
+        $senderName = isset($meta['sender_name']) && $meta['sender_name'] !== ''
+            ? (string) $meta['sender_name']
+            : (isset($meta['from_name']) && $meta['from_name'] !== '' ? (string) $meta['from_name'] : null);
+        $recipientId = isset($meta['recipient_id']) ? (int) $meta['recipient_id'] : (isset($meta['to_id']) ? (int) $meta['to_id'] : null);
+        $recipientName = isset($meta['recipient_name']) && $meta['recipient_name'] !== ''
+            ? (string) $meta['recipient_name']
+            : (isset($meta['to_name']) && $meta['to_name'] !== '' ? (string) $meta['to_name'] : null);
+        $recipientEmail = isset($meta['recipient_email']) && $meta['recipient_email'] !== ''
+            ? (string) $meta['recipient_email']
+            : null;
+
+        if ($senderName === null && $senderId && $senderId === (int) $walletUser->id) {
+            $senderName = $walletUser->name;
+        }
+        if ($senderName === null && $senderId) {
+            $sender = User::query()->find($senderId, ['id', 'name', 'email']);
+            $senderName = $sender?->name;
+        }
+        if ($senderName === null && ($meta['source'] ?? '') === 'bp_gift_hold') {
+            $senderName = $walletUser->name;
+            $senderId = (int) $walletUser->id;
+        }
+
+        if ($recipientName === null || $recipientName === '') {
+            $recipientName = $recipientEmail;
+        }
+        if (($recipientName === null || $recipientName === '') && $recipientId) {
+            $recipient = User::query()->find($recipientId, ['id', 'name', 'email']);
+            $recipientName = $recipient?->name;
+            $recipientEmail = $recipientEmail ?? $recipient?->email;
+        }
+
+        // Claim row is stored on the recipient wallet — still show Sender → Recipient.
+        if ($senderName === null && isset($meta['from_name'])) {
+            $senderName = (string) $meta['from_name'];
+        }
+        if (($recipientName === null || $recipientName === '') && $t->type === 'bp_gift_claim') {
+            $recipientName = $walletUser->name;
+            $recipientId = (int) $walletUser->id;
+            $recipientEmail = $walletUser->email;
+        }
+
+        return [
+            'from_type' => 'supporter',
+            'from_name' => $senderName,
+            'from_email' => $senderId && $senderId === (int) $walletUser->id ? $walletUser->email : null,
+            'from_id' => $senderId,
+            'to_type' => 'supporter',
+            'to_name' => $recipientName,
+            'to_email' => $recipientEmail,
+            'to_id' => $recipientId ?: null,
+        ];
     }
 
     /**

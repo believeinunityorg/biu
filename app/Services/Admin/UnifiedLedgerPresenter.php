@@ -280,6 +280,7 @@ class UnifiedLedgerPresenter
             'believe_points_purchase' => 'believe_points',
             'believe_points_wallet_transfer' => 'believe_points',
             'bp_settlement' => 'believe_points',
+            'bp_gift_hold', 'bp_gift_claim', 'bp_gift_hold_refund', 'bp_gift_email_changed' => 'believe_points',
             'order' => $base === 'MerchantHubOfferRedemption'
                 ? 'merchant_hub'
                 : ($this->isGiftCardPurchaseContext($t)
@@ -301,6 +302,7 @@ class UnifiedLedgerPresenter
                 'Raffle' => 'marketplace',
                 'MerchantHubOfferRedemption' => 'merchant_hub',
                 'MerchantHubReferralReward' => 'merchant_hub',
+                'BelievePointGiftInvite' => 'believe_points',
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
             default => match ($base) {
@@ -310,6 +312,7 @@ class UnifiedLedgerPresenter
                 'Raffle' => 'marketplace',
                 'MerchantHubOfferRedemption' => 'merchant_hub',
                 'MerchantHubReferralReward' => 'merchant_hub',
+                'BelievePointGiftInvite' => 'believe_points',
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
         };
@@ -427,6 +430,10 @@ class UnifiedLedgerPresenter
             'believe_points_purchase',
             'believe_points_wallet_transfer',
             'bp_settlement',
+            'bp_gift_hold',
+            'bp_gift_claim',
+            'bp_gift_hold_refund',
+            'bp_gift_email_changed',
             'believe_points_auto_replenish',
             'believe_points_auto_replenish_setup' => 'believe_points',
             'referral_reward',
@@ -501,6 +508,9 @@ class UnifiedLedgerPresenter
                 return 'believe_points';
             }
             if (str_ends_with($rt, 'BelievePointWalletTransfer')) {
+                return 'believe_points';
+            }
+            if (str_ends_with($rt, 'BelievePointGiftInvite')) {
                 return 'believe_points';
             }
             if (str_contains($rt, 'CareAllianceDonation')) {

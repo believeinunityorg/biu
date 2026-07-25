@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Mail\BelievePointGiftAwaitingClaimMail;
 use App\Mail\BelievePointGiftClaimedMail;
 use App\Mail\BelievePointGiftInviteCancelledMail;
 use App\Mail\BelievePointGiftInviteCancelledSenderMail;
@@ -10,19 +11,18 @@ use App\Mail\BelievePointGiftInviteMail;
 use App\Mail\BelievePointGiftInvitePendingMail;
 use App\Mail\BelievePointGiftReceivedMail;
 use App\Mail\BelievePointGiftRefundedMail;
-use App\Mail\BelievePointGiftSentMail;
 use App\Models\BelievePointGiftInvite;
 use App\Models\BelievePointGiftInviteGoodwill;
 use App\Models\GiftOccasion;
 use App\Models\SupporterBelievePointGift;
 use App\Models\User;
+use App\Notifications\BelievePointGiftAwaitingClaimNotification;
 use App\Notifications\BelievePointGiftClaimedNotification;
 use App\Notifications\BelievePointGiftInviteCancelledNotification;
 use App\Notifications\BelievePointGiftInviteEmailChangedNotification;
 use App\Notifications\BelievePointGiftInvitePendingNotification;
 use App\Notifications\BelievePointGiftInviteResentNotification;
 use App\Notifications\BelievePointGiftRefundedNotification;
-use App\Notifications\BelievePointGiftSentNotification;
 use App\Notifications\SupporterBelievePointGiftReceivedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -31,13 +31,12 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Gift Believe Points to registered supporters immediately, or hold BP and invite
- * unregistered emails to join as supporters.
+ * Gift Believe Points: always Available → Holding → Pending until the recipient claims.
  *
- * Existing gifted-BP rules still apply after claim:
- * - credited to gifted_believe_points (restricted bucket)
- * - cannot be re-gifted; cannot move to wallet
- * - gift cards: closed-loop retail only (not Visa/Mastercard open-loop)
+ * Works for both registered supporters and unregistered emails (invite to register).
+ * On claim, BP credits gifted_believe_points (Gifted BP wallet):
+ * - cannot be re-gifted; cannot move to cash wallet
+ * - spend on gift cards, Marketplace, Learning Hub, merchants
  */
 class BelievePointGiftInviteService
 {
@@ -109,7 +108,7 @@ class BelievePointGiftInviteService
     }
 
     /**
-     * Immediate gift to an existing verified supporter.
+     * Hold BP for an existing verified supporter until they Accept / Collect.
      */
     public function sendToExistingUser(
         User $sender,
@@ -117,7 +116,7 @@ class BelievePointGiftInviteService
         float $amount,
         GiftOccasion $occasion,
         ?string $message = null,
-    ): SupporterBelievePointGift {
+    ): BelievePointGiftInvite {
         $this->assertCanSend($sender);
 
         if ($recipient->id === $sender->id) {
@@ -132,14 +131,40 @@ class BelievePointGiftInviteService
             ]);
         }
 
+        if (blank($recipient->email_verified_at)) {
+            throw ValidationException::withMessages([
+                'recipient' => 'This supporter has not verified their email yet.',
+            ]);
+        }
+
+        $email = Str::lower(trim((string) $recipient->email));
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw ValidationException::withMessages([
+                'recipient' => 'This supporter does not have a valid email on file.',
+            ]);
+        }
+
+        $alreadyPending = BelievePointGiftInvite::query()
+            ->where('sender_id', $sender->id)
+            ->where('status', BelievePointGiftInvite::STATUS_PENDING)
+            ->where(function ($q) use ($recipient, $email) {
+                $q->where('recipient_id', $recipient->id)
+                    ->orWhereRaw('LOWER(recipient_email) = ?', [$email]);
+            })
+            ->exists();
+        if ($alreadyPending) {
+            throw ValidationException::withMessages([
+                'recipient' => 'You already have a pending gift for this supporter. Cancel it first, or wait until they accept.',
+            ]);
+        }
+
         $amount = round($amount, 2);
         $message = filled($message) ? trim((string) $message) : null;
+        $holdDays = self::holdDays();
 
-        [$lockedSender, $lockedRecipient, $gift] = DB::transaction(function () use ($sender, $recipient, $amount, $message, $occasion) {
+        $invite = DB::transaction(function () use ($sender, $recipient, $email, $amount, $message, $occasion, $holdDays) {
             /** @var User $lockedSender */
             $lockedSender = User::query()->whereKey($sender->id)->lockForUpdate()->firstOrFail();
-            /** @var User $lockedRecipient */
-            $lockedRecipient = User::query()->whereKey($recipient->id)->lockForUpdate()->firstOrFail();
 
             $purchased = round((float) ($lockedSender->believe_points ?? 0), 2);
             if ($purchased < $amount) {
@@ -149,27 +174,73 @@ class BelievePointGiftInviteService
             }
 
             $lockedSender->decrement('believe_points', $amount);
-            $lockedRecipient->increment('gifted_believe_points', $amount);
+            $lockedSender->increment('holding_believe_points', $amount);
 
-            $gift = SupporterBelievePointGift::create([
+            $invite = BelievePointGiftInvite::create([
                 'sender_id' => $lockedSender->id,
-                'recipient_id' => $lockedRecipient->id,
+                'recipient_email' => $email,
+                'recipient_id' => $recipient->id,
                 'gift_occasion_id' => $occasion->id,
                 'amount' => $amount,
                 'occasion' => $occasion->occasion,
                 'message' => $message,
-                'sent_at' => now(),
+                'token' => Str::random(48),
+                'status' => BelievePointGiftInvite::STATUS_PENDING,
+                'expires_at' => now()->addDays($holdDays),
             ]);
 
-            return [$lockedSender, $lockedRecipient, $gift];
+            BelievePointsWalletLedgerService::recordGiftHold($invite);
+            BelievePointGiftAdminLedgerService::recordHold($invite);
+
+            return $invite;
         });
 
-        BelievePointsWalletLedgerService::recordGiftSent($gift);
-        BelievePointsWalletLedgerService::recordGiftReceived($gift);
+        $invite->load(['sender', 'recipient']);
+        $this->notifyRegisteredGiftPending($invite);
 
-        $this->notifyImmediateGift($lockedSender, $lockedRecipient, $gift, $amount, $message, $occasion->occasion);
+        return $invite;
+    }
 
-        return $gift;
+    /**
+     * Recipient Accept / Collect for a pending gift addressed to them.
+     */
+    public function claimAsRecipient(User $recipient, BelievePointGiftInvite $invite): BelievePointGiftInvite
+    {
+        if ($recipient->role !== 'user') {
+            throw ValidationException::withMessages([
+                'invite' => 'Only supporter accounts can collect Believe Points gifts.',
+            ]);
+        }
+
+        if (! $invite->isPending()) {
+            throw ValidationException::withMessages([
+                'invite' => 'This gift is no longer available to collect.',
+            ]);
+        }
+
+        if ($invite->expires_at && $invite->expires_at->isPast()) {
+            throw ValidationException::withMessages([
+                'invite' => 'This gift has expired.',
+            ]);
+        }
+
+        $email = Str::lower(trim((string) $recipient->email));
+        $matchesId = (int) ($invite->recipient_id ?? 0) === (int) $recipient->id;
+        $matchesEmail = $email !== '' && Str::lower($invite->recipient_email) === $email;
+        if (! $matchesId && ! $matchesEmail) {
+            throw ValidationException::withMessages([
+                'invite' => 'This gift was not sent to your account.',
+            ]);
+        }
+
+        $claimed = $this->claimInvite($invite, $recipient);
+        if ($claimed === null) {
+            throw ValidationException::withMessages([
+                'invite' => 'Could not collect this gift. It may have already been claimed or cancelled.',
+            ]);
+        }
+
+        return $claimed;
     }
 
     /**
@@ -257,6 +328,7 @@ class BelievePointGiftInviteService
         });
 
         $invite->load('sender');
+        BelievePointGiftAdminLedgerService::recordHold($invite);
         $this->notifyInviteCreated($invite);
 
         return $invite;
@@ -360,6 +432,7 @@ class BelievePointGiftInviteService
             // Sender Available was already reduced at hold time (gift_hold ledger).
             // Only credit the recipient's gifted ledger here.
             BelievePointsWalletLedgerService::recordGiftReceived($gift);
+            BelievePointGiftAdminLedgerService::recordClaim($lockedInvite->fresh(['sender', 'recipient', 'gift']));
 
             return $lockedInvite->fresh(['sender', 'recipient', 'gift']);
         });
@@ -437,6 +510,7 @@ class BelievePointGiftInviteService
         });
 
         if ($invite) {
+            BelievePointGiftAdminLedgerService::recordHoldRefund($invite, round((float) $invite->amount, 2), 'expired');
             $this->notifyInviteExpired($invite);
 
             return true;
@@ -494,9 +568,14 @@ class BelievePointGiftInviteService
                 BelievePointGiftInviteGoodwill::REASON_CANCELLED,
             );
 
-            return $lockedInvite->fresh(['sender']);
+            return $lockedInvite->fresh(['sender', 'recipient']);
         });
 
+        BelievePointGiftAdminLedgerService::recordHoldRefund(
+            $cancelled,
+            round((float) $cancelled->amount, 2),
+            'cancelled_by_sender'
+        );
         $this->notifyInviteCancelled($cancelled);
 
         return $cancelled;
@@ -524,10 +603,14 @@ class BelievePointGiftInviteService
         }
 
         $invite->update(['last_resent_at' => now()]);
-        $invite->loadMissing('sender');
+        $invite->loadMissing('sender', 'recipient');
 
         try {
-            Mail::to($invite->recipient_email)->send(new BelievePointGiftInviteMail($invite));
+            if ((int) ($invite->recipient_id ?? 0) > 0 && $invite->recipient) {
+                Mail::to($invite->recipient->email)->send(new BelievePointGiftAwaitingClaimMail($invite));
+            } else {
+                Mail::to($invite->recipient_email)->send(new BelievePointGiftInviteMail($invite));
+            }
         } catch (\Throwable $e) {
             Log::warning('Gift invite resend email failed', ['error' => $e->getMessage()]);
             throw ValidationException::withMessages([
@@ -539,6 +622,20 @@ class BelievePointGiftInviteService
             $sender->notify(new BelievePointGiftInviteResentNotification($invite));
         } catch (\Throwable $e) {
             Log::error('Gift invite resent notification failed', ['error' => $e->getMessage()]);
+        }
+
+        if ((int) ($invite->recipient_id ?? 0) > 0) {
+            $amt = self::formatAmount((float) $invite->amount);
+            $this->pushToUser(
+                (int) $invite->recipient_id,
+                'Gift reminder',
+                ($invite->sender?->name ?: 'Someone')." reminded you to accept {$amt} BP.",
+                [
+                    'type' => 'gift_awaiting_claim',
+                    'invite_id' => (string) $invite->id,
+                    'url' => route('gift-bp.index', [], true),
+                ]
+            );
         }
 
         $amt = self::formatAmount((float) $invite->amount);
@@ -553,7 +650,7 @@ class BelievePointGiftInviteService
             ]
         );
 
-        return $invite->fresh(['sender']);
+        return $invite->fresh(['sender', 'recipient']);
     }
 
     /**
@@ -563,6 +660,12 @@ class BelievePointGiftInviteService
     {
         $this->assertCanSend($sender);
         $this->assertOwnsPendingInvite($sender, $invite);
+
+        if ((int) ($invite->recipient_id ?? 0) > 0) {
+            throw ValidationException::withMessages([
+                'email' => 'This gift is already addressed to a registered supporter. Cancel it and send a new gift if needed.',
+            ]);
+        }
 
         $newEmail = Str::lower(trim($newEmail));
         if (! filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
@@ -643,6 +746,7 @@ class BelievePointGiftInviteService
             return $lockedInvite->fresh(['sender']);
         });
 
+        BelievePointGiftAdminLedgerService::recordEmailChanged($updated, $previousEmail);
         $this->notifyInviteEmailChanged($updated, $previousEmail);
 
         return $updated;
@@ -826,6 +930,19 @@ class BelievePointGiftInviteService
                 'url' => route('gift-bp.index', [], true),
             ]
         );
+
+        if ($invite->recipient_id) {
+            $this->pushToUser(
+                (int) $invite->recipient_id,
+                'Gift rescinded',
+                "{$senderName} cancelled a {$amt} BP gift before you accepted it.",
+                [
+                    'type' => 'gift_invite_cancelled_recipient',
+                    'invite_id' => (string) $invite->id,
+                    'url' => route('gift-bp.index', [], true),
+                ]
+            );
+        }
     }
 
     private function notifyInviteEmailChanged(BelievePointGiftInvite $invite, string $previousEmail): void
@@ -881,62 +998,58 @@ class BelievePointGiftInviteService
         );
     }
 
-    private function notifyImmediateGift(
-        User $sender,
-        User $recipient,
-        SupporterBelievePointGift $gift,
-        float $amount,
-        ?string $message,
-        string $occasion,
-    ): void {
+    private function notifyRegisteredGiftPending(BelievePointGiftInvite $invite): void
+    {
+        $sender = $invite->sender;
+        $recipient = $invite->recipient;
+        if (! $sender || ! $recipient) {
+            return;
+        }
+
+        $amt = self::formatAmount((float) $invite->amount);
+
         try {
-            $recipient->notify(new SupporterBelievePointGiftReceivedNotification(
-                $sender,
-                $gift,
-                $amount,
-                $message,
-                $occasion,
-            ));
+            $sender->notify(new BelievePointGiftInvitePendingNotification($invite));
         } catch (\Throwable $e) {
-            Log::error('Gift received in-app notification failed', ['error' => $e->getMessage()]);
+            Log::error('Registered gift pending sender notification failed', ['error' => $e->getMessage()]);
         }
 
         try {
-            $sender->notify(new BelievePointGiftSentNotification($gift, $recipient));
+            $recipient->notify(new BelievePointGiftAwaitingClaimNotification($invite));
         } catch (\Throwable $e) {
-            Log::error('Gift sent in-app notification failed', ['error' => $e->getMessage()]);
+            Log::error('Registered gift awaiting-claim notification failed', ['error' => $e->getMessage()]);
         }
 
         try {
-            Mail::to($recipient->email)->send(new BelievePointGiftReceivedMail($sender, $recipient, $gift));
+            Mail::to($recipient->email)->send(new BelievePointGiftAwaitingClaimMail($invite));
         } catch (\Throwable $e) {
-            Log::warning('Gift received email failed', ['error' => $e->getMessage()]);
+            Log::warning('Registered gift awaiting-claim email failed', ['error' => $e->getMessage()]);
         }
 
         try {
-            Mail::to($sender->email)->send(new BelievePointGiftSentMail($sender, $recipient, $gift));
+            Mail::to($sender->email)->send(new BelievePointGiftInvitePendingMail($invite));
         } catch (\Throwable $e) {
-            Log::warning('Gift sent email failed', ['error' => $e->getMessage()]);
+            Log::warning('Registered gift pending email to sender failed', ['error' => $e->getMessage()]);
         }
 
         $this->pushToUser(
             $recipient->id,
-            'You received a gift',
-            "{$sender->name} sent you ".self::formatAmount($amount).' BP.',
+            'You have a Believe Points gift',
+            "{$sender->name} sent you {$amt} BP. Accept it on Gift BP to add it to your Gifted BP wallet.",
             [
-                'type' => 'gift_received',
-                'gift_id' => (string) $gift->id,
-                'url' => route('believe-points.index', [], true),
+                'type' => 'gift_awaiting_claim',
+                'invite_id' => (string) $invite->id,
+                'url' => route('gift-bp.index', [], true),
             ]
         );
 
         $this->pushToUser(
             $sender->id,
-            'Gift sent',
-            'You sent '.self::formatAmount($amount)." BP to {$recipient->name}.",
+            'Gift pending acceptance',
+            "{$amt} BP is holding for {$recipient->name} until they accept.",
             [
-                'type' => 'gift_sent',
-                'gift_id' => (string) $gift->id,
+                'type' => 'gift_invite_pending',
+                'invite_id' => (string) $invite->id,
                 'url' => route('gift-bp.index', [], true),
             ]
         );

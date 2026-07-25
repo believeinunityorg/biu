@@ -2,6 +2,7 @@
 
 namespace App\Services\Admin;
 
+use App\Models\BelievePointGiftInvite;
 use App\Models\BelievePointPurchase;
 use App\Models\BelievePointWalletTransfer;
 use App\Models\CareAllianceDonation;
@@ -425,12 +426,22 @@ final class LedgerListFilters
                     ->orWhere('related_type', 'like', '%BelievePointPurchase')
                     ->orWhere('related_type', BelievePointWalletTransfer::class)
                     ->orWhere('related_type', 'like', '%BelievePointWalletTransfer')
+                    ->orWhere('related_type', BelievePointGiftInvite::class)
+                    ->orWhere('related_type', 'like', '%BelievePointGiftInvite')
                     ->orWhere('type', 'believe_points_wallet_transfer')
                     ->orWhere('type', 'bp_settlement')
+                    ->orWhere('type', 'bp_gift_hold')
+                    ->orWhere('type', 'bp_gift_claim')
+                    ->orWhere('type', 'bp_gift_hold_refund')
+                    ->orWhere('type', 'bp_gift_email_changed')
                     ->orWhere('meta->source', 'believe_points_purchase')
                     ->orWhere('meta->source', 'believe_points_purchase_refund')
                     ->orWhere('meta->source', 'believe_points_wallet_transfer')
-                    ->orWhere('meta->source', 'bp_settlement');
+                    ->orWhere('meta->source', 'bp_settlement')
+                    ->orWhere('meta->source', 'bp_gift_hold')
+                    ->orWhere('meta->source', 'bp_gift_claim')
+                    ->orWhere('meta->source', 'bp_gift_hold_refund')
+                    ->orWhere('meta->source', 'bp_gift_email_changed');
             })
                 ->whereNot(function (Builder $rf) {
                     $rf->where('type', 'refund')

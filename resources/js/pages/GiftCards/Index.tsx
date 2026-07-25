@@ -1,385 +1,637 @@
 "use client"
 
-import { Head, router } from "@inertiajs/react"
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Head, Link, router } from "@inertiajs/react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
-    Gift,
-    Search,
-    ShoppingBag,
-    Globe,
-    ArrowRight,
-    Sparkles,
-    Filter
+  Gift,
+  Search,
+  ShoppingBag,
+  Globe,
+  ArrowRight,
+  Sparkles,
+  Wallet,
+  Package,
+  Loader2,
+  ShieldCheck,
+  Zap,
+  Tag,
 } from "lucide-react"
 import AppSidebarLayout from "@/layouts/app/app-sidebar-layout"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 
 interface Brand {
-    productId?: number
-    productName?: string
-    /** False when Visa/Mastercard — Gifted Believe Points cannot be used */
-    allowedForGiftedPoints?: boolean
-    productImage?: string
-    denominations?: number[]
-    valueRestrictions?: {
-        minVal?: number
-        maxVal?: number
-    }
-    productDescription?: string
-    termsAndConditions?: string
-    howToUse?: string
-    expiryAndValidity?: string
-    discount?: number
+  productId?: number
+  productName?: string
+  /** False when Visa/Mastercard — Gifted Believe Points cannot be used */
+  allowedForGiftedPoints?: boolean
+  productImage?: string
+  denominations?: number[]
+  valueRestrictions?: {
+    minVal?: number
+    maxVal?: number
+  }
+  productDescription?: string
+  termsAndConditions?: string
+  howToUse?: string
+  expiryAndValidity?: string
+  discount?: number
 }
 
 interface PaginationData {
-    current_page: number
-    last_page: number
-    per_page: number
-    total: number
-    from: number | null
-    to: number | null
-    links: Array<{
-        url: string | null
-        label: string
-        active: boolean
-    }>
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+  from: number | null
+  to: number | null
+  has_more?: boolean
+  links: Array<{
+    url: string | null
+    label: string
+    active: boolean
+  }>
 }
 
 interface GiftCardsIndexProps {
-    giftCards: {
-        data: Brand[]
-    } & PaginationData
-    user?: {
-        id: number
-        name: string
-        email: string
-        role: string
-    } | null
-    filters: {
-        search: string
-        country: string
-        per_page: number
-    }
-    availableCountries: Record<string, string>
+  giftCards: {
+    data: Brand[]
+  } & PaginationData
+  user?: {
+    id: number
+    name: string
+    email: string
+    role: string
+  } | null
+  filters: {
+    search: string
+    country: string
+    per_page: number
+  }
+  availableCountries: Record<string, string>
 }
 
-export default function GiftCardsIndex({ giftCards, user, filters, availableCountries }: GiftCardsIndexProps) {
-    const [searchQuery, setSearchQuery] = useState(filters.search || "")
-    const [selectedCountry, setSelectedCountry] = useState<string>(filters.country || "USA")
-    const [isLoading, setIsLoading] = useState(false)
+function formatCurrency(amount: number, currency: string = "USD") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
 
-    const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null)
+function BrandCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card dark:border-gray-800">
+      <div className="aspect-[16/10] animate-pulse bg-muted/80 dark:bg-gray-800" />
+      <div className="space-y-3 p-4">
+        <div className="h-4 w-3/4 animate-pulse rounded bg-muted dark:bg-gray-800" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-muted dark:bg-gray-800" />
+        <div className="h-10 w-full animate-pulse rounded-xl bg-muted dark:bg-gray-800" />
+      </div>
+    </div>
+  )
+}
 
-    const handleSearch = (value: string) => {
-        setSearchQuery(value)
+export default function GiftCardsIndex({
+  giftCards,
+  user,
+  filters,
+  availableCountries,
+}: GiftCardsIndexProps) {
+  const [searchQuery, setSearchQuery] = useState(filters.search || "")
+  const [selectedCountry, setSelectedCountry] = useState<string>(filters.country || "USA")
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [brands, setBrands] = useState<Brand[]>(giftCards.data ?? [])
+  const [totalBrands, setTotalBrands] = useState(giftCards.total ?? 0)
+  const [hasMore, setHasMore] = useState(
+    giftCards.has_more ?? giftCards.current_page < giftCards.last_page,
+  )
+  const [page, setPage] = useState(giftCards.current_page || 1)
 
-        // Clear existing timeout
-        if (searchTimeout) {
-            clearTimeout(searchTimeout)
-        }
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null)
+  const loadingMoreRef = useRef(false)
+  const hasMoreRef = useRef(hasMore)
+  const pageRef = useRef(page)
+  const isLoadingRef = useRef(false)
+  const searchQueryRef = useRef(searchQuery)
+  const selectedCountryRef = useRef(selectedCountry)
 
-        // Set new timeout with longer delay (1000ms = 1 second)
-        const timeoutId = setTimeout(() => {
-            router.get(route('gift-cards.index'), {
-                search: value,
-                country: selectedCountry,
-                per_page: filters.per_page,
-            }, {
-                preserveState: true,
-                preserveScroll: true,
-                onStart: () => setIsLoading(true),
-                onFinish: () => setIsLoading(false),
-            })
-        }, 1000) // Increased delay to 1 second
+  const isOrgOrAdmin =
+    Boolean(user) && user!.role !== "user" && user!.role !== null
+  const Layout = isOrgOrAdmin ? AppSidebarLayout : FrontendLayout
+  const countryLabel = availableCountries[selectedCountry] || selectedCountry
+  const myCardsHref = isOrgOrAdmin ? route("gift-cards.created") : route("gift-cards.my-cards")
+  const myCardsLabel = isOrgOrAdmin ? "Purchased cards" : "My cards"
 
-        setSearchTimeout(timeoutId)
+  useEffect(() => {
+    hasMoreRef.current = hasMore
+  }, [hasMore])
+
+  useEffect(() => {
+    pageRef.current = page
+  }, [page])
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading
+  }, [isLoading])
+
+  useEffect(() => {
+    searchQueryRef.current = searchQuery
+  }, [searchQuery])
+
+  useEffect(() => {
+    selectedCountryRef.current = selectedCountry
+  }, [selectedCountry])
+
+  // Keep the address bar clean: /gift-cards (no ?country=&page=&search=)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (window.location.search) {
+      window.history.replaceState(window.history.state, "", window.location.pathname)
     }
+  }, [])
 
-    const handleCountryFilter = (country: string) => {
-        setSelectedCountry(country)
-        router.get(route('gift-cards.index'), {
-            search: searchQuery,
-            country: country,
-            per_page: filters.per_page,
-        }, {
-            preserveState: true,
-            preserveScroll: true,
-            onStart: () => setIsLoading(true),
-            onFinish: () => setIsLoading(false),
+  const fetchBrandsPage = useCallback(
+    async (
+      pageNum: number,
+      options: { search?: string; country?: string; append?: boolean } = {},
+    ) => {
+      const country = options.country ?? selectedCountryRef.current
+      const search = (options.search ?? searchQueryRef.current).trim()
+      const append = Boolean(options.append)
+
+      const params = new URLSearchParams()
+      params.set("page", String(pageNum))
+      params.set("country", country)
+      if (search !== "") {
+        params.set("search", search)
+      }
+
+      const response = await fetch(`${route("gift-cards.brands")}?${params.toString()}`, {
+        headers: {
+          Accept: "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        credentials: "same-origin",
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to load gift cards")
+      }
+
+      const json = (await response.json()) as {
+        brands?: Brand[]
+        current_page?: number
+        has_more?: boolean
+        total?: number | null
+      }
+
+      const incoming = Array.isArray(json.brands) ? json.brands : []
+      const nextHasMore = Boolean(json.has_more)
+      const nextPage = json.current_page ?? pageNum
+
+      if (append) {
+        setBrands((prev) => {
+          const seen = new Set(prev.map((b) => b.productId).filter(Boolean))
+          const next = incoming.filter((b) => b.productId == null || !seen.has(b.productId))
+          return next.length ? [...prev, ...next] : prev
         })
+      } else {
+        setBrands(incoming)
+      }
+
+      if (typeof json.total === "number") {
+        setTotalBrands(json.total)
+      }
+
+      setHasMore(nextHasMore)
+      hasMoreRef.current = nextHasMore
+      setPage(nextPage)
+      pageRef.current = nextPage
+
+      return incoming
+    },
+    [],
+  )
+
+  const runFilter = (overrides: { search?: string; country?: string } = {}) => {
+    if (isLoadingRef.current) return
+    setIsLoading(true)
+    isLoadingRef.current = true
+    loadingMoreRef.current = false
+    setLoadingMore(false)
+
+    void fetchBrandsPage(1, {
+      search: overrides.search ?? searchQueryRef.current,
+      country: overrides.country ?? selectedCountryRef.current,
+      append: false,
+    })
+      .catch(() => {
+        setBrands([])
+        setHasMore(false)
+        hasMoreRef.current = false
+      })
+      .finally(() => {
+        setIsLoading(false)
+        isLoadingRef.current = false
+      })
+  }
+
+  const handleSearch = (value: string) => {
+    setSearchQuery(value)
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+    searchTimeoutRef.current = setTimeout(() => {
+      runFilter({ search: value })
+    }, 400)
+  }
+
+  const handleCountryFilter = (country: string) => {
+    setSelectedCountry(country)
+    window.requestAnimationFrame(() => {
+      runFilter({ country })
+    })
+  }
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current || !hasMoreRef.current || isLoadingRef.current) return
+
+    const nextPage = pageRef.current + 1
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+
+    void fetchBrandsPage(nextPage, { append: true })
+      .catch(() => {
+        // Keep existing list; allow retry on next scroll.
+      })
+      .finally(() => {
+        loadingMoreRef.current = false
+        setLoadingMore(false)
+      })
+  }, [fetchBrandsPage])
+
+  useEffect(() => {
+    const el = loadMoreSentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore()
+      },
+      { root: null, rootMargin: "240px 0px", threshold: 0 },
+    )
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [loadMore, brands.length, hasMore])
+
+  const handleViewBrand = (brand: Brand) => {
+    if (brand.productId) {
+      router.visit(
+        route("gift-cards.show") + `?productId=${brand.productId}&country=${selectedCountry}`,
+      )
     }
+  }
 
-    const handlePageChange = (page: number) => {
-        if (page < 1 || page > giftCards.last_page) return
-
-        router.get(route('gift-cards.index'), {
-            page,
-            search: searchQuery,
-            country: selectedCountry,
-            per_page: filters.per_page,
-        }, {
-            preserveState: true,
-            preserveScroll: true,
-            onStart: () => setIsLoading(true),
-            onFinish: () => setIsLoading(false),
-        })
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
     }
+  }, [])
 
-    const handleViewBrand = (brand: Brand) => {
-        if (brand.productId) {
-            router.visit(route('gift-cards.show') + `?productId=${brand.productId}&country=${selectedCountry}`)
-        }
-    }
+  return (
+    <Layout>
+      <Head title="Gift Cards" />
 
-    // Cleanup timeout on unmount
-    useEffect(() => {
-        return () => {
-            if (searchTimeout) {
-                clearTimeout(searchTimeout)
-            }
-        }
-    }, [searchTimeout])
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        {/* Full-bleed hero */}
+        <header className="relative w-full overflow-hidden bg-gradient-to-br from-purple-600 via-purple-600 to-blue-600 text-white shadow-lg">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 opacity-30"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 15% 20%, rgba(255,255,255,0.35), transparent 45%), radial-gradient(circle at 85% 10%, rgba(255,255,255,0.2), transparent 40%), radial-gradient(circle at 70% 90%, rgba(59,130,246,0.5), transparent 50%)",
+            }}
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"
+          />
 
-    const formatCurrency = (amount: number, currency: string = 'USD') => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: currency,
-        }).format(amount)
-    }
+          <div className="relative mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 sm:py-10 md:px-10 md:py-12">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0 max-w-xl">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/75 sm:text-sm">
+                  Marketplace
+                </p>
+                <h1 className="mt-1.5 text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">
+                  Gift Cards
+                </h1>
+                <p className="mt-2 text-sm leading-relaxed text-white/85 sm:mt-3 sm:text-base">
+                  Browse trusted brands, pick an amount, and check out securely — for yourself or
+                  someone you care about.
+                </p>
+              </div>
 
-    // Use FrontendLayout for users and guests, AppSidebarLayout only for orgs/admins
-    const Layout = (user && user.role !== 'user' && user.role !== null) ? AppSidebarLayout : FrontendLayout
-
-    return (
-        <Layout>
-            <Head title="Gift Cards Marketplace" />
-
-            <div className="container mx-auto flex h-full flex-1 flex-col gap-6 rounded-xl px-4 py-4 md:px-10 md:py-6">
-                {/* Header */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-primary/10 dark:bg-primary/20 rounded-xl p-3">
-                                <Gift className="text-primary h-8 w-8" />
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-bold dark:text-white">Gift Cards Marketplace</h1>
-                                <p className="text-muted-foreground">Browse and purchase gift cards from brands worldwide</p>
-                            </div>
-                        </div>
-                        {user ? (
-                            <Button
-                                type="button"
-                                onClick={() => router.visit('/gift-bp')}
-                                className="h-11 shrink-0 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 px-5 font-semibold text-white shadow-md hover:from-violet-700 hover:to-blue-700"
-                            >
-                                <Sparkles className="mr-2 h-4 w-4" />
-                                Gift BP
-                                <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        ) : null}
-                    </div>
-
-                    {user ? (
-                        <button
-                            type="button"
-                            onClick={() => router.visit('/gift-bp')}
-                            className="flex w-full items-center gap-4 rounded-2xl border border-violet-400/40 bg-gradient-to-r from-violet-50 to-blue-50 p-4 text-left transition hover:border-violet-500 hover:shadow-md dark:from-violet-950/40 dark:to-blue-950/30 dark:border-violet-500/40"
-                        >
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow">
-                                <Gift className="h-5 w-5" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <p className="font-semibold text-foreground">Gift Believe Points instead</p>
-                                <p className="mt-0.5 text-sm text-muted-foreground">
-                                    Send BP to a supporter — or invite someone new by email. They can redeem any gift card they want.
-                                </p>
-                            </div>
-                            <ArrowRight className="h-5 w-5 shrink-0 text-violet-600" />
-                        </button>
-                    ) : null}
-
-                    {/* Search and Filter */}
-                    <div className="flex flex-col gap-4 sm:flex-row">
-                        <div className="relative flex-1">
-                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transform" />
-                            <Input
-                                placeholder="Search gift cards..."
-                                value={searchQuery}
-                                onChange={(e) => handleSearch(e.target.value)}
-                                className="pl-10 dark:border-gray-700 dark:bg-gray-800"
-                                disabled={isLoading}
-                            />
-                        </div>
-
-                        {/* Country Filter */}
-                        <Select value={selectedCountry} onValueChange={handleCountryFilter}>
-                            <SelectTrigger className="w-full sm:w-[200px] dark:border-gray-700 dark:bg-gray-800">
-                                <Globe className="mr-2 h-4 w-4" />
-                                <SelectValue placeholder="Select Country" />
-                            </SelectTrigger>
-                            <SelectContent className="dark:bg-gray-800">
-                                {Object.entries(availableCountries).map(([code, name]) => (
-                                    <SelectItem key={code} value={code} className="dark:hover:bg-gray-700">
-                                        {name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                {/* Gift Cards Grid */}
-                {isLoading ? (
-                    <div className="py-12 text-center">
-                        <p className="text-muted-foreground">Loading...</p>
-                    </div>
-                ) : giftCards.data.length === 0 ? (
-                    <Card className="dark:border-gray-700 dark:bg-gray-800">
-                        <CardContent className="py-12 text-center">
-                            <Gift className="text-muted-foreground mx-auto mb-4 h-12 w-12 opacity-50" />
-                            <p className="text-muted-foreground">No gift cards found</p>
-                            <p className="text-muted-foreground mt-2 text-sm">Try adjusting your search or country filter</p>
-                        </CardContent>
-                    </Card>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                {user ? (
+                  <>
+                    <Link
+                      href="/gift-bp"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-purple-700 shadow-md transition hover:bg-white/95"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Gift BP
+                      <ArrowRight className="h-4 w-4 opacity-70" />
+                    </Link>
+                    <Link
+                      href={myCardsHref}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/35 bg-white/10 px-4 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
+                    >
+                      <Wallet className="h-4 w-4" />
+                      {myCardsLabel}
+                    </Link>
+                  </>
                 ) : (
-                    <>
-                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                            {giftCards.data.map((brand) => (
-                                <Card
-                                    key={brand.productId}
-                                    className="group hover:border-primary/50 overflow-hidden border-2 transition-all duration-300 hover:shadow-xl dark:border-gray-700 dark:bg-gray-800"
-                                >
-                                    {/* Image Section */}
-                                    {brand.productImage ? (
-                                        <div className="bg-muted relative h-48 w-full overflow-hidden">
-                                            <img
-                                                src={brand.productImage}
-                                                alt={brand.productName || 'Gift Card'}
-                                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
-                                            />
-                                            {brand.allowedForGiftedPoints === false && (
-                                                <Badge
-                                                    variant="secondary"
-                                                    className="absolute top-2 left-2 max-w-[140px] truncate text-[10px] font-normal bg-slate-900/80 text-white border border-white/20"
-                                                >
-                                                    Purchased points only
-                                                </Badge>
-                                            )}
-                                            {brand.discount && brand.discount > 0 && (
-                                                <Badge className="absolute top-2 right-2 bg-red-500 text-white">{brand.discount}% OFF</Badge>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div className="from-primary/20 to-primary/10 dark:from-primary/30 dark:to-primary/20 flex h-48 w-full items-center justify-center bg-gradient-to-br">
-                                            <Gift className="text-primary/50 h-16 w-16" />
-                                        </div>
-                                    )}
-
-                                    <CardHeader className="pb-3">
-                                        <div className="space-y-2">
-                                            <CardTitle className="group-hover:text-primary line-clamp-2 text-lg transition-colors dark:text-white">
-                                                {brand.productName || 'Gift Card'}
-                                            </CardTitle>
-                                        </div>
-                                    </CardHeader>
-
-                                    <CardContent className="space-y-4">
-                                        {/* Amount Display */}
-                                        {brand.valueRestrictions && (
-                                            <div className="bg-primary/5 dark:bg-primary/10 border-primary/20 flex items-center justify-between rounded-lg border p-3">
-                                                <span className="text-muted-foreground text-sm">Starting from:</span>
-                                                <span className="text-primary text-xl font-bold">
-                                                    {formatCurrency(brand.valueRestrictions.minVal || 0)}
-                                                </span>
-                                            </div>
-                                        )}
-
-                                        {/* Quick Info */}
-                                        <div className="space-y-2 text-sm">
-                                            {brand.denominations && brand.denominations.length > 0 && (
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-muted-foreground">Available amounts:</span>
-                                                    <span className="text-xs font-medium">{brand.denominations.length} options</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Purchase Button */}
-                                        <Button
-                                            className="group-hover:bg-primary/90 dark:bg-primary dark:hover:bg-primary/90 w-full shadow-md"
-                                            onClick={() => handleViewBrand(brand)}
-                                            disabled={isLoading}
-                                        >
-                                            <ShoppingBag className="mr-2 h-4 w-4" />
-                                            View Details
-                                            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-
-                        {/* Pagination */}
-                        {giftCards.last_page > 1 && (
-                            <div className="border-border mt-8 flex flex-col items-center justify-between gap-4 border-t pt-6 sm:flex-row dark:border-gray-700">
-                                <div className="text-muted-foreground text-sm">
-                                    Showing {giftCards.from || 0} to {giftCards.to || 0} of {giftCards.total} results
-                                </div>
-                                <nav className="flex flex-wrap justify-center space-x-1 sm:justify-end">
-                                    {giftCards.links.map((link, index) => (
-                                        <button
-                                            key={index}
-                                            onClick={() => {
-                                                if (link.url && !link.active) {
-                                                    const url = new URL(link.url, window.location.origin);
-                                                    const page = url.searchParams.get('page') || '1';
-                                                    handlePageChange(parseInt(page));
-                                                }
-                                            }}
-                                            disabled={!link.url || link.active}
-                                            className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                                                link.active
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-card text-muted-foreground hover:bg-accent border-border border dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700'
-                                            } ${!link.url && 'cursor-not-allowed opacity-50'}`}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ))}
-                                </nav>
-                            </div>
-                        )}
-                    </>
+                  <div className="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm text-white/90 backdrop-blur-sm">
+                    <ShieldCheck className="h-4 w-4 shrink-0" />
+                    Instant delivery after payment
+                  </div>
                 )}
-
-                {/* Info Section */}
-                <Card className="bg-primary/5 border-primary/20 dark:bg-primary/10 dark:border-primary/30">
-                    <CardContent className="pt-6">
-                        <div className="flex items-start gap-4">
-                            <Sparkles className="text-primary mt-1 h-6 w-6 shrink-0" />
-                            <div>
-                                <h3 className="mb-2 font-semibold dark:text-white">About Gift Cards</h3>
-                                <p className="text-muted-foreground text-sm">
-                                    Purchase gift cards from brands instantly with secure payment. Your gift card will be delivered immediately after
-                                    payment confirmation. Perfect for gifting or personal use!
-                                </p>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+              </div>
             </div>
-        </Layout>
-    );
+
+            <div className="mt-6 grid grid-cols-1 gap-2 sm:mt-8 sm:grid-cols-3 sm:gap-3">
+              <div className="flex items-center gap-3 rounded-xl bg-white/12 px-3.5 py-3 backdrop-blur-sm">
+                <Zap className="h-4 w-4 shrink-0 text-white/90" />
+                <div>
+                  <p className="text-xs font-semibold text-white">Fast checkout</p>
+                  <p className="text-[11px] text-white/70">Card or Believe Points</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/12 px-3.5 py-3 backdrop-blur-sm">
+                <Globe className="h-4 w-4 shrink-0 text-white/90" />
+                <div>
+                  <p className="text-xs font-semibold text-white">{countryLabel}</p>
+                  <p className="text-[11px] text-white/70">Selected marketplace</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white/12 px-3.5 py-3 backdrop-blur-sm">
+                <Package className="h-4 w-4 shrink-0 text-white/90" />
+                <div>
+                  <p className="text-xs font-semibold text-white tabular-nums">
+                    {totalBrands.toLocaleString()} brands
+                  </p>
+                  <p className="text-[11px] text-white/70">Available to browse</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="container mx-auto flex min-w-0 flex-1 flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-4 md:px-10 md:py-6">
+        {user ? (
+          <Link
+            href="/gift-bp"
+            className="group flex items-center gap-4 rounded-2xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.06] to-blue-600/[0.06] p-4 transition hover:border-purple-500/40 hover:shadow-md dark:from-purple-500/10 dark:to-blue-500/10"
+          >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/25">
+              <Gift className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">Prefer to gift Believe Points?</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Send BP instead — the recipient chooses any gift card they want.
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 shrink-0 text-purple-600 transition group-hover:translate-x-0.5" />
+          </Link>
+        ) : null}
+
+        {/* Filters */}
+        <section className="relative z-20 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4 dark:border-gray-800 dark:bg-gray-900/80">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search all brands…"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="h-11 rounded-xl border-border/80 bg-background pl-10 dark:border-gray-700 dark:bg-gray-900"
+                aria-label="Search gift cards"
+              />
+            </div>
+
+            <Select value={selectedCountry} onValueChange={handleCountryFilter}>
+              <SelectTrigger className="h-11 w-full rounded-xl dark:border-gray-700 dark:bg-gray-900 sm:w-[220px]">
+                <Globe className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="Select country" />
+              </SelectTrigger>
+              <SelectContent
+                position="popper"
+                sideOffset={6}
+                className="z-[200] max-h-72 dark:border-gray-700 dark:bg-gray-900"
+              >
+                {Object.entries(availableCountries).map(([code, name]) => (
+                  <SelectItem key={code} value={code} className="dark:focus:bg-gray-800 dark:hover:bg-gray-800">
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="hidden items-center gap-2 text-sm text-muted-foreground xl:flex">
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Updating…
+                </>
+              ) : (
+                <span className="tabular-nums">
+                  {brands.length.toLocaleString()}
+                  {totalBrands > 0 ? ` of ${totalBrands.toLocaleString()}` : ""} shown
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Catalog — each scroll page fetches the next 20 from Phaze via the server */}
+        {isLoading && brands.length === 0 ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <BrandCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : brands.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border/80 bg-muted/20 px-6 py-16 text-center dark:border-gray-700 dark:bg-gray-900/40">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600/15 to-blue-600/15 text-purple-600 dark:text-purple-400">
+              <Gift className="h-7 w-7" />
+            </div>
+            <h2 className="text-lg font-semibold text-foreground">No gift cards found</h2>
+            <p className="mt-1.5 max-w-sm text-sm text-muted-foreground">
+              Try another search term or switch country to see more brands.
+            </p>
+            {(searchQuery || selectedCountry !== "USA") && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-5 rounded-xl"
+                onClick={() => {
+                  setSearchQuery("")
+                  setSelectedCountry("USA")
+                  runFilter({ search: "", country: "USA" })
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4",
+                isLoading && "opacity-60 transition-opacity",
+              )}
+            >
+              {brands.map((brand, index) => {
+                const minVal = brand.valueRestrictions?.minVal
+                const denomCount = brand.denominations?.length ?? 0
+                const hasDiscount = Boolean(brand.discount && brand.discount > 0)
+
+                return (
+                  <article
+                    key={brand.productId ?? `brand-${index}`}
+                    className="group flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm transition duration-300 hover:-translate-y-0.5 hover:border-purple-500/35 hover:shadow-lg hover:shadow-purple-600/10 dark:border-gray-800 dark:bg-gray-900/80"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleViewBrand(brand)}
+                      disabled={isLoading || !brand.productId}
+                      className="relative aspect-[16/10] w-full overflow-hidden bg-muted text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:bg-gray-800"
+                    >
+                      {brand.productImage ? (
+                        <img
+                          src={brand.productImage}
+                          alt={brand.productName || "Gift card"}
+                          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-600/15 to-blue-600/15">
+                          <Gift className="h-12 w-12 text-purple-600/40" />
+                        </div>
+                      )}
+
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-80" />
+
+                      <div className="absolute top-2.5 left-2.5 flex max-w-[70%] flex-wrap gap-1.5">
+                        {brand.allowedForGiftedPoints === false && (
+                          <Badge className="border-0 bg-slate-950/80 text-[10px] font-medium text-white backdrop-blur-sm">
+                            Purchased BP only
+                          </Badge>
+                        )}
+                      </div>
+
+                      {hasDiscount && (
+                        <Badge className="absolute top-2.5 right-2.5 border-0 bg-rose-500 text-[10px] font-semibold text-white shadow-sm">
+                          <Tag className="mr-1 h-3 w-3" />
+                          {brand.discount}% off
+                        </Badge>
+                      )}
+                    </button>
+
+                    <div className="flex flex-1 flex-col gap-3 p-4">
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <h2 className="line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-foreground transition group-hover:text-purple-700 dark:group-hover:text-purple-300">
+                          {brand.productName || "Gift Card"}
+                        </h2>
+                        {denomCount > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {denomCount} amount{denomCount === 1 ? "" : "s"} available
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex items-end justify-between gap-3 border-t border-border/60 pt-3 dark:border-gray-800">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            From
+                          </p>
+                          <p className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-lg font-bold tabular-nums text-transparent">
+                            {formatCurrency(minVal ?? 0)}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isLoading || !brand.productId}
+                          onClick={() => handleViewBrand(brand)}
+                          className="h-9 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-3.5 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                        >
+                          <ShoppingBag className="mr-1.5 h-3.5 w-3.5" />
+                          View
+                          <ArrowRight className="ml-1 h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+
+            <div ref={loadMoreSentinelRef} className="flex flex-col items-center gap-3 py-6">
+              {loadingMore && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+                  Fetching next 20 from Phaze…
+                </div>
+              )}
+              {!loadingMore && hasMore && (
+                <p className="text-xs text-muted-foreground">Scroll to load more</p>
+              )}
+              {!hasMore && brands.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  You’ve reached the end
+                  {totalBrands > 0
+                    ? ` · ${totalBrands.toLocaleString()} brands`
+                    : ` · ${brands.length.toLocaleString()} brands`}
+                </p>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Trust strip */}
+        <aside className="rounded-2xl border border-purple-500/15 bg-gradient-to-r from-purple-600/[0.05] to-blue-600/[0.05] px-4 py-4 sm:px-5 dark:from-purple-500/10 dark:to-blue-500/10">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">How gift cards work</h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                Choose a brand and amount, pay with card or Believe Points, and your voucher is
+                delivered after confirmation — ready to use or share.
+              </p>
+            </div>
+          </div>
+        </aside>
+        </div>
+      </div>
+    </Layout>
+  )
 }

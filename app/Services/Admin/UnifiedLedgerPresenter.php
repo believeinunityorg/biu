@@ -259,6 +259,26 @@ class UnifiedLedgerPresenter
     }
 
     /**
+     * Believe Reward Points (BRP) ledger rows — earn/redeem credits, not BP purchases or marketplace sales.
+     */
+    private function isBrpLedgerModule(Transaction $t): bool
+    {
+        $meta = is_array($t->meta) ? $t->meta : [];
+
+        if ($t->ledger_type === UnifiedLedgerType::BRP) {
+            return true;
+        }
+        if (strtoupper((string) ($t->currency ?? '')) === 'BRP') {
+            return true;
+        }
+        if (in_array(($meta['source'] ?? ''), ['reward_point_ledger', 'believe_points_purchase_brp'], true)) {
+            return true;
+        }
+
+        return str_starts_with((string) ($t->transaction_id ?? ''), 'brp:');
+    }
+
+    /**
      * @param  array<string, mixed>  $ledgerReport
      */
     private function resolveModule(Transaction $t, string $sourceType, array $ledgerReport = []): string
@@ -271,6 +291,11 @@ class UnifiedLedgerPresenter
         }
         if (in_array($t->type, ['withdrawal', 'transfer_out'], true)) {
             return 'payout';
+        }
+
+        // BRP earn/redeem rows are Reward — never Marketplace (fallback) or Believe Points (BP currency).
+        if ($this->isBrpLedgerModule($t)) {
+            return 'reward';
         }
 
         return match ($sourceType) {
@@ -682,7 +707,7 @@ class UnifiedLedgerPresenter
             'donation' => $this->donationTransactionType($t, $donationPerspective),
             'fundme' => 'fundme_contribution',
             'campaign' => 'campaign_contribution',
-            'believe_points' => $this->believePointsTransactionType($t),
+            'believe_points', 'reward' => $this->believePointsTransactionType($t),
             'gift_card' => 'gift_card_purchase',
             'marketplace' => 'marketplace_sale',
             'servicehub' => 'service_payment',
@@ -911,7 +936,7 @@ class UnifiedLedgerPresenter
             }
         }
 
-        if ($module === 'believe_points' && $walletUser) {
+        if (($module === 'believe_points' || $module === 'reward') && $walletUser) {
             $rowMeta = is_array($t->meta) ? $t->meta : [];
             $isWalletTransfer = in_array($rowMeta['source'] ?? '', ['bp_redemption', 'bridge_wallet_transfer', 'believe_points_wallet_transfer'], true)
                 || in_array($t->type, ['bp_redemption', 'bridge_wallet_transfer', 'believe_points_wallet_transfer'], true);

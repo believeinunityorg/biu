@@ -198,6 +198,7 @@ function moduleLabel(m: string) {
     fundme: "Support a project",
     campaign: "Campaign",
     believe_points: "Believe Points",
+    reward: "Reward",
     wallet: "Wallet",
     marketplace: "Marketplace",
     gift_card: "Gift card",

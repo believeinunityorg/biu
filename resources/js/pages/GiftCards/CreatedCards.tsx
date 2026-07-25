@@ -31,6 +31,9 @@ interface GiftCard {
     id: number
     voucher: string | null
     amount: number
+    platform_fee?: number | null
+    platform_fee_biu_share?: number | null
+    platform_fee_org_share?: number | null
     commission_percentage?: number | null
     total_commission?: number | null
     platform_commission?: number | null
@@ -55,6 +58,16 @@ interface GiftCard {
     }
 }
 
+interface EarningsSummary {
+    platform_fee: number
+    platform_fee_biu_share: number
+    platform_fee_org_share: number
+    platform_commission: number
+    nonprofit_commission: number
+    biu_total: number
+    organization_total: number
+}
+
 interface CreatedCardsProps {
     giftCards: {
         data: GiftCard[]
@@ -72,6 +85,7 @@ interface CreatedCardsProps {
         prev_page_url?: string | null
         next_page_url?: string | null
     }
+    earningsSummary?: EarningsSummary
     organization: {
         id: number
         name: string
@@ -81,7 +95,7 @@ interface CreatedCardsProps {
     isAdmin?: boolean
 }
 
-export default function CreatedCardsPage({ giftCards, organization, isAdmin = false }: CreatedCardsProps) {
+export default function CreatedCardsPage({ giftCards, earningsSummary, organization, isAdmin = false }: CreatedCardsProps) {
     const page = usePage<{
         flash?: { success?: string }
         errors?: Record<string, string>
@@ -296,7 +310,7 @@ export default function CreatedCardsPage({ giftCards, organization, isAdmin = fa
                         )}
 
                         {/* Stats */}
-                        <div className={`grid grid-cols-1 sm:grid-cols-${isAdmin ? '4' : '3'} gap-4`}>
+                        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Total Purchased</CardTitle>
@@ -312,23 +326,15 @@ export default function CreatedCardsPage({ giftCards, organization, isAdmin = fa
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
+                            <CardTitle className="text-sm font-medium">Buyer Platform Fees</CardTitle>
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">
-                                {formatCurrency(
-                                    giftCards.data.length > 0
-                                        ? giftCards.data.reduce((sum, card) => {
-                                              const amount = typeof card.amount === 'number' ? card.amount : parseFloat(card.amount) || 0;
-                                              return sum + amount;
-                                          }, 0)
-                                        : 0,
-                                    giftCards.data[0]?.currency || 'USD'
-                                )}
+                                {formatCommission(earningsSummary?.platform_fee ?? 0, giftCards.data[0]?.currency || 'USD')}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Combined value
+                                Split 50% BIU / 50% organization
                             </p>
                         </CardContent>
                     </Card>
@@ -336,46 +342,30 @@ export default function CreatedCardsPage({ giftCards, organization, isAdmin = fa
                     {isAdmin ? (
                         <Card className="border-l-4 border-l-blue-500">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Platform Commission</CardTitle>
+                                <CardTitle className="text-sm font-medium">BIU Total Earnings</CardTitle>
                                 <DollarSign className="h-4 w-4 text-blue-500" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                    {formatCommission(
-                                        giftCards.data.length > 0
-                                            ? giftCards.data.reduce((sum, card) => {
-                                                  const commission = typeof card.platform_commission === 'number' ? card.platform_commission : parseFloat(card.platform_commission) || 0;
-                                                  return sum + commission;
-                                              }, 0)
-                                            : 0,
-                                        giftCards.data[0]?.currency || 'USD'
-                                    )}
+                                    {formatCommission(earningsSummary?.biu_total ?? 0, giftCards.data[0]?.currency || 'USD')}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Total platform earnings
+                                    Fee share {formatCommission(earningsSummary?.platform_fee_biu_share ?? 0)} + provider {formatCommission(earningsSummary?.platform_commission ?? 0)}
                                 </p>
                             </CardContent>
                         </Card>
                     ) : (
                         <Card className="border-l-4 border-l-green-500">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Your Commission</CardTitle>
+                                <CardTitle className="text-sm font-medium">Your Total Earnings</CardTitle>
                                 <DollarSign className="h-4 w-4 text-green-500" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                    {formatCommission(
-                                        giftCards.data.length > 0
-                                            ? giftCards.data.reduce((sum, card) => {
-                                                  const commission = typeof card.nonprofit_commission === 'number' ? card.nonprofit_commission : parseFloat(card.nonprofit_commission) || 0;
-                                                  return sum + commission;
-                                              }, 0)
-                                            : 0,
-                                        giftCards.data[0]?.currency || 'USD'
-                                    )}
+                                    {formatCommission(earningsSummary?.organization_total ?? 0, giftCards.data[0]?.currency || 'USD')}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Total organization earnings
+                                    Fee share {formatCommission(earningsSummary?.platform_fee_org_share ?? 0)} + provider {formatCommission(earningsSummary?.nonprofit_commission ?? 0)}
                                 </p>
                             </CardContent>
                         </Card>
@@ -477,19 +467,30 @@ export default function CreatedCardsPage({ giftCards, organization, isAdmin = fa
                                                 <p className="text-2xl font-bold text-primary">
                                                     {formatCurrency(card.amount, card.currency)}
                                                 </p>
-                                                {isAdmin && card.platform_commission !== null && card.platform_commission !== undefined && (
-                                                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-1">
-                                                        Platform: {formatCommission(card.platform_commission, card.currency)}
+                                                {card.platform_fee != null && Number(card.platform_fee) > 0 && (
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        Platform fee: {formatCommission(card.platform_fee, card.currency)}
+                                                        {card.platform_fee_org_share != null && (
+                                                            <> (org {formatCommission(card.platform_fee_org_share, card.currency)} / BIU {formatCommission(card.platform_fee_biu_share ?? 0, card.currency)})</>
+                                                        )}
                                                     </p>
                                                 )}
-                                                {!isAdmin && card.nonprofit_commission !== null && card.nonprofit_commission !== undefined && (
+                                                {isAdmin && card.platform_commission !== null && card.platform_commission !== undefined && (
+                                                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mt-1">
+                                                        BIU provider: {formatCommission(card.platform_commission, card.currency)}
+                                                    </p>
+                                                )}
+                                                {!isAdmin && (
                                                     <p className="text-sm font-semibold text-green-600 dark:text-green-400 mt-1">
-                                                        Commission: {formatCommission(card.nonprofit_commission, card.currency)}
+                                                        Your earnings: {formatCommission(
+                                                            (Number(card.platform_fee_org_share) || 0) + (Number(card.nonprofit_commission) || 0),
+                                                            card.currency
+                                                        )}
                                                     </p>
                                                 )}
                                                 {isAdmin && card.nonprofit_commission !== null && card.nonprofit_commission !== undefined && (
                                                     <p className="text-sm font-semibold text-green-600 dark:text-green-400 mt-1">
-                                                        Nonprofit: {formatCommission(card.nonprofit_commission, card.currency)}
+                                                        Org provider: {formatCommission(card.nonprofit_commission, card.currency)}
                                                     </p>
                                                 )}
                                                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -650,7 +651,7 @@ export default function CreatedCardsPage({ giftCards, organization, isAdmin = fa
                                     <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
                                         <h4 className="font-semibold text-gray-900 dark:text-white mb-3">Summary</h4>
                                         <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                                            Believe is not soliciting donations through gift card sales. Gift cards are sold at face value with no additional platform fee on the purchase price. The gift card provider pays a commission; Believe retains 10% of that provider commission as a platform share and distributes the remainder to participating nonprofits as earned fundraising revenue. Purchases are not tax-deductible, and all funds are reported as program-related income.
+                                            Believe is not soliciting donations through gift card sales. Gift cards are sold at face value plus a fixed buyer platform fee. That platform fee is split evenly (50% Believe / 50% your organization). Separately, the gift card provider pays a commission; Believe retains 10% of that provider commission and distributes the remainder to participating nonprofits as earned fundraising revenue. Purchases are not tax-deductible, and all funds are reported as program-related income.
                                         </p>
                                     </div>
 

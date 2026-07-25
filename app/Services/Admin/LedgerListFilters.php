@@ -78,6 +78,7 @@ final class LedgerListFilters
             'refund',
             'adjustment',
             'believe_points',
+            'reward',
             'wallet',
         ];
     }
@@ -197,6 +198,7 @@ final class LedgerListFilters
             'gift_card' => self::scopeGiftCard(self::withRefundPayoutExclusion($query)),
             'marketplace' => self::scopeMarketplace(self::withRefundPayoutExclusion($query)),
             'believe_points' => self::scopeBelievePoints($query),
+            'reward' => self::scopeReward($query),
             'wallet' => self::scopeWallet($query),
             default => null,
         };
@@ -446,8 +448,28 @@ final class LedgerListFilters
                 ->whereNot(function (Builder $rf) {
                     $rf->where('type', 'refund')
                         ->orWhere('status', Transaction::STATUS_REFUND);
+                })
+                // BRP earn/redeem rows use the Reward module, not Believe Points (BP currency).
+                ->whereNot(function (Builder $brp) {
+                    self::whereMatchesRewardModule($brp);
                 });
         });
+    }
+
+    private static function scopeReward(Builder $query): void
+    {
+        $query->where(function (Builder $q) {
+            self::whereMatchesRewardModule($q);
+        });
+    }
+
+    private static function whereMatchesRewardModule(Builder $query): void
+    {
+        $query->where('ledger_type', UnifiedLedgerType::BRP)
+            ->orWhere('currency', 'BRP')
+            ->orWhere('meta->source', 'reward_point_ledger')
+            ->orWhere('meta->source', 'believe_points_purchase_brp')
+            ->orWhere('transaction_id', 'like', 'brp:%');
     }
 
     private static function scopeGiftCard(Builder $query): void
@@ -535,6 +557,10 @@ final class LedgerListFilters
                 ->orWhere('type', 'gift_card_purchase')
                 ->orWhere('meta->type', 'gift_card_purchase')
                 ->orWhereNotNull('meta->gift_card_id');
+        });
+
+        $query->whereNot(function (Builder $brp) {
+            self::whereMatchesRewardModule($brp);
         });
     }
 

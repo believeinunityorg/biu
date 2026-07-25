@@ -72,8 +72,8 @@ export default function AdminBiuFeeIndex({
             <span className="font-medium text-foreground">Connection Hub</span> courses and meetups use dedicated module rates (platform fees are never
             refunded when a host cancels).{" "}
             <span className="font-medium text-foreground">Other sales modules</span> (Service Hub, raffles, merchant hub cash) use the global sales rate
-            below. <span className="font-medium text-foreground">Gift cards</span> charge a fixed platform fee on top of face value (Believe Points); BIU
-            also earns a share of provider commissions (see Gift card revenue).
+            below. <span className="font-medium text-foreground">Gift cards</span> charge a fixed platform fee on top of face value (Believe Points),
+            split 50/50 between BIU and the beneficiary organization. BIU also earns a share of provider commissions (see Gift card revenue).
           </p>
         </div>
 
@@ -97,7 +97,8 @@ export default function AdminBiuFeeIndex({
               Connection Hub meetup @ {eventPct}% → ${((100 * eventPct) / 100).toFixed(2)} platform fee on a $100 registration fee.
             </p>
             <p>
-              Gift card $25 face + ${giftCardFee.toFixed(2)} platform fee → ${(25 + giftCardFee).toFixed(2)} total charged in Believe Points.
+              Gift card $25 face + ${giftCardFee.toFixed(2)} platform fee → ${(25 + giftCardFee).toFixed(2)} total charged in Believe Points
+              (fee split: BIU ${(giftCardFee / 2).toFixed(2)} / org ${(giftCardFee / 2).toFixed(2)}).
             </p>
           </CardContent>
         </Card>
@@ -216,7 +217,7 @@ export default function AdminBiuFeeIndex({
             <CardHeader>
               <CardTitle>Gift cards — fixed platform fee</CardTitle>
               <CardDescription>
-                Added on top of the gift card face value and charged in Believe Points at purchase. The card face value sent to Phaze is unchanged.
+                Added on top of the gift card face value and charged in Believe Points at purchase. Split 50% BIU / 50% organization. The card face value sent to Phaze is unchanged.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

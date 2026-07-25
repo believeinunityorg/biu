@@ -1569,6 +1569,9 @@ class GiftCardController extends Controller
                     'amount' => $giftCardModel->amount,
                     'commission_percentage' => $giftCardModel->commission_percentage,
                     'total_commission' => $giftCardModel->total_commission,
+                    'platform_fee' => $giftCardModel->platform_fee !== null ? (float) $giftCardModel->platform_fee : null,
+                    'platform_fee_biu_share' => $giftCardModel->platform_fee_biu_share !== null ? (float) $giftCardModel->platform_fee_biu_share : null,
+                    'platform_fee_org_share' => $giftCardModel->platform_fee_org_share !== null ? (float) $giftCardModel->platform_fee_org_share : null,
                     'platform_commission' => $giftCardModel->platform_commission,
                     'nonprofit_commission' => $giftCardModel->nonprofit_commission,
                     'brand' => $giftCardModel->brand,
@@ -1685,10 +1688,28 @@ class GiftCardController extends Controller
         }
         // Admin sees all purchased cards (no filter)
 
+        $earningsBase = (clone $query)->where('status', '!=', 'failed');
+        $earningsSummary = [
+            'platform_fee' => (float) (clone $earningsBase)->sum('platform_fee'),
+            'platform_fee_biu_share' => (float) (clone $earningsBase)->sum('platform_fee_biu_share'),
+            'platform_fee_org_share' => (float) (clone $earningsBase)->sum('platform_fee_org_share'),
+            'platform_commission' => (float) (clone $earningsBase)->sum('platform_commission'),
+            'nonprofit_commission' => (float) (clone $earningsBase)->sum('nonprofit_commission'),
+        ];
+        $earningsSummary['biu_total'] = round(
+            $earningsSummary['platform_fee_biu_share'] + $earningsSummary['platform_commission'],
+            2
+        );
+        $earningsSummary['organization_total'] = round(
+            $earningsSummary['platform_fee_org_share'] + $earningsSummary['nonprofit_commission'],
+            2
+        );
+
         $giftCards = $query->paginate(15);
 
         return Inertia::render('GiftCards/CreatedCards', [
             'giftCards' => $giftCards,
+            'earningsSummary' => $earningsSummary,
             'organization' => $user->organization ? [
                 'id' => $user->organization->id,
                 'name' => $user->organization->name,

@@ -25,6 +25,9 @@ interface GiftCard {
     voucher: string | null
     card_number: string | null
     amount: number
+    platform_fee?: number | null
+    platform_fee_biu_share?: number | null
+    platform_fee_org_share?: number | null
     commission_percentage?: number | null
     total_commission?: number | null
     platform_commission?: number | null
@@ -247,22 +250,46 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                     </div>
                                 )}
 
-                                {/* Commission Information */}
-                                {giftCard.nonprofit_commission !== null && giftCard.nonprofit_commission !== undefined && (
-                                    <div className="p-6 rounded-lg bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800">
+                                {/* Earnings Information */}
+                                {(giftCard.platform_fee_org_share != null || giftCard.nonprofit_commission != null) && (
+                                    <div className="p-6 rounded-lg bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 space-y-4">
                                         <div className="flex items-center justify-between">
                                             <div>
-                                                <p className="text-sm text-green-800 dark:text-green-200 mb-1 font-medium">Your Organization Commission</p>
+                                                <p className="text-sm text-green-800 dark:text-green-200 mb-1 font-medium">Your Organization Earnings</p>
                                                 <p className="text-3xl font-bold text-green-700 dark:text-green-300">
-                                                    {formatCommission(giftCard.nonprofit_commission)}
+                                                    {formatCommission(
+                                                        (Number(giftCard.platform_fee_org_share) || 0) +
+                                                        (Number(giftCard.nonprofit_commission) || 0)
+                                                    )}
                                                 </p>
-                                                {giftCard.total_commission && giftCard.commission_percentage && (
-                                                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                                                        {giftCard.commission_percentage}% commission on {formatCurrency(giftCard.amount)}
-                                                    </p>
-                                                )}
                                             </div>
                                             <DollarSign className="h-12 w-12 text-green-600 dark:text-green-400 opacity-50" />
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                                            {giftCard.platform_fee != null && (
+                                                <div className="rounded-md bg-white/60 dark:bg-black/20 p-3">
+                                                    <p className="text-green-800/80 dark:text-green-200/80">Platform fee (50% share)</p>
+                                                    <p className="font-semibold text-green-800 dark:text-green-200">
+                                                        {formatCommission(giftCard.platform_fee_org_share ?? 0)}
+                                                        <span className="ml-1 text-xs font-normal opacity-80">
+                                                            of {formatCommission(giftCard.platform_fee)}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {giftCard.nonprofit_commission != null && (
+                                                <div className="rounded-md bg-white/60 dark:bg-black/20 p-3">
+                                                    <p className="text-green-800/80 dark:text-green-200/80">Provider commission share</p>
+                                                    <p className="font-semibold text-green-800 dark:text-green-200">
+                                                        {formatCommission(giftCard.nonprofit_commission)}
+                                                    </p>
+                                                    {giftCard.total_commission && giftCard.commission_percentage && (
+                                                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                                            From {giftCard.commission_percentage}% on {formatCurrency(giftCard.amount)}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}

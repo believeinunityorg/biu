@@ -91,6 +91,9 @@ class GiftCardRedemptionService
                 'organization_id' => $validated['organization_id'],
                 'card_number' => GiftCard::generateUniqueCardNumber(),
                 'amount' => $faceValue,
+                'platform_fee' => $feeMeta['platform_fee'],
+                'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
+                'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
                 'brand' => $finalBrandName,
                 'brand_name' => $finalBrandName,
                 'country' => $validated['country'] ?? null,
@@ -115,6 +118,8 @@ class GiftCardRedemptionService
                         'at' => $requestedAt->toIso8601String(),
                         'amount' => $faceValue,
                         'platform_fee' => $platformFee,
+                        'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
+                        'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
                         'total_charged' => $pointsRequired,
                         'order_id' => $orderId,
                     ]],
@@ -694,12 +699,21 @@ class GiftCardRedemptionService
             return;
         }
 
+        $recordedFeeSplit = $giftCard->platform_fee !== null
+            ? [
+                'platform_fee' => (float) $giftCard->platform_fee,
+                'platform_fee_biu_share' => (float) ($giftCard->platform_fee_biu_share ?? 0),
+                'platform_fee_org_share' => (float) ($giftCard->platform_fee_org_share ?? 0),
+            ]
+            : null;
+
         $ledgerSlice = GiftCardRevenueShareService::ledgerMetaSlice(
             (float) $giftCard->amount,
             $giftCard->total_commission !== null ? (float) $giftCard->total_commission : null,
             $giftCard->platform_commission !== null ? (float) $giftCard->platform_commission : null,
             $giftCard->nonprofit_commission !== null ? (float) $giftCard->nonprofit_commission : null,
             (float) ($giftCard->merchant_revenue ?? 0),
+            $recordedFeeSplit,
         );
 
         $meta = $giftCard->meta ?? [];

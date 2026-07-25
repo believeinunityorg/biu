@@ -6,6 +6,9 @@ final class UnifiedLedgerBpStatus
 {
     public const PROCESSING = 'processing';
 
+    /** Gift BP held pending claim (distinct from purchase settlement "Processing"). */
+    public const HOLDING = 'holding';
+
     public const AVAILABLE = 'available';
 
     public const REVERSED = 'reversed';
@@ -17,6 +20,7 @@ final class UnifiedLedgerBpStatus
     {
         return [
             self::PROCESSING,
+            self::HOLDING,
             self::AVAILABLE,
             self::REVERSED,
             self::NA,
@@ -27,6 +31,7 @@ final class UnifiedLedgerBpStatus
     {
         return match ($status) {
             self::PROCESSING => 'Processing',
+            self::HOLDING => 'Holding',
             self::AVAILABLE, 'settled', 'settlement_available' => 'Available',
             self::REVERSED => 'Reversed',
             default => 'N/A',
@@ -44,6 +49,7 @@ final class UnifiedLedgerBpStatus
 
         return match ($raw) {
             self::PROCESSING => self::PROCESSING,
+            self::HOLDING => self::HOLDING,
             self::AVAILABLE, 'settled', 'settlement_available' => self::AVAILABLE,
             self::REVERSED, 'refunded' => self::REVERSED,
             self::NA, 'na', 'n/a' => self::NA,

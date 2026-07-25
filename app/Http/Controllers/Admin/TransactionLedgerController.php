@@ -141,7 +141,11 @@ class TransactionLedgerController extends Controller
                 'believe_points_auto_replenish_setup',
                 'believe_points_purchase',
                 'believe_points_wallet_transfer',
-                'bp_gift',
+                'bp_gift_sent',
+                'bp_gift_claimed',
+                'bp_gift_cancelled',
+                'bp_gift_expired',
+                'bp_gift_refunded',
                 'bp_settlement',
                 'big_boss_override',
                 'cancellation',
@@ -270,22 +274,27 @@ class TransactionLedgerController extends Controller
             $type = $request->string('type')->toString();
             if ($type === 'enrollment') {
                 LedgerListFilters::applyEnrollmentWalletType($query);
-            } elseif ($type === 'bp_gift') {
-                $query->where(function ($q) {
-                    $q->whereIn('type', [
-                        'bp_gift',
-                        'bp_gift_hold',
-                        'bp_gift_claim',
-                        'bp_gift_hold_refund',
-                        'bp_gift_email_changed',
-                    ])->orWhereIn('meta->source', [
-                        'bp_gift',
-                        'bp_gift_hold',
-                        'bp_gift_claim',
-                        'bp_gift_hold_refund',
-                        'bp_gift_email_changed',
-                    ])->orWhere('transaction_id', 'like', 'bp_gift:%')
-                        ->orWhere('transaction_id', 'like', 'bp_gift_legacy:%');
+            } elseif (in_array($type, ['bp_gift', 'bp_gift_sent', 'bp_gift_claimed', 'bp_gift_cancelled', 'bp_gift_expired', 'bp_gift_refunded'], true)
+                || str_starts_with($type, 'bp_gift_')) {
+                $query->where(function ($q) use ($type) {
+                    if ($type === 'bp_gift') {
+                        $q->whereIn('type', [
+                            'bp_gift',
+                            'bp_gift_sent',
+                            'bp_gift_claimed',
+                            'bp_gift_cancelled',
+                            'bp_gift_expired',
+                            'bp_gift_refunded',
+                            'bp_gift_hold',
+                            'bp_gift_claim',
+                            'bp_gift_hold_refund',
+                            'bp_gift_email_changed',
+                        ])->orWhere('transaction_id', 'like', 'bp_gift%');
+                    } else {
+                        $q->where('type', $type)
+                            ->orWhere('meta->source', $type)
+                            ->orWhere('transaction_id', 'like', $type.':%');
+                    }
                 });
             } else {
                 $query->where('type', $type);

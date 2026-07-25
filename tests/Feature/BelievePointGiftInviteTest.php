@@ -63,9 +63,10 @@ it('holds believe points for an existing supporter until they claim', function (
     ]);
 
     $this->assertDatabaseHas('transactions', [
-        'type' => 'bp_gift',
+        'type' => 'bp_gift_sent',
         'user_id' => $sender->id,
         'currency' => 'BP',
+        'bp_status' => 'holding',
     ]);
 });
 
@@ -108,9 +109,9 @@ it('lets a registered recipient claim a pending gift into gifted bp', function (
     expect($invite->status)->toBe(BelievePointGiftInvite::STATUS_CLAIMED);
 
     $this->assertDatabaseHas('transactions', [
-        'type' => 'bp_gift',
-        'user_id' => $sender->id,
-        'transaction_id' => 'bp_gift:'.$invite->id,
+        'type' => 'bp_gift_claimed',
+        'user_id' => $recipient->id,
+        'transaction_id' => 'bp_gift_claimed:'.$invite->id,
     ]);
 });
 
@@ -247,10 +248,14 @@ it('cancels a pending invite and returns holding believe points immediately', fu
     Mail::assertSent(\App\Mail\BelievePointGiftInviteCancelledSenderMail::class);
 
     $this->assertDatabaseHas('transactions', [
-        'type' => 'bp_gift',
+        'type' => 'bp_gift_cancelled',
         'user_id' => $sender->id,
-        'status' => 'cancelled',
-        'transaction_id' => 'bp_gift:'.$invite->id,
+        'transaction_id' => 'bp_gift_cancelled:'.$invite->id,
+    ]);
+    $this->assertDatabaseHas('transactions', [
+        'type' => 'bp_gift_refunded',
+        'user_id' => $sender->id,
+        'transaction_id' => 'bp_gift_refunded:'.$invite->id,
     ]);
 
     $this->assertDatabaseHas('believe_point_gift_invite_goodwills', [

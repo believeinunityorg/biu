@@ -141,6 +141,7 @@ class TransactionLedgerController extends Controller
                 'believe_points_auto_replenish_setup',
                 'believe_points_purchase',
                 'believe_points_wallet_transfer',
+                'bp_gift',
                 'bp_settlement',
                 'big_boss_override',
                 'cancellation',
@@ -269,6 +270,22 @@ class TransactionLedgerController extends Controller
             $type = $request->string('type')->toString();
             if ($type === 'enrollment') {
                 LedgerListFilters::applyEnrollmentWalletType($query);
+            } elseif ($type === 'bp_gift') {
+                $query->where(function ($q) {
+                    $q->whereIn('type', [
+                        'bp_gift',
+                        'bp_gift_hold',
+                        'bp_gift_claim',
+                        'bp_gift_hold_refund',
+                        'bp_gift_email_changed',
+                    ])->orWhereIn('meta->source', [
+                        'bp_gift',
+                        'bp_gift_hold',
+                        'bp_gift_claim',
+                        'bp_gift_hold_refund',
+                        'bp_gift_email_changed',
+                    ]);
+                });
             } else {
                 $query->where('type', $type);
             }

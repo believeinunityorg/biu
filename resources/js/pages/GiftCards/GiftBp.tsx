@@ -358,15 +358,15 @@ export default function GiftBpPage() {
   const statusBadgeClass = (status: string) => {
     switch (status) {
       case "pending":
-        return "border-amber-500/40 text-amber-800 dark:text-amber-200"
+        return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
       case "claimed":
-        return "border-emerald-500/40 text-emerald-800 dark:text-emerald-200"
+        return "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
       case "cancelled":
-        return "border-rose-500/40 text-rose-800 dark:text-rose-200"
+        return "border-rose-500/30 bg-rose-500/10 text-rose-800 dark:text-rose-200"
       case "expired":
-        return "border-slate-400/40 text-slate-700 dark:text-slate-300"
+        return "border-slate-400/30 bg-slate-500/10 text-slate-700 dark:text-slate-300"
       default:
-        return ""
+        return "border-border bg-muted/50 text-muted-foreground"
     }
   }
 
@@ -379,12 +379,23 @@ export default function GiftBpPage() {
         })
       : "—"
 
+  const formatDateTime = (iso: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "—"
+
   const pageBody = (
       <div
         className={
           isOrgViewer
-            ? "container mx-auto flex h-full flex-1 flex-col gap-8 px-4 py-4 md:px-10 md:py-6"
-            : "space-y-8"
+            ? "container mx-auto flex h-full min-w-0 flex-1 flex-col gap-6 px-3 py-4 sm:gap-8 sm:px-4 md:px-10 md:py-6"
+            : "min-w-0 max-w-full space-y-6 overflow-x-hidden sm:space-y-8"
         }
       >
         <div className="flex items-center justify-between gap-3">
@@ -398,7 +409,7 @@ export default function GiftBpPage() {
         </div>
 
         {/* Hero */}
-        <header className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-purple-600 via-purple-600 to-blue-600 px-5 py-8 text-white shadow-lg sm:px-8 sm:py-10">
+        <header className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600 via-purple-600 to-blue-600 px-4 py-6 text-white shadow-lg sm:rounded-3xl sm:px-8 sm:py-10">
           <div
             className="pointer-events-none absolute inset-0 opacity-30"
             style={{
@@ -406,27 +417,27 @@ export default function GiftBpPage() {
                 "radial-gradient(circle at 15% 20%, rgba(255,255,255,0.35), transparent 45%), radial-gradient(circle at 85% 10%, rgba(255,255,255,0.2), transparent 40%), radial-gradient(circle at 70% 90%, rgba(59,130,246,0.5), transparent 50%)",
             }}
           />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-xl">
-              <p className="text-sm font-medium text-white/80">Believe Points</p>
-              <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Gift BP</h1>
-              <p className="mt-3 text-sm leading-relaxed text-white/85 sm:text-base">
+          <div className="relative flex flex-col gap-5 sm:gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 max-w-xl">
+              <p className="text-xs font-medium text-white/80 sm:text-sm">Believe Points</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">Gift BP</h1>
+              <p className="mt-2 text-sm leading-relaxed text-white/85 sm:mt-3 sm:text-base">
                 Send Believe Points like a real gift. They stay in Holding until the recipient Accepts —
                 then land in their Gifted BP wallet.
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:min-w-[22rem]">
-              <div className="rounded-2xl bg-white/15 px-3 py-3 backdrop-blur-sm sm:px-4">
-                <p className="text-[11px] uppercase tracking-wide text-white/70">Available</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{purchased.toFixed(0)}</p>
+            <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-3 lg:min-w-[22rem]">
+              <div className="rounded-xl bg-white/15 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
+                <p className="text-[10px] uppercase tracking-wide text-white/70 sm:text-[11px]">Available</p>
+                <p className="mt-0.5 text-base font-semibold tabular-nums sm:mt-1 sm:text-xl">{purchased.toFixed(0)}</p>
               </div>
-              <div className="rounded-2xl bg-amber-400/25 px-3 py-3 backdrop-blur-sm sm:px-4">
-                <p className="text-[11px] uppercase tracking-wide text-amber-50/90">Holding</p>
-                <p className="mt-1 text-lg font-semibold tabular-nums sm:text-xl">{holding.toFixed(0)}</p>
+              <div className="rounded-xl bg-amber-400/25 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
+                <p className="text-[10px] uppercase tracking-wide text-amber-50/90 sm:text-[11px]">Holding</p>
+                <p className="mt-0.5 text-base font-semibold tabular-nums sm:mt-1 sm:text-xl">{holding.toFixed(0)}</p>
               </div>
-              <div className="rounded-2xl bg-white/15 px-3 py-3 backdrop-blur-sm sm:px-4">
-                <p className="text-[11px] uppercase tracking-wide text-white/70">Window</p>
-                <p className="mt-1 text-lg font-semibold sm:text-xl">{holdDays}d</p>
+              <div className="rounded-xl bg-white/15 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
+                <p className="text-[10px] uppercase tracking-wide text-white/70 sm:text-[11px]">Window</p>
+                <p className="mt-0.5 text-base font-semibold sm:mt-1 sm:text-xl">{holdDays}d</p>
               </div>
             </div>
           </div>
@@ -487,7 +498,7 @@ export default function GiftBpPage() {
                     </div>
                     <Button
                       type="button"
-                      className="h-11 shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 px-5 shadow-md shadow-purple-600/20"
+                      className="h-11 w-full shrink-0 bg-gradient-to-r from-purple-600 to-blue-600 px-5 shadow-md shadow-purple-600/20 sm:h-11 sm:w-auto"
                       disabled={busy}
                       onClick={() => claimGift(gift)}
                     >
@@ -511,16 +522,16 @@ export default function GiftBpPage() {
         )}
 
         {/* Send composer */}
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.7fr)] lg:items-start">
-          <div className="overflow-hidden rounded-3xl border border-purple-500/15 bg-card shadow-sm dark:bg-slate-900/50">
-            <div className="border-b border-purple-500/10 bg-gradient-to-r from-purple-600/[0.07] to-blue-600/[0.07] px-5 py-4 sm:px-6">
-              <h2 className="text-lg font-semibold tracking-tight dark:text-white">Send a gift</h2>
+        <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(14rem,0.7fr)] lg:items-start">
+          <div className="min-w-0 overflow-hidden rounded-2xl border border-purple-500/15 bg-card shadow-sm dark:bg-slate-900/50 sm:rounded-3xl">
+            <div className="border-b border-purple-500/10 bg-gradient-to-r from-purple-600/[0.07] to-blue-600/[0.07] px-4 py-4 sm:px-6">
+              <h2 className="text-base font-semibold tracking-tight dark:text-white sm:text-lg">Send a gift</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Find someone by name or email, then choose amount and occasion.
               </p>
             </div>
 
-            <div className="space-y-6 p-5 sm:p-6">
+            <div className="min-w-0 space-y-6 p-4 sm:p-6">
               {/* Recipient step */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -666,7 +677,7 @@ export default function GiftBpPage() {
 
                   <div>
                     <Label className="text-muted-foreground">Amount (Believe Points)</Label>
-                    <div className="mt-2 grid grid-cols-4 gap-2">
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {PRESETS.map((n) => (
                         <button
                           key={n}
@@ -786,15 +797,26 @@ export default function GiftBpPage() {
         </section>
 
         {/* Sent history */}
-        <section className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight dark:text-white">BP Gifts Sent</h2>
-              <p className="text-sm text-muted-foreground">
-                Pending gifts can be cancelled or resent until claimed.
+        <section className="min-w-0 w-full max-w-full overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm dark:bg-slate-900/50">
+          <div className="flex flex-col gap-3 border-b border-border/70 bg-gradient-to-r from-purple-600/[0.05] via-transparent to-blue-600/[0.05] px-3 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold tracking-tight dark:text-white sm:text-lg">
+                  BP Gifts Sent
+                </h2>
+                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-purple-600/10 px-2 text-xs font-semibold tabular-nums text-purple-700 dark:text-purple-300">
+                  {sentGifts.length}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+                Full send history · cancel or resend while pending
               </p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div
+              className="flex w-full shrink-0 gap-0.5 overflow-x-auto rounded-xl border border-border/70 bg-background/80 p-0.5 sm:w-auto sm:gap-1 sm:p-1"
+              role="tablist"
+              aria-label="Filter gifts by status"
+            >
               {(
                 [
                   ["all", "All"],
@@ -803,78 +825,232 @@ export default function GiftBpPage() {
                   ["cancelled", "Cancelled"],
                   ["expired", "Expired"],
                 ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => applyStatusFilter(value)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
-                    statusFilter === value
-                      ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-sm"
-                      : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+              ).map(([value, label]) => {
+                const active = statusFilter === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => applyStatusFilter(value)}
+                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all sm:px-3 sm:text-sm ${
+                      active
+                        ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-sm"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {sentGifts.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-muted-foreground/25 px-6 py-12 text-center">
-              <Gift className="mx-auto h-8 w-8 text-muted-foreground/50" />
-              <p className="mt-3 text-sm text-muted-foreground">No gifts in this filter yet.</p>
+            <div className="px-4 py-12 text-center sm:px-6 sm:py-16">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-muted/60">
+                <Gift className="h-6 w-6 text-muted-foreground/60" />
+              </div>
+              <p className="mt-4 text-sm font-medium text-foreground">No gifts in this view</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try another status filter, or send your first Gift BP above.
+              </p>
             </div>
           ) : (
-            <ul className="space-y-3">
-              {sentGifts.map((gift) => {
-                const busy = gift.invite_id != null && inviteActionId === gift.invite_id
-                return (
-                  <li
-                    key={gift.id}
-                    className="rounded-2xl border border-border/80 bg-card p-4 transition-colors hover:border-purple-500/25 dark:bg-slate-900/40 sm:p-5"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-semibold dark:text-white" title={gift.recipient_label}>
-                            {gift.recipient_label}
+            <>
+              {/* Desktop table — full columns */}
+              <div className="hidden min-w-0 lg:block">
+                <div className="overflow-x-auto overscroll-x-contain">
+                  <table className="w-full border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border/70 bg-muted/30 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <th className="whitespace-nowrap px-4 py-3 font-semibold xl:px-5">Sent</th>
+                        <th className="px-3 py-3 font-semibold xl:px-4">Recipient</th>
+                        <th className="whitespace-nowrap px-3 py-3 text-right font-semibold xl:px-4">Amount</th>
+                        <th className="whitespace-nowrap px-3 py-3 font-semibold xl:px-4">Status</th>
+                        <th className="whitespace-nowrap px-3 py-3 font-semibold xl:px-4">Occasion</th>
+                        <th className="whitespace-nowrap px-3 py-3 font-semibold xl:px-4">Claimed / Expires</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right font-semibold xl:px-5">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {sentGifts.map((gift) => {
+                        const busy = gift.invite_id != null && inviteActionId === gift.invite_id
+                        const hasActions =
+                          gift.invite_id != null &&
+                          (gift.can_resend || gift.can_change_email || gift.can_cancel)
+                        return (
+                          <tr
+                            key={gift.id}
+                            className="transition-colors hover:bg-purple-500/[0.03] dark:hover:bg-purple-500/[0.06]"
+                          >
+                            <td className="whitespace-nowrap px-4 py-3.5 text-muted-foreground tabular-nums xl:px-5">
+                              <span title={formatDateTime(gift.created_at)}>{formatDate(gift.created_at)}</span>
+                            </td>
+                            <td className="max-w-[14rem] px-3 py-3.5 xl:max-w-[18rem] xl:px-4">
+                              <p className="truncate font-medium text-foreground" title={gift.recipient_label}>
+                                {gift.recipient_name || gift.recipient_email || gift.recipient_label}
+                              </p>
+                              {gift.recipient_name && gift.recipient_email ? (
+                                <p className="truncate text-xs text-muted-foreground" title={gift.recipient_email}>
+                                  {gift.recipient_email}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-3.5 text-right xl:px-4">
+                              <span className="font-semibold tabular-nums text-foreground">
+                                {Number(gift.amount).toFixed(2)}
+                              </span>
+                              <span className="ml-1 text-xs font-medium text-muted-foreground">BP</span>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-3.5 xl:px-4">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold capitalize tracking-wide ${statusBadgeClass(gift.status)}`}
+                              >
+                                {gift.status}
+                              </span>
+                            </td>
+                            <td
+                              className="max-w-[8rem] truncate px-3 py-3.5 text-muted-foreground xl:max-w-[10rem] xl:px-4"
+                              title={gift.occasion ?? undefined}
+                            >
+                              {gift.occasion || "—"}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-3.5 text-muted-foreground tabular-nums xl:px-4">
+                              {gift.claimed_at
+                                ? formatDate(gift.claimed_at)
+                                : gift.status === "pending" && gift.expires_at
+                                  ? (
+                                    <span className="text-amber-700 dark:text-amber-300">
+                                      Exp. {formatDate(gift.expires_at)}
+                                    </span>
+                                    )
+                                  : "—"}
+                            </td>
+                            <td className="px-4 py-3.5 xl:px-5">
+                              {hasActions ? (
+                                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                  {gift.can_resend ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 rounded-lg px-2.5 text-xs"
+                                      disabled={busy}
+                                      onClick={() => runInviteAction(gift, "resend")}
+                                    >
+                                      {busy && inviteAction === "resend" ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <RefreshCw className="h-3.5 w-3.5" />
+                                      )}
+                                      <span className="ml-1">Resend</span>
+                                    </Button>
+                                  ) : null}
+                                  {gift.can_change_email ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 rounded-lg px-2.5 text-xs"
+                                      disabled={busy}
+                                      onClick={() => openEditEmail(gift)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                      <span className="ml-1">Email</span>
+                                    </Button>
+                                  ) : null}
+                                  {gift.can_cancel ? (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 rounded-lg border-rose-500/35 px-2.5 text-xs text-rose-700 hover:bg-rose-500/10 dark:text-rose-300"
+                                      disabled={busy}
+                                      onClick={() => setCancelTarget(gift)}
+                                    >
+                                      <XCircle className="h-3.5 w-3.5" />
+                                      <span className="ml-1">Cancel</span>
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="block text-right text-xs text-muted-foreground">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Phone + tablet cards */}
+              <ul className="divide-y divide-border/60 lg:hidden">
+                {sentGifts.map((gift) => {
+                  const busy = gift.invite_id != null && inviteActionId === gift.invite_id
+                  const hasActions =
+                    gift.invite_id != null &&
+                    (gift.can_resend || gift.can_change_email || gift.can_cancel)
+                  return (
+                    <li key={gift.id} className="min-w-0 space-y-3 px-3 py-4 sm:px-4">
+                      <div className="flex items-start justify-between gap-2 sm:gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words font-semibold text-foreground sm:truncate" title={gift.recipient_label}>
+                            {gift.recipient_name || gift.recipient_email || gift.recipient_label}
                           </p>
-                          <Badge variant="outline" className={`capitalize ${statusBadgeClass(gift.status)}`}>
-                            {gift.status}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          <span className="font-medium tabular-nums text-foreground">
-                            {Number(gift.amount).toFixed(2)} BP
-                          </span>
-                          <span className="mx-1.5 text-muted-foreground/50">·</span>
-                          Sent {formatDate(gift.created_at)}
-                          {gift.claimed_at ? (
-                            <>
-                              <span className="mx-1.5 text-muted-foreground/50">·</span>
-                              Claimed {formatDate(gift.claimed_at)}
-                            </>
-                          ) : gift.expires_at && gift.status === "pending" ? (
-                            <>
-                              <span className="mx-1.5 text-muted-foreground/50">·</span>
-                              Expires {formatDate(gift.expires_at)}
-                            </>
+                          {gift.recipient_name && gift.recipient_email ? (
+                            <p className="mt-0.5 break-all text-xs text-muted-foreground sm:truncate">
+                              {gift.recipient_email}
+                            </p>
                           ) : null}
-                        </p>
-                        {gift.occasion ? (
-                          <p className="text-xs text-muted-foreground">{gift.occasion}</p>
-                        ) : null}
+                        </div>
+                        <span
+                          className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize sm:px-2.5 sm:text-[11px] ${statusBadgeClass(gift.status)}`}
+                        >
+                          {gift.status}
+                        </span>
                       </div>
 
-                      {(gift.can_resend || gift.can_change_email || gift.can_cancel) && gift.invite_id ? (
-                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 rounded-xl bg-muted/25 p-3 text-xs sm:grid-cols-4 sm:gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Amount</p>
+                          <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
+                            {Number(gift.amount).toFixed(2)} BP
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Sent</p>
+                          <p className="mt-0.5 text-sm text-foreground">{formatDate(gift.created_at)}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">Occasion</p>
+                          <p className="mt-0.5 truncate text-sm text-foreground">{gift.occasion || "—"}</p>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80">
+                            {gift.claimed_at ? "Claimed" : gift.status === "pending" ? "Expires" : "Date"}
+                          </p>
+                          <p className="mt-0.5 text-sm text-foreground">
+                            {gift.claimed_at
+                              ? formatDate(gift.claimed_at)
+                              : gift.status === "pending" && gift.expires_at
+                                ? formatDate(gift.expires_at)
+                                : "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {hasActions ? (
+                        <div className="grid grid-cols-1 gap-2 border-t border-border/50 pt-3 sm:flex sm:flex-wrap">
                           {gift.can_resend ? (
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="rounded-full"
+                              className="h-9 w-full rounded-lg text-xs sm:h-8 sm:w-auto sm:flex-1"
                               disabled={busy}
                               onClick={() => runInviteAction(gift, "resend")}
                             >
@@ -891,7 +1067,7 @@ export default function GiftBpPage() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="rounded-full"
+                              className="h-9 w-full rounded-lg text-xs sm:h-8 sm:w-auto sm:flex-1"
                               disabled={busy}
                               onClick={() => openEditEmail(gift)}
                             >
@@ -904,7 +1080,7 @@ export default function GiftBpPage() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="rounded-full border-rose-500/40 text-rose-700 dark:text-rose-300"
+                              className="h-9 w-full rounded-lg border-rose-500/35 text-xs text-rose-700 dark:text-rose-300 sm:h-8 sm:w-auto sm:flex-1"
                               disabled={busy}
                               onClick={() => setCancelTarget(gift)}
                             >
@@ -914,11 +1090,11 @@ export default function GiftBpPage() {
                           ) : null}
                         </div>
                       ) : null}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
           )}
         </section>
 
@@ -1044,7 +1220,7 @@ export default function GiftBpPage() {
   return (
     <FrontendLayout>
       <Head title="Gift BP" />
-      <div className="container mx-auto max-w-5xl px-4 py-8">{pageBody}</div>
+      <div className="container mx-auto max-w-5xl min-w-0 px-3 py-6 sm:px-4 sm:py-8">{pageBody}</div>
     </FrontendLayout>
   )
 }

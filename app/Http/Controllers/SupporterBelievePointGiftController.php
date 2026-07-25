@@ -3,9 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\GiftOccasion;
-use App\Models\OrganizationLivestream;
-use App\Models\UserLivestream;
-use App\Support\UnityLiveBroadcast;
 use App\Models\User;
 use App\Services\BelievePointGiftInviteService;
 use Illuminate\Http\Request;
@@ -79,7 +76,7 @@ class SupporterBelievePointGiftController extends Controller
         ]);
 
         $occasion = GiftOccasion::query()->findOrFail((int) $validated['gift_occasion_id']);
-        $gift = $this->giftService->sendToExistingUser(
+        $invite = $this->giftService->sendToExistingUser(
             $sender,
             $recipient,
             (float) $validated['amount'],
@@ -87,29 +84,15 @@ class SupporterBelievePointGiftController extends Controller
             $validated['message'] ?? null,
         );
 
-        $livestreamKind = $validated['livestream_kind'] ?? null;
-        $livestreamId = isset($validated['livestream_id']) ? (int) $validated['livestream_id'] : null;
-        if ($livestreamKind && $livestreamId) {
-            $livestream = $livestreamKind === 'user'
-                ? UserLivestream::query()->find($livestreamId)
-                : OrganizationLivestream::query()->find($livestreamId);
-            if ($livestream instanceof UserLivestream || $livestream instanceof OrganizationLivestream) {
-                UnityLiveBroadcast::notifyGiftReceived(
-                    $livestream,
-                    $sender->fresh(),
-                    $recipient->fresh(),
-                    (float) $gift->amount,
-                    (string) ($gift->occasion ?? $occasion->occasion),
-                    $gift->message,
-                );
-            }
-        }
+        $amt = BelievePointGiftInviteService::formatAmount((float) $invite->amount);
+        $days = BelievePointGiftInviteService::holdDays();
+        $success = "Gift sent to {$recipient->name}. {$amt} BP is holding until they accept ({$days} days).";
 
         if ($request->header('X-Inertia')) {
-            return back()->with('success', 'Your Believe Points gift was sent successfully.');
+            return back()->with('success', $success);
         }
 
-        return redirect()->route('find-supporters.index')->with('success', 'Your Believe Points gift was sent successfully.');
+        return redirect()->route('find-supporters.index')->with('success', $success);
     }
 
     public function sendBirthdayGift(Request $request, User $celebrant)

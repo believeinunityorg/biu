@@ -176,16 +176,19 @@ export default function BirthdayGiftPage() {
                 {errors.message && <p className="text-sm text-destructive mt-1">{errors.message}</p>}
               </div>
 
-              <div className="flex items-center justify-between gap-3 text-sm border rounded-lg p-3 bg-amber-500/5 border-amber-500/30">
+              <div className="flex flex-col gap-2 text-sm border rounded-lg p-3 bg-amber-500/5 border-amber-500/30">
                 <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
                   <Gift className="h-4 w-4" />
                   <span>
                     Purchased balance: <strong>{purchased.toFixed(2)}</strong>
                   </span>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  BP moves to Holding until they Accept / Collect, then to their Gifted BP wallet (not re-giftable).
+                </p>
                 {gifted > 0 && (
-                  <span className="text-xs text-muted-foreground text-right">
-                    Recipient gets Gifted Balance. Your gifted balance cannot be re-sent.
+                  <span className="text-xs text-muted-foreground">
+                    Your Gifted BP balance cannot be re-sent.
                   </span>
                 )}
               </div>
@@ -201,7 +204,7 @@ export default function BirthdayGiftPage() {
                     Sending…
                   </>
                 ) : (
-                  "Send"
+                  "Send gift & hold BP"
                 )}
               </Button>
             </form>

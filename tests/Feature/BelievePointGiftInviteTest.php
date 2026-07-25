@@ -22,7 +22,7 @@ beforeEach(function () {
     ]);
 });
 
-it('gifts believe points immediately to an existing supporter from gift-bp send', function () {
+it('holds believe points for an existing supporter until they claim', function () {
     $sender = User::factory()->create([
         'role' => 'user',
         'believe_points' => 100,
@@ -52,8 +52,65 @@ it('gifts believe points immediately to an existing supporter from gift-bp send'
     $recipient->refresh();
 
     expect((float) $sender->believe_points)->toBe(60.0);
+    expect((float) $sender->holding_believe_points)->toBe(40.0);
+    expect((float) $recipient->gifted_believe_points)->toBe(5.0);
+
+    $this->assertDatabaseHas('believe_point_gift_invites', [
+        'sender_id' => $sender->id,
+        'recipient_id' => $recipient->id,
+        'amount' => 40.00,
+        'status' => 'pending',
+    ]);
+
+    $this->assertDatabaseHas('transactions', [
+        'type' => 'bp_gift_hold',
+        'user_id' => $sender->id,
+        'currency' => 'BP',
+    ]);
+});
+
+it('lets a registered recipient claim a pending gift into gifted bp', function () {
+    $sender = User::factory()->create([
+        'role' => 'user',
+        'believe_points' => 50,
+        'holding_believe_points' => 40,
+    ]);
+
+    $recipient = User::factory()->create([
+        'role' => 'user',
+        'email_verified_at' => now(),
+        'gifted_believe_points' => 5,
+    ]);
+
+    $invite = BelievePointGiftInvite::create([
+        'sender_id' => $sender->id,
+        'recipient_email' => $recipient->email,
+        'recipient_id' => $recipient->id,
+        'gift_occasion_id' => 1,
+        'amount' => 40,
+        'occasion' => 'Birthday',
+        'message' => 'Enjoy!',
+        'token' => 'test-token-claim-registered-123456789012',
+        'status' => BelievePointGiftInvite::STATUS_PENDING,
+        'expires_at' => now()->addDays(14),
+    ]);
+
+    $response = $this->actingAs($recipient)->post(route('gift-bp.gifts.claim', $invite));
+    $response->assertSessionHasNoErrors();
+    $response->assertRedirect();
+
+    $sender->refresh();
+    $recipient->refresh();
+    $invite->refresh();
+
     expect((float) $sender->holding_believe_points)->toBe(0.0);
     expect((float) $recipient->gifted_believe_points)->toBe(45.0);
+    expect($invite->status)->toBe(BelievePointGiftInvite::STATUS_CLAIMED);
+
+    $this->assertDatabaseHas('transactions', [
+        'type' => 'bp_gift_claim',
+        'user_id' => $recipient->id,
+    ]);
 });
 
 it('holds believe points and creates an invite for an unregistered email', function () {
@@ -187,6 +244,11 @@ it('cancels a pending invite and returns holding believe points immediately', fu
 
     Mail::assertSent(\App\Mail\BelievePointGiftInviteCancelledMail::class);
     Mail::assertSent(\App\Mail\BelievePointGiftInviteCancelledSenderMail::class);
+
+    $this->assertDatabaseHas('transactions', [
+        'type' => 'bp_gift_hold_refund',
+        'user_id' => $sender->id,
+    ]);
 
     $this->assertDatabaseHas('believe_point_gift_invite_goodwills', [
         'email' => 'wrong.address@example.com',

@@ -284,7 +284,8 @@ class TransactionLedgerController extends Controller
                         'bp_gift_claim',
                         'bp_gift_hold_refund',
                         'bp_gift_email_changed',
-                    ]);
+                    ])->orWhere('transaction_id', 'like', 'bp_gift:%')
+                        ->orWhere('transaction_id', 'like', 'bp_gift_legacy:%');
                 });
             } else {
                 $query->where('type', $type);

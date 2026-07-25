@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BelievePointGiftInvite;
+use App\Models\SupporterBelievePointGift;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\UnifiedLedgerBpStatus;
@@ -10,65 +11,129 @@ use App\Support\UnifiedLedgerBrpActivity;
 use App\Support\UnifiedLedgerType;
 
 /**
- * Admin unified ledger rows for Gift BP lifecycle (hold / claim / refund / email change).
+ * Admin unified ledger: one "BP Gift" row per gift (sender → recipient), status = gift lifecycle.
  */
 final class BelievePointGiftAdminLedgerService
 {
     /**
-     * Upsert admin ledger rows for an invite based on its current status (for sync/backfill).
+     * Upsert the canonical ledger row for an invite (and prune old multi-row ids).
      */
     public static function syncFromInvite(BelievePointGiftInvite $invite): void
     {
         $invite->loadMissing('sender', 'recipient', 'gift');
-
-        match ($invite->status) {
-            BelievePointGiftInvite::STATUS_PENDING => self::recordHold($invite),
-            BelievePointGiftInvite::STATUS_CLAIMED => self::recordClaim($invite),
-            BelievePointGiftInvite::STATUS_CANCELLED,
-            BelievePointGiftInvite::STATUS_EXPIRED => self::recordHoldRefund(
-                $invite,
-                round((float) $invite->amount, 2),
-                $invite->status === BelievePointGiftInvite::STATUS_CANCELLED ? 'cancelled' : 'expired',
-            ),
-            default => null,
-        };
+        self::upsertCanonicalFromInvite($invite);
+        self::pruneLegacyInviteRows($invite->id);
     }
 
-    public static function recordHold(BelievePointGiftInvite $invite): void
+    /**
+     * Backfill gifts that completed under the old immediate-transfer path (no invite row).
+     */
+    public static function syncFromLegacyGift(SupporterBelievePointGift $gift): void
     {
-        $invite->loadMissing('sender', 'recipient');
-        $amount = round((float) $invite->amount, 2);
-        if ($amount <= 0 || ! $invite->sender) {
+        $gift->loadMissing('sender', 'recipient');
+        if (! $gift->sender || round((float) $gift->amount, 2) <= 0) {
             return;
         }
 
-        $sender = $invite->sender;
-        $recipientLabel = self::recipientLabel($invite);
-        $forRegistered = (int) ($invite->recipient_id ?? 0) > 0;
+        // Skip if an invite already owns this gift (invite sync covers it).
+        $linkedInvite = BelievePointGiftInvite::query()
+            ->where('supporter_believe_point_gift_id', $gift->id)
+            ->exists();
+        if ($linkedInvite) {
+            return;
+        }
 
-        self::upsert(
-            transactionId: 'bp_gift_hold:'.$invite->id,
-            user: $sender,
-            invite: $invite,
-            type: 'bp_gift_hold',
-            status: Transaction::STATUS_PENDING,
-            amount: -$amount,
-            bpStatus: UnifiedLedgerBpStatus::PROCESSING,
-            source: 'bp_gift_hold',
-            eventName: 'BP Gift',
-            description: $forRegistered
-                ? "Gift of {$amount} BP to {$recipientLabel} is holding until they accept."
-                : "Gift of {$amount} BP to {$recipientLabel} is holding until they register and claim.",
-            availableDelta: -$amount,
-            holdingDelta: $amount,
-            processedAt: null,
-            extraMeta: [
-                'gift_status' => BelievePointGiftInvite::STATUS_PENDING,
+        $sender = $gift->sender;
+        $recipient = $gift->recipient;
+        $amount = round((float) $gift->amount, 2);
+        $recipientLabel = $recipient?->name ?: 'Recipient';
+
+        Transaction::query()->updateOrCreate(
+            ['transaction_id' => 'bp_gift_legacy:'.$gift->id],
+            [
+                'user_id' => $sender->id,
+                'related_id' => $gift->id,
+                'related_type' => SupporterBelievePointGift::class,
+                'type' => 'bp_gift',
+                'ledger_type' => UnifiedLedgerType::BP,
+                'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
+                'brp_activity_type' => UnifiedLedgerBrpActivity::NA,
+                'current_owner' => $sender->name,
+                'available_at' => null,
+                'status' => Transaction::STATUS_COMPLETED,
+                'amount' => -$amount,
+                'fee' => 0,
+                'currency' => 'BP',
+                'payment_method' => 'believe_points',
+                'processed_at' => $gift->sent_at ?? $gift->created_at ?? now(),
+                'meta' => array_filter([
+                    'source' => 'bp_gift',
+                    'ledger_type' => UnifiedLedgerType::BP,
+                    'ledger_role' => 'bp_gift',
+                    'event_name' => 'BP Gift',
+                    'description' => "Gift of {$amount} BP to {$recipientLabel} (completed).",
+                    'gift_status' => BelievePointGiftInvite::STATUS_CLAIMED,
+                    'supporter_believe_point_gift_id' => $gift->id,
+                    'sender_id' => $sender->id,
+                    'sender_name' => $sender->name,
+                    'recipient_id' => $recipient?->id,
+                    'recipient_email' => $recipient?->email,
+                    'recipient_name' => $recipientLabel,
+                    'from_type' => 'supporter',
+                    'from_name' => $sender->name,
+                    'from_id' => $sender->id,
+                    'to_type' => 'supporter',
+                    'to_name' => $recipientLabel,
+                    'to_id' => $recipient?->id,
+                    'points_amount' => $amount,
+                    'bp_available_delta' => -$amount,
+                    'bp_holding_delta' => 0,
+                    'bp_wallet_delta' => -$amount,
+                    'gross_amount' => $amount,
+                    'occasion' => $gift->occasion,
+                    'current_owner' => $sender->name,
+                    'owner_type' => 'supporter',
+                ], static fn ($v) => $v !== null && $v !== ''),
             ],
         );
     }
 
+    public static function recordHold(BelievePointGiftInvite $invite): void
+    {
+        self::upsertCanonicalFromInvite($invite->loadMissing('sender', 'recipient'));
+    }
+
     public static function recordClaim(BelievePointGiftInvite $invite): void
+    {
+        self::upsertCanonicalFromInvite($invite->loadMissing('sender', 'recipient', 'gift'));
+        self::pruneLegacyInviteRows($invite->id);
+    }
+
+    public static function recordHoldRefund(BelievePointGiftInvite $invite, float $refundAmount, string $reason): void
+    {
+        self::upsertCanonicalFromInvite(
+            $invite->loadMissing('sender', 'recipient'),
+            ['refund_reason' => $reason, 'refund_amount' => round(max(0, $refundAmount), 2)],
+        );
+        self::pruneLegacyInviteRows($invite->id);
+    }
+
+    public static function recordEmailChanged(BelievePointGiftInvite $invite, string $previousEmail): void
+    {
+        self::upsertCanonicalFromInvite(
+            $invite->loadMissing('sender', 'recipient'),
+            [
+                'previous_email' => $previousEmail,
+                'new_email' => $invite->recipient_email,
+                'email_changed_at' => now()->toIso8601String(),
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraMeta
+     */
+    private static function upsertCanonicalFromInvite(BelievePointGiftInvite $invite, array $extraMeta = []): void
     {
         $invite->loadMissing('sender', 'recipient', 'gift');
         $amount = round((float) $invite->amount, 2);
@@ -79,207 +144,118 @@ final class BelievePointGiftAdminLedgerService
         $sender = $invite->sender;
         $recipient = $invite->recipient;
         $recipientLabel = self::recipientLabel($invite);
+        $giftStatus = (string) $invite->status;
 
-        // Mark the hold row completed (ownership left Holding).
-        self::upsert(
-            transactionId: 'bp_gift_hold:'.$invite->id,
-            user: $sender,
-            invite: $invite,
-            type: 'bp_gift_hold',
-            status: Transaction::STATUS_COMPLETED,
-            amount: -$amount,
-            bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
-            source: 'bp_gift_hold',
-            eventName: 'BP Gift',
-            description: "Gift of {$amount} BP to {$recipientLabel} was claimed.",
-            availableDelta: -$amount,
-            holdingDelta: 0,
-            processedAt: $invite->claimed_at ?? now(),
-            extraMeta: [
-                'gift_status' => BelievePointGiftInvite::STATUS_CLAIMED,
-                'claimed_at' => $invite->claimed_at?->toIso8601String(),
-                'supporter_believe_point_gift_id' => $invite->supporter_believe_point_gift_id,
+        [$txnStatus, $bpStatus, $description, $availableDelta, $holdingDelta, $processedAt] = match ($giftStatus) {
+            BelievePointGiftInvite::STATUS_PENDING => [
+                Transaction::STATUS_PENDING,
+                UnifiedLedgerBpStatus::PROCESSING,
+                (int) ($invite->recipient_id ?? 0) > 0
+                    ? "Gift of {$amount} BP to {$recipientLabel} is holding until they accept."
+                    : "Gift of {$amount} BP to {$recipientLabel} is holding until they register and claim.",
+                -$amount,
+                $amount,
+                null,
             ],
-        );
-
-        if ($recipient) {
-            self::upsert(
-                transactionId: 'bp_gift_claim:'.$invite->id,
-                user: $recipient,
-                invite: $invite,
-                type: 'bp_gift_claim',
-                status: Transaction::STATUS_COMPLETED,
-                amount: $amount,
-                bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
-                source: 'bp_gift_claim',
-                eventName: 'BP Gift',
-                description: "{$sender->name} gifted {$amount} BP — credited to Gifted BP wallet.",
-                availableDelta: 0,
-                holdingDelta: -$amount,
-                processedAt: $invite->claimed_at ?? now(),
-                extraMeta: [
-                    'gift_status' => BelievePointGiftInvite::STATUS_CLAIMED,
-                    'gifted_bp_delta' => $amount,
-                    'supporter_believe_point_gift_id' => $invite->supporter_believe_point_gift_id,
-                    'from_type' => 'supporter',
-                    'from_name' => $sender->name,
-                    'from_id' => $sender->id,
-                    'to_type' => 'supporter',
-                    'to_name' => $recipient->name,
-                    'to_id' => $recipient->id,
-                ],
-            );
-        }
-    }
-
-    public static function recordHoldRefund(BelievePointGiftInvite $invite, float $refundAmount, string $reason): void
-    {
-        $invite->loadMissing('sender', 'recipient');
-        $refundAmount = round(max(0, $refundAmount), 2);
-        if ($refundAmount <= 0 || ! $invite->sender) {
-            return;
-        }
-
-        $sender = $invite->sender;
-        $recipientLabel = self::recipientLabel($invite);
-        $statusLabel = $invite->status === BelievePointGiftInvite::STATUS_CANCELLED
-            ? 'cancelled'
-            : 'expired';
-
-        self::upsert(
-            transactionId: 'bp_gift_hold:'.$invite->id,
-            user: $sender,
-            invite: $invite,
-            type: 'bp_gift_hold',
-            status: Transaction::STATUS_CANCELLED,
-            amount: -$refundAmount,
-            bpStatus: UnifiedLedgerBpStatus::REVERSED,
-            source: 'bp_gift_hold',
-            eventName: 'BP Gift',
-            description: "Gift hold to {$recipientLabel} was {$statusLabel}.",
-            availableDelta: -$refundAmount,
-            holdingDelta: 0,
-            processedAt: $invite->refunded_at ?? now(),
-            extraMeta: [
-                'gift_status' => $invite->status,
+            BelievePointGiftInvite::STATUS_CLAIMED => [
+                Transaction::STATUS_COMPLETED,
+                UnifiedLedgerBpStatus::AVAILABLE,
+                "Gift of {$amount} BP to {$recipientLabel} was claimed.",
+                -$amount,
+                0.0,
+                $invite->claimed_at ?? now(),
             ],
-        );
-
-        self::upsert(
-            transactionId: 'bp_gift_hold_refund:'.$invite->id,
-            user: $sender,
-            invite: $invite,
-            type: 'bp_gift_hold_refund',
-            status: Transaction::STATUS_COMPLETED,
-            amount: $refundAmount,
-            bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
-            source: 'bp_gift_hold_refund',
-            eventName: 'BP Gift',
-            description: "{$refundAmount} BP returned to Available after gift {$statusLabel} ({$reason}).",
-            availableDelta: $refundAmount,
-            holdingDelta: -$refundAmount,
-            processedAt: $invite->refunded_at ?? now(),
-            extraMeta: [
-                'gift_status' => $invite->status,
-                'refund_reason' => $reason,
+            BelievePointGiftInvite::STATUS_CANCELLED => [
+                Transaction::STATUS_CANCELLED,
+                UnifiedLedgerBpStatus::REVERSED,
+                "Gift of {$amount} BP to {$recipientLabel} was cancelled; BP returned to Available.",
+                0.0,
+                0.0,
+                $invite->refunded_at ?? now(),
             ],
-        );
-    }
-
-    public static function recordEmailChanged(BelievePointGiftInvite $invite, string $previousEmail): void
-    {
-        $invite->loadMissing('sender');
-        $amount = round((float) $invite->amount, 2);
-        if (! $invite->sender) {
-            return;
-        }
-
-        self::upsert(
-            transactionId: 'bp_gift_email_changed:'.$invite->id.':'.now()->timestamp,
-            user: $invite->sender,
-            invite: $invite,
-            type: 'bp_gift_email_changed',
-            status: Transaction::STATUS_COMPLETED,
-            amount: 0,
-            bpStatus: UnifiedLedgerBpStatus::NA,
-            source: 'bp_gift_email_changed',
-            eventName: 'BP Gift',
-            description: "Gift invite email changed from {$previousEmail} to {$invite->recipient_email}. Holding BP unchanged ({$amount} BP).",
-            availableDelta: 0,
-            holdingDelta: 0,
-            processedAt: now(),
-            extraMeta: [
-                'gift_status' => BelievePointGiftInvite::STATUS_PENDING,
-                'previous_email' => $previousEmail,
-                'new_email' => $invite->recipient_email,
+            BelievePointGiftInvite::STATUS_EXPIRED => [
+                Transaction::STATUS_CANCELLED,
+                UnifiedLedgerBpStatus::REVERSED,
+                "Gift of {$amount} BP to {$recipientLabel} expired; BP returned to Available.",
+                0.0,
+                0.0,
+                $invite->refunded_at ?? now(),
             ],
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $extraMeta
-     */
-    private static function upsert(
-        string $transactionId,
-        User $user,
-        BelievePointGiftInvite $invite,
-        string $type,
-        string $status,
-        float $amount,
-        string $bpStatus,
-        string $source,
-        string $eventName,
-        string $description,
-        float $availableDelta,
-        float $holdingDelta,
-        mixed $processedAt,
-        array $extraMeta = [],
-    ): void {
-        $recipientLabel = self::recipientLabel($invite);
+            default => [
+                Transaction::STATUS_PENDING,
+                UnifiedLedgerBpStatus::PROCESSING,
+                "Gift of {$amount} BP to {$recipientLabel}.",
+                -$amount,
+                $amount,
+                null,
+            ],
+        };
 
         Transaction::query()->updateOrCreate(
-            ['transaction_id' => $transactionId],
+            ['transaction_id' => 'bp_gift:'.$invite->id],
             [
-                'user_id' => $user->id,
+                'user_id' => $sender->id,
                 'related_id' => $invite->id,
                 'related_type' => BelievePointGiftInvite::class,
-                'type' => $type,
+                'type' => 'bp_gift',
                 'ledger_type' => UnifiedLedgerType::BP,
                 'bp_status' => $bpStatus,
                 'brp_activity_type' => UnifiedLedgerBrpActivity::NA,
-                'current_owner' => $user->name,
+                'current_owner' => $sender->name,
                 'available_at' => null,
-                'status' => $status,
-                'amount' => $amount,
+                'status' => $txnStatus,
+                'amount' => -$amount,
                 'fee' => 0,
                 'currency' => 'BP',
                 'payment_method' => 'believe_points',
                 'processed_at' => $processedAt,
                 'meta' => array_filter([
-                    'source' => $source,
+                    'source' => 'bp_gift',
                     'ledger_type' => UnifiedLedgerType::BP,
-                    'ledger_role' => $source,
-                    'event_name' => $eventName,
+                    'ledger_role' => 'bp_gift',
+                    'event_name' => 'BP Gift',
                     'description' => $description,
                     'believe_point_gift_invite_id' => $invite->id,
                     'gift_id' => $invite->id,
+                    'gift_status' => $giftStatus,
                     'sender_id' => $invite->sender_id,
-                    'sender_name' => $invite->sender?->name,
+                    'sender_name' => $sender->name,
                     'recipient_id' => $invite->recipient_id,
                     'recipient_email' => $invite->recipient_email,
-                    'recipient_name' => $invite->recipient?->name ?? $recipientLabel,
-                    'points_amount' => round((float) $invite->amount, 2),
+                    'recipient_name' => $recipient?->name ?? $recipientLabel,
+                    'from_type' => 'supporter',
+                    'from_name' => $sender->name,
+                    'from_id' => $sender->id,
+                    'to_type' => 'supporter',
+                    'to_name' => $recipient?->name ?? $recipientLabel,
+                    'to_id' => $invite->recipient_id,
+                    'points_amount' => $amount,
                     'bp_available_delta' => $availableDelta,
                     'bp_holding_delta' => $holdingDelta,
                     'bp_wallet_delta' => $availableDelta,
-                    'gross_amount' => round((float) $invite->amount, 2),
+                    'gross_amount' => $amount,
                     'occasion' => $invite->occasion,
-                    'current_owner' => $user->name,
+                    'supporter_believe_point_gift_id' => $invite->supporter_believe_point_gift_id,
+                    'claimed_at' => $invite->claimed_at?->toIso8601String(),
+                    'current_owner' => $sender->name,
                     'owner_type' => 'supporter',
                     ...$extraMeta,
                 ], static fn ($v) => $v !== null && $v !== ''),
             ],
         );
+    }
+
+    private static function pruneLegacyInviteRows(int $inviteId): void
+    {
+        Transaction::query()
+            ->where(function ($q) use ($inviteId) {
+                $q->whereIn('transaction_id', [
+                    'bp_gift_hold:'.$inviteId,
+                    'bp_gift_claim:'.$inviteId,
+                    'bp_gift_hold_refund:'.$inviteId,
+                ])->orWhere('transaction_id', 'like', 'bp_gift_email_changed:'.$inviteId.':%');
+            })
+            ->delete();
     }
 
     private static function recipientLabel(BelievePointGiftInvite $invite): string

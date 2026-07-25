@@ -769,7 +769,9 @@ class UnifiedLedgerPresenter
                 'bp_gift_claim',
                 'bp_gift_hold_refund',
                 'bp_gift_email_changed',
-            ], true);
+            ], true)
+            || str_starts_with((string) $t->transaction_id, 'bp_gift:')
+            || str_starts_with((string) $t->transaction_id, 'bp_gift_legacy:');
     }
 
     private function donationTransactionType(Transaction $t, ?string $donationPerspective): string

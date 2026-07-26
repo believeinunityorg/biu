@@ -260,6 +260,7 @@ export default function NotificationsInbox() {
         notification.type === "gift_invite_cancelled" ||
         notification.type === "gift_invite_email_changed" ||
         notification.type === "gift_invite_resent" ||
+        notification.type === "gift_awaiting_claim" ||
         notification.type === "gift_sent"
       ) {
         router.visit("/gift-bp")

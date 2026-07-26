@@ -2,7 +2,7 @@
 
 import type React from "react"
 import ProfileLayout from "@/components/frontend/layout/user-profile-layout"
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Button } from "@/components/frontend/ui/button"
 import { Input } from "@/components/frontend/ui/input"
 import { Label } from "@/components/frontend/ui/label"
@@ -27,6 +27,9 @@ import {
   MapPin,
   Plus,
   Lock,
+  ArrowRight,
+  PenLine,
+  LogOut,
 } from "lucide-react"
 import { Link, useForm, usePage, router } from "@inertiajs/react"
 import { toast } from "sonner"
@@ -47,6 +50,15 @@ import {
 } from "@/components/frontend/profile-organization-picker"
 import { useAppearance, type Appearance } from "@/hooks/use-appearance"
 import { cn, formatMmDdInput, isValidMmDd, normalizeMmDd } from "@/lib/utils"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/frontend/ui/alert-dialog"
 import {
   getGeolocationPermissionState,
   requestLocationPermissionPrompt,
@@ -165,6 +177,26 @@ function orgInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || "O"
 }
 
+function visitPathname(url: string | URL): string {
+  try {
+    const resolved = typeof url === "string" ? new URL(url, window.location.origin) : url
+    return resolved.pathname.replace(/\/$/, "") || "/"
+  } catch {
+    return ""
+  }
+}
+
+/** Same-page reloads and profile mutations from this screen must not trip the leave guard. */
+function isAllowedWhileDirty(url: string | URL): boolean {
+  const path = visitPathname(url)
+  return (
+    path.endsWith("/profile/edit") ||
+    path.endsWith("/profile/update") ||
+    path.endsWith("/profile/primary-organization/change") ||
+    path.endsWith("/profile/timezone")
+  )
+}
+
 export default function ProfileEdit() {
   const pageProps = usePage<SharedData & ProfileEditPageProps>().props
   const user = pageProps.user ?? EMPTY_PROFILE_USER
@@ -226,7 +258,8 @@ export default function ProfileEdit() {
     return next
   })
 
-  const { data, setData, post, processing, errors, reset, recentlySuccessful } = inertiaForm
+  const { data, setData, post, processing, errors, reset, recentlySuccessful, isDirty, setDefaults } =
+    inertiaForm
 
   const positions = data.positions ?? []
   const supporterInterests = data.supporter_interests ?? []
@@ -240,7 +273,13 @@ export default function ProfileEdit() {
   const [changeReasonOption, setChangeReasonOption] = useState<PrimaryOrgChangeReasonId | "">("")
   const [changingPrimary, setChangingPrimary] = useState(false)
   const [locationPermission, setLocationPermission] = useState<GeolocationPermissionState>("prompt")
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false)
   const isPrimaryLocked = Boolean(user.primary_organization_locked)
+
+  const isDirtyRef = useRef(isDirty)
+  const allowNavigationRef = useRef(false)
+  const pendingVisitUrlRef = useRef<string | null>(null)
+  isDirtyRef.current = isDirty
 
   useEffect(() => {
     void getGeolocationPermissionState().then(setLocationPermission)
@@ -248,40 +287,84 @@ export default function ProfileEdit() {
 
   useEffect(() => {
     if (!user) return
-      setData("name", user.name || "")
-      setData("email", user.email || "")
-      setData("phone", user.phone || "")
-      setData("dob", user.dob || "")
-      setData("city", user.city || "")
-      setData("state", user.state || "")
-      setData("zipcode", user.zipcode || "")
-      setData("religion", user.religion || "")
-    setData("account_visibility", user.account_visibility === "private" ? "private" : "public")
-    setData("messaging_policy", (user.messaging_policy ?? "everyone") as ProfileEditPageProps["user"]["messaging_policy"])
-    setData("primary_organization_id", user.primary_organization_id ?? "")
-    setData("secondary_organization_ids", user.secondary_organization_ids ?? [])
-    setData("preferred_theme", (user.preferred_theme as Appearance) || "system")
-      setData("positions", user.positions || [])
-      setData("supporter_interests", user.supporter_interests || [])
-      if (user.image) {
-        setPreviewUrl(user.image)
-      }
+    const synced = {
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      dob: user.dob || "",
+      city: user.city || "",
+      state: user.state || "",
+      zipcode: user.zipcode || "",
+      religion: user.religion || "",
+      account_visibility: (user.account_visibility === "private" ? "private" : "public") as "public" | "private",
+      messaging_policy: (user.messaging_policy ?? "everyone") as ProfileEditPageProps["user"]["messaging_policy"],
+      primary_organization_id: user.primary_organization_id ?? "",
+      secondary_organization_ids: user.secondary_organization_ids ?? [],
+      preferred_theme: ((user.preferred_theme as Appearance) || "system") as Appearance,
+      positions: user.positions || [],
+      supporter_interests: user.supporter_interests || [],
+      image: null as File | null,
+      proximity_notifications_enabled: user.proximity_notifications_enabled !== false,
+      _supporter_interests_touched: true,
+    }
+    setData(synced)
+    setDefaults(synced)
+    if (user.image) {
+      setPreviewUrl(user.image)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync form when loaded user identity changes, not on every prop churn
   }, [user?.id])
 
   useEffect(() => {
     if (!user) return
-    setData("primary_organization_id", user.primary_organization_id ?? "")
+    const primaryId = user.primary_organization_id ?? ""
+    setData("primary_organization_id", primaryId)
+    setDefaults("primary_organization_id", primaryId)
     if (user.primary_organization) {
       setOrgCache((prev) => ({ ...prev, [user.primary_organization!.id]: user.primary_organization! }))
     }
-  }, [user?.primary_organization_id, user?.primary_organization?.id, setData])
+  }, [user?.primary_organization_id, user?.primary_organization?.id, setData, setDefaults])
 
   useEffect(() => {
     if (!user) return
-    setData("positions", user.positions ?? [])
-    setData("supporter_interests", user.supporter_interests ?? [])
-  }, [user?.positions, user?.supporter_interests, setData])
+    const nextPositions = user.positions ?? []
+    const nextInterests = user.supporter_interests ?? []
+    setData("positions", nextPositions)
+    setData("supporter_interests", nextInterests)
+    setDefaults({
+      positions: nextPositions,
+      supporter_interests: nextInterests,
+    })
+  }, [user?.positions, user?.supporter_interests, setData, setDefaults])
+
+  useEffect(() => {
+    const remove = router.on("before", (event) => {
+      if (allowNavigationRef.current) {
+        allowNavigationRef.current = false
+        return
+      }
+      if (!isDirtyRef.current) return
+
+      const visit = event.detail.visit
+      if (isAllowedWhileDirty(visit.url)) return
+
+      event.preventDefault()
+      pendingVisitUrlRef.current =
+        typeof visit.url === "string" ? visit.url : visit.url.href
+      setLeaveConfirmOpen(true)
+    })
+    return remove
+  }, [])
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!isDirtyRef.current || allowNavigationRef.current) return
+      e.preventDefault()
+      e.returnValue = ""
+    }
+    window.addEventListener("beforeunload", onBeforeUnload)
+    return () => window.removeEventListener("beforeunload", onBeforeUnload)
+  }, [])
 
   const profileUpdateErrorMessage = (errs: Record<string, string | string[]>) => {
     const first = Object.values(errs)[0]
@@ -291,44 +374,49 @@ export default function ProfileEdit() {
     return typeof first === "string" ? first : "Failed to update profile. Please check the form."
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
+  const validateProfileForm = (): boolean => {
     const normalizedDob = normalizeMmDd(data.dob ?? "")
     if (!isValidMmDd(normalizedDob)) {
       toast.error("Enter a valid date of birth (MM/DD).")
-      return
+      return false
     }
 
     if (!data.name.trim()) {
       toast.error("Full name is required.")
-      return
+      return false
     }
 
     if (!data.email.trim()) {
       toast.error("Email address is required.")
-      return
+      return false
     }
 
     if (!data.city.trim()) {
       toast.error("City is required.")
-      return
+      return false
     }
 
     if (!data.state.trim()) {
       toast.error("State is required.")
-      return
+      return false
     }
 
     if (!data.zipcode.trim()) {
       toast.error("Zip code is required.")
-      return
+      return false
     }
 
+    return true
+  }
+
+  const submitProfile = (options?: { continueTo?: string | null }) => {
+    if (!validateProfileForm()) return
+
+    const continueTo = options?.continueTo ?? null
     const hasImageUpload = data.image instanceof File
 
     post(route("user.profile.update"), {
-      preserveScroll: true,
+      preserveScroll: !continueTo,
       forceFormData: hasImageUpload,
       onSuccess: (page) => {
         const savedUser = (page.props as ProfileEditPageProps).user
@@ -341,12 +429,44 @@ export default function ProfileEdit() {
         }
         updateAppearance(data.preferred_theme)
         toast.success("Profile updated successfully!")
+        queueMicrotask(() => {
+          setDefaults()
+          if (continueTo) {
+            allowNavigationRef.current = true
+            setLeaveConfirmOpen(false)
+            pendingVisitUrlRef.current = null
+            router.visit(continueTo)
+          }
+        })
       },
       onError: (errs) => {
         console.error("Update errors:", errs)
         toast.error(profileUpdateErrorMessage(errs))
       },
     })
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    submitProfile()
+  }
+
+  const handleStayOnPage = () => {
+    pendingVisitUrlRef.current = null
+    setLeaveConfirmOpen(false)
+  }
+
+  const handleLeaveWithoutSaving = () => {
+    const nextUrl = pendingVisitUrlRef.current
+    pendingVisitUrlRef.current = null
+    setLeaveConfirmOpen(false)
+    if (!nextUrl) return
+    allowNavigationRef.current = true
+    router.visit(nextUrl)
+  }
+
+  const handleSaveAndLeave = () => {
+    submitProfile({ continueTo: pendingVisitUrlRef.current })
   }
 
   const handleCancel = () => {
@@ -356,10 +476,22 @@ export default function ProfileEdit() {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setData("image", file)
-      setPreviewUrl(URL.createObjectURL(file))
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image file.")
+      e.target.value = ""
+      return
     }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Image size must be less than 10MB.")
+      e.target.value = ""
+      return
+    }
+
+    setData("image", file)
+    setPreviewUrl(URL.createObjectURL(file))
   }
 
   const copyUnityId = async () => {
@@ -594,7 +726,7 @@ export default function ProfileEdit() {
   return (
     <ProfileLayout
       title="Profile Settings"
-      description="Manage your personal information, account settings, and organization affiliations."
+      description="Manage your personal information and account settings."
     >
       {!profileReady ? (
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-900/30 dark:text-gray-400">
@@ -643,7 +775,7 @@ export default function ProfileEdit() {
                   </div>
                   <Input id="image" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                 </Label>
-                <p className={cn("mt-2", helperClass)}>JPG, PNG or GIF. Max 2MB.</p>
+                <p className={cn("mt-2", helperClass)}>JPG, PNG or GIF. Max 10MB.</p>
                 {errors.image && <p className="mt-1 text-sm text-red-400">{errors.image}</p>}
               </div>
             </div>
@@ -1395,6 +1527,103 @@ export default function ProfileEdit() {
       </form>
         </>
       )}
+
+      <AlertDialog
+        open={leaveConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (processing) return
+            handleStayOnPage()
+            return
+          }
+          setLeaveConfirmOpen(true)
+        }}
+      >
+        <AlertDialogContent className="max-w-[22rem] gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none sm:rounded-3xl">
+          <div className="relative overflow-hidden rounded-3xl border border-white/60 bg-white shadow-[0_24px_80px_-20px_rgba(79,70,229,0.45)] dark:border-gray-700/80 dark:bg-gray-950">
+            {/* Brand atmosphere */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(ellipse_at_top,_rgba(147,51,234,0.28),_transparent_60%),radial-gradient(ellipse_at_80%_20%,_rgba(37,99,235,0.22),_transparent_55%)]"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/20 blur-2xl"
+            />
+
+            <div className="relative px-5 pb-5 pt-7 sm:px-6">
+              <div className="mb-5 flex items-start gap-4">
+                <div className="relative shrink-0">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-lg shadow-purple-500/30">
+                    <User className="h-7 w-7" strokeWidth={1.75} />
+                  </div>
+                  <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-amber-950 shadow-sm dark:border-gray-950">
+                    <PenLine className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  </span>
+                </div>
+                <AlertDialogHeader className="space-y-1.5 text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-purple-600 dark:text-purple-400">
+                    Almost gone
+                  </p>
+                  <AlertDialogTitle className="text-xl font-bold leading-snug tracking-tight text-gray-900 dark:text-white">
+                    Your profile edits are still open
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+                    Leave now and those changes won’t be kept. Save first if you want them on your
+                    profile.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+              </div>
+
+              <AlertDialogFooter className="mt-1 flex flex-col gap-2.5 space-x-0 sm:flex-col sm:space-x-0">
+                <button
+                  type="button"
+                  disabled={processing}
+                  onClick={handleSaveAndLeave}
+                  className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-3.5 text-left text-white shadow-md shadow-purple-500/25 transition hover:from-purple-500 hover:to-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 disabled:opacity-60 dark:focus-visible:ring-offset-gray-950"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                    <Save className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">
+                      {processing ? "Saving…" : "Save & continue"}
+                    </span>
+                    <span className="block text-xs text-white/75">Keep your updates, then go</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 opacity-80 transition group-hover:translate-x-0.5" />
+                </button>
+
+                <AlertDialogCancel
+                  disabled={processing}
+                  onClick={handleStayOnPage}
+                  className="mt-0 flex h-auto w-full items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-3.5 text-left font-normal text-gray-900 shadow-none hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-purple-400 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-100 dark:hover:bg-gray-800 dark:hover:text-white"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-purple-600 shadow-sm dark:bg-gray-800 dark:text-purple-400">
+                    <PenLine className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">Keep editing</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400">
+                      Stay on this page
+                    </span>
+                  </span>
+                </AlertDialogCancel>
+
+                <button
+                  type="button"
+                  disabled={processing}
+                  onClick={handleLeaveWithoutSaving}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm text-gray-500 transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-60 dark:text-gray-400 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Leave without saving
+                </button>
+              </AlertDialogFooter>
+            </div>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </ProfileLayout>
   )
 }

@@ -755,16 +755,193 @@ class GiftCardService
     }
 
     /**
+     * Return exactly $chunkSize brands for app page $appPage by walking Phaze currentPage results.
+     * Each call is a real Phaze-backed fetch (cached per Phaze page). Used for scroll pagination of 20.
+     *
+     * @return array{brands: array<int, array>, total: int|null, last_page: int, per_page: int, has_more: bool}
+     */
+    public function getGiftBrandsChunk(string $country = 'USA', int $appPage = 1, int $chunkSize = 20): array
+    {
+        $appPage = max(1, $appPage);
+        $chunkSize = max(1, min(48, $chunkSize));
+        $offset = ($appPage - 1) * $chunkSize;
+        $need = $offset + $chunkSize;
+
+        $collected = [];
+        $apiTotal = null;
+        $phazePage = 1;
+        $maxPhazePages = 40;
+        $sawEmpty = false;
+
+        while (count($collected) < $need && $phazePage <= $maxPhazePages) {
+            $payload = $this->getGiftBrandsPagePayload($country, $phazePage);
+            $pageBrands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
+
+            if ($payload['total'] !== null) {
+                $apiTotal = (int) $payload['total'];
+            }
+
+            if ($pageBrands === []) {
+                $sawEmpty = true;
+                break;
+            }
+
+            $collected = array_merge($collected, array_values($pageBrands));
+
+            if ($payload['last_page'] !== null && $phazePage >= (int) $payload['last_page']) {
+                break;
+            }
+
+            // If Phaze doesn't advertise last_page, stop when a short page arrives.
+            $hint = $payload['per_page'] ?? null;
+            if ($hint !== null && count($pageBrands) < (int) $hint) {
+                break;
+            }
+
+            $phazePage++;
+        }
+
+        $chunk = array_slice($collected, $offset, $chunkSize);
+        $collectedCount = count($collected);
+        $hasMore = ($offset + count($chunk)) < $collectedCount
+            || (! $sawEmpty && count($chunk) === $chunkSize && ($apiTotal === null || ($offset + $chunkSize) < $apiTotal));
+
+        if ($apiTotal !== null) {
+            $lastPage = max(1, (int) ceil($apiTotal / $chunkSize));
+        } elseif ($hasMore) {
+            $lastPage = $appPage + 1;
+        } else {
+            $lastPage = max(1, $appPage);
+        }
+
+        return [
+            'brands' => array_values($chunk),
+            'total' => $apiTotal ?? $collectedCount,
+            'last_page' => $lastPage,
+            'per_page' => $chunkSize,
+            'has_more' => $hasMore && count($chunk) > 0,
+        ];
+    }
+
+    /**
+     * Search brands across Phaze pages for a country, returning one 20-card page of matches.
+     * Scans only as far as needed for the requested page (then caches progress for faster next pages).
+     *
+     * @return array{brands: array<int, array>, total: int, last_page: int, per_page: int, has_more: bool}
+     */
+    public function searchGiftBrandsChunk(
+        string $country = 'USA',
+        string $search = '',
+        int $appPage = 1,
+        int $chunkSize = 20
+    ): array {
+        $appPage = max(1, $appPage);
+        $chunkSize = max(1, min(48, $chunkSize));
+        $needle = strtolower(trim($search));
+
+        if ($needle === '') {
+            return $this->getGiftBrandsChunk($country, $appPage, $chunkSize);
+        }
+
+        $offset = ($appPage - 1) * $chunkSize;
+        $needForPage = $offset + $chunkSize;
+        $needForHasMore = $needForPage + 1;
+
+        $cacheKey = 'phaze_brands_search_v2_'.$country.'_'.md5($needle);
+        $state = Cache::get($cacheKey, [
+            'matches' => [],
+            'scanned_through_page' => 0,
+            'exhausted' => false,
+        ]);
+
+        $matches = is_array($state['matches'] ?? null) ? $state['matches'] : [];
+        $scannedThrough = (int) ($state['scanned_through_page'] ?? 0);
+        $exhausted = (bool) ($state['exhausted'] ?? false);
+        $maxPhazePages = 40;
+
+        // Resume Phaze scan only until we have enough matches for this page (+1 to know has_more).
+        $phazePage = $scannedThrough + 1;
+        while (! $exhausted && count($matches) < $needForHasMore && $phazePage <= $maxPhazePages) {
+            $payload = $this->getGiftBrandsPagePayload($country, $phazePage);
+            $pageBrands = is_array($payload['brands'] ?? null) ? $payload['brands'] : [];
+
+            if ($pageBrands === []) {
+                $exhausted = true;
+                $scannedThrough = $phazePage;
+                break;
+            }
+
+            foreach ($pageBrands as $brand) {
+                $name = strtolower((string) ($brand['productName'] ?? ''));
+                if ($name !== '' && str_contains($name, $needle)) {
+                    $matches[] = $brand;
+                }
+            }
+
+            $scannedThrough = $phazePage;
+
+            if ($payload['last_page'] !== null && $phazePage >= (int) $payload['last_page']) {
+                $exhausted = true;
+                break;
+            }
+
+            $hint = $payload['per_page'] ?? null;
+            if ($hint !== null && count($pageBrands) < (int) $hint) {
+                $exhausted = true;
+                break;
+            }
+
+            $phazePage++;
+        }
+
+        if ($phazePage > $maxPhazePages) {
+            $exhausted = true;
+        }
+
+        Cache::put($cacheKey, [
+            'matches' => $matches,
+            'scanned_through_page' => $scannedThrough,
+            'exhausted' => $exhausted,
+        ], self::CACHE_DURATION);
+
+        $chunk = array_slice($matches, $offset, $chunkSize);
+        $matchCount = count($matches);
+        $hasMore = ($offset + count($chunk)) < $matchCount
+            || (! $exhausted && count($chunk) === $chunkSize);
+
+        if ($exhausted) {
+            $total = $matchCount;
+            $lastPage = max(1, (int) ceil(max(1, $total) / $chunkSize));
+            if ($total === 0) {
+                $lastPage = 1;
+            }
+        } else {
+            // Still scanning — report a lower bound so the UI can keep scrolling.
+            $total = max($matchCount, $needForPage + ($hasMore ? 1 : 0));
+            $lastPage = $hasMore ? $appPage + 1 : max(1, $appPage);
+        }
+
+        return [
+            'brands' => array_values($chunk),
+            'total' => $total,
+            'last_page' => $lastPage,
+            'per_page' => $chunkSize,
+            'has_more' => $hasMore && count($chunk) > 0,
+        ];
+    }
+
+    /**
      * Brands for one Phaze API page plus pagination hints from the API response (when present).
      *
      * @return array{brands: array, total: int|null, last_page: int|null, per_page: int|null}
      */
-    public function getGiftBrandsPagePayload(string $country = 'USA', int $currentPage = 1): array
+    public function getGiftBrandsPagePayload(string $country = 'USA', int $currentPage = 1, int $pageSize = 20): array
     {
-        // v2: cache stores structured payload (brands + meta); bump key so old entries are ignored
-        $cacheKey = "phaze_brands_v2_{$country}_page_{$currentPage}";
+        // pageSize is reserved for callers; Phaze catalog uses currentPage only.
+        // (Passing pageSize broke some environments and cached empty pages.)
+        $cacheKey = "phaze_brands_v4_{$country}_page_{$currentPage}";
 
-        return Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($country, $currentPage) {
+        return Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($country, $currentPage, $pageSize) {
             try {
                 $apiKey = $this->getApiKey();
                 if (empty($apiKey)) {
@@ -772,11 +949,11 @@ class GiftCardService
                         'brands' => [],
                         'total' => null,
                         'last_page' => null,
-                        'per_page' => null,
+                        'per_page' => $pageSize,
                     ];
                 }
 
-                // Build endpoint
+                // Phaze paginates with currentPage only.
                 $endpointPath = '/brands/country/'.urlencode($country);
                 $endpoint = $endpointPath.'?currentPage='.$currentPage;
 
@@ -826,8 +1003,12 @@ class GiftCardService
                     ];
                 }
 
-                // Check if response contains an error
-                if (isset($response['error']) || isset($response['message']) || (isset($response['httpStatusCode']) && $response['httpStatusCode'] >= 400)) {
+                // Check if response contains an error (do not treat a soft "message" alone as failure —
+                // some Phaze success payloads include message text alongside brands).
+                if (
+                    (isset($response['error']) && $response['error']) ||
+                    (isset($response['httpStatusCode']) && (int) $response['httpStatusCode'] >= 400)
+                ) {
                     Log::warning('Phaze API brands request returned error', [
                         'country' => $country,
                         'currentPage' => $currentPage,
@@ -984,20 +1165,21 @@ class GiftCardService
      */
     public function clearBrandsCache(?string $country = null): void
     {
-        if ($country) {
-            // Clear specific country cache
-            for ($page = 1; $page <= 10; $page++) {
-                Cache::forget("phaze_brands_v2_{$country}_page_{$page}");
-                Cache::forget("phaze_brands_{$country}_page_{$page}");
+        $forgetCountryPages = function (string $countryCode): void {
+            Cache::forget("phaze_brands_catalog_v1_{$countryCode}");
+            for ($page = 1; $page <= 40; $page++) {
+                Cache::forget("phaze_brands_v4_{$countryCode}_page_{$page}");
+                Cache::forget("phaze_brands_v3_{$countryCode}_page_{$page}_size_12");
+                Cache::forget("phaze_brands_v2_{$countryCode}_page_{$page}");
+                Cache::forget("phaze_brands_{$countryCode}_page_{$page}");
             }
+        };
+
+        if ($country) {
+            $forgetCountryPages($country);
         } else {
-            // Clear all brands cache
-            $countries = ['USA', 'Canada', 'UK', 'France', 'India', 'Italy', 'Japan'];
-            foreach ($countries as $countryCode) {
-                for ($page = 1; $page <= 10; $page++) {
-                    Cache::forget("phaze_brands_v2_{$countryCode}_page_{$page}");
-                    Cache::forget("phaze_brands_{$countryCode}_page_{$page}");
-                }
+            foreach (['USA', 'Canada', 'UK', 'France', 'India', 'Italy', 'Japan'] as $countryCode) {
+                $forgetCountryPages($countryCode);
             }
         }
     }

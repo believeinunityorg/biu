@@ -38,14 +38,18 @@ use App\Support\DigitalProductDelivery;
 use App\Support\ProfileReligions;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 
 class UserProfileController extends Controller
 {
@@ -424,7 +428,7 @@ class UserProfileController extends Controller
                     }
                 },
             ],
-            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:2048'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif', 'max:10240'],
             'positions' => ['sometimes', 'array'],
             'positions.*' => ['exists:supporter_positions,id'],
             'supporter_interests' => ['sometimes', 'array'],
@@ -520,15 +524,13 @@ class UserProfileController extends Controller
             $user->sendEmailVerificationNotification();
         }
 
-        // Handle image upload
+        // Handle image upload (resize + JPEG compress before storage)
         if ($request->hasFile('image')) {
             if ($user->image) {
                 Storage::disk('public')->delete($user->image);
             }
 
-            $filename = 'profile-'.$user->id.'-'.time().'.'.$request->file('image')->extension();
-            $path = $request->file('image')->storeAs('profile-photos', $filename, 'public');
-            $validated['image'] = $path;
+            $validated['image'] = $this->storeCompressedProfileImage($request->file('image'), (int) $user->id);
         }
 
         // Canonical geo for kiosk_providers + AI ingest (same keys as KioskProviderAiIngestService).
@@ -658,6 +660,42 @@ class UserProfileController extends Controller
         }
 
         return to_route('user.profile.edit')->with('success', 'Profile updated successfully!');
+    }
+
+    /**
+     * JPEG-compress a profile photo without changing width/height, then store on the public disk.
+     * Falls back to the original upload if compression fails.
+     */
+    private function storeCompressedProfileImage(UploadedFile $file, int $userId): string
+    {
+        $directory = 'profile-photos';
+        Storage::disk('public')->makeDirectory($directory);
+
+        $filename = 'profile-'.$userId.'-'.time().'.jpg';
+        $path = $directory.'/'.$filename;
+
+        try {
+            $manager = new ImageManager(new Driver);
+            $image = $manager->read($file->getRealPath());
+
+            // Compress only — keep original width/height.
+            $image->toJpeg(82)->save(storage_path('app/public/'.$path));
+
+            return $path;
+        } catch (\Throwable $e) {
+            Log::warning('Profile image compression failed; storing original.', [
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+
+            $extension = $file->getClientOriginalExtension() ?: $file->extension() ?: 'jpg';
+
+            return $file->storeAs(
+                $directory,
+                'profile-'.$userId.'-'.time().'.'.$extension,
+                'public'
+            );
+        }
     }
 
     public function changePrimaryOrganization(Request $request)

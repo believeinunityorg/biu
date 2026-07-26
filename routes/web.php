@@ -271,6 +271,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified'])->group(function () {
     Route::get('/gift-bp', [\App\Http\Controllers\GiftBelievePointsController::class, 'index'])->name('gift-bp.index');
     Route::get('/gift-bp/search', [\App\Http\Controllers\GiftBelievePointsController::class, 'search'])->name('gift-bp.search');
     Route::post('/gift-bp/send', [\App\Http\Controllers\GiftBelievePointsController::class, 'send'])->name('gift-bp.send');
+    Route::post('/gift-bp/gifts/{invite}/claim', [\App\Http\Controllers\GiftBelievePointsController::class, 'claim'])->name('gift-bp.gifts.claim');
     Route::post('/gift-bp/invites/{invite}/cancel', [\App\Http\Controllers\GiftBelievePointsController::class, 'cancel'])->name('gift-bp.invites.cancel');
     Route::post('/gift-bp/invites/{invite}/resend', [\App\Http\Controllers\GiftBelievePointsController::class, 'resend'])->name('gift-bp.invites.resend');
     Route::post('/gift-bp/invites/{invite}/email', [\App\Http\Controllers\GiftBelievePointsController::class, 'updateEmail'])->name('gift-bp.invites.email');

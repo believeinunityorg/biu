@@ -256,7 +256,7 @@ final class BelievePointsWalletLedgerService
             'user_id' => $invite->sender_id,
             'amount' => -$amount,
             'entry_type' => BelievePointsLedgerEntry::TYPE_GIFT_HOLD,
-            'description' => 'Gift invite holding (awaiting registration)',
+            'description' => 'Gift holding (awaiting claim)',
             'metadata' => [
                 'believe_point_gift_invite_id' => $invite->id,
                 'recipient_email' => $invite->recipient_email,
@@ -285,7 +285,7 @@ final class BelievePointsWalletLedgerService
             'user_id' => $invite->sender_id,
             'amount' => $amount,
             'entry_type' => BelievePointsLedgerEntry::TYPE_GIFT_HOLD_REFUND,
-            'description' => 'Gift invite expired — holding refunded',
+            'description' => 'Gift hold refunded to Available',
             'metadata' => [
                 'believe_point_gift_invite_id' => $invite->id,
                 'recipient_email' => $invite->recipient_email,

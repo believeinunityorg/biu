@@ -321,8 +321,30 @@ function ledgerEventLabel(u: UnifiedLedgerRow | undefined): string {
   if (!u) {
     return "—"
   }
+  const giftEvents = [
+    "bp_gift_sent",
+    "bp_gift_claimed",
+    "bp_gift_cancelled",
+    "bp_gift_expired",
+    "bp_gift_refunded",
+  ]
+  if (giftEvents.includes(u.transaction_type)) {
+    return transactionTypeDisplayLabel(u.transaction_type)
+  }
   const eventName = u.event_name?.trim()
   if (eventName) {
+    if (
+      eventName === "Gift Sent" ||
+      eventName === "Gift Claimed" ||
+      eventName === "Gift Cancelled" ||
+      eventName === "Gift Expired" ||
+      eventName === "Gift Refunded"
+    ) {
+      return eventName
+    }
+    if (eventName.toLowerCase().startsWith("bp gift") || eventName.toLowerCase().startsWith("gift ")) {
+      return eventName
+    }
     return eventName
   }
   return u.transaction_type.replace(/_/g, " ")
@@ -417,6 +439,7 @@ function statusIcon(status: string) {
   switch (status) {
     case "completed":
     case "deposit":
+    case "claimed":
       return <CheckCircle2 className="h-4 w-4 shrink-0" />
     case "pending":
       return <Clock className="h-4 w-4 shrink-0" />
@@ -424,6 +447,7 @@ function statusIcon(status: string) {
     case "rejected":
       return <XCircle className="h-4 w-4 shrink-0" />
     case "cancelled":
+    case "expired":
       return <Ban className="h-4 w-4 shrink-0" />
     default:
       return <AlertCircle className="h-4 w-4 shrink-0" />
@@ -434,6 +458,7 @@ function statusClass(status: string) {
   switch (status) {
     case "completed":
     case "deposit":
+    case "claimed":
       return "border-emerald-500/40 bg-emerald-500/[0.12] text-emerald-800 shadow-sm shadow-emerald-500/10 dark:text-emerald-200"
     case "pending":
       return "border-amber-500/40 bg-amber-500/[0.12] text-amber-900 shadow-sm shadow-amber-500/10 dark:text-amber-100"
@@ -441,6 +466,7 @@ function statusClass(status: string) {
     case "rejected":
       return "border-red-500/40 bg-red-500/[0.12] text-red-800 shadow-sm shadow-red-500/10 dark:text-red-200"
     case "cancelled":
+    case "expired":
       return "border-muted-foreground/25 bg-muted/60 text-muted-foreground"
     default:
       return "border-primary/35 bg-primary/10 text-primary shadow-sm shadow-primary/10"
@@ -508,6 +534,24 @@ function ledgerRowTypeDisplay(row: LedgerRow): { label: string; className: strin
         className: "border-violet-500/45 bg-violet-500/[0.12] text-violet-900 shadow-sm shadow-violet-500/10 dark:text-violet-100",
         icon: "arrows",
       }
+    }
+  }
+
+  if (
+    walletType.startsWith("bp_gift") ||
+    (row.unified_ledger?.transaction_type ?? "").startsWith("bp_gift")
+  ) {
+    const typeKey =
+      walletType.startsWith("bp_gift") && walletType !== "bp_gift"
+        ? walletType
+        : row.unified_ledger?.transaction_type?.startsWith("bp_gift")
+          ? row.unified_ledger.transaction_type
+          : "bp_gift_sent"
+    return {
+      label: transactionTypeDisplayLabel(typeKey),
+      className:
+        "border-purple-500/40 bg-purple-500/[0.12] text-purple-900 shadow-sm shadow-purple-500/10 dark:text-purple-100",
+      icon: "arrows",
     }
   }
 
@@ -607,12 +651,19 @@ function processorFeeRailBadgeClass(kind: "stripe" | "bridge") {
 
 function partiesSummary(u: UnifiedLedgerRow | undefined): string {
   if (!u) return "—"
-  if (u.module === "believe_points") {
+  const isBpGift =
+    u.transaction_type?.startsWith("bp_gift") ||
+    (typeof u.event_name === "string" &&
+      (u.event_name.startsWith("Gift ") || u.event_name.toLowerCase().includes("bp gift")))
+  // Gift BP and most modules: Sender → Recipient. Purchases keep "Purchaser:" shorthand.
+  if (u.module === "believe_points" && !isBpGift) {
     const name = (u.from_name ?? u.from_type)?.trim()
     return name ? `Purchaser: ${name}` : "—"
   }
   const from = u.from_name ?? u.from_type
   const to = u.to_name ?? u.to_type
+  if (!from && !to) return "—"
+  if (!to) return String(from)
   return `${from} → ${to}`
 }
 
@@ -1476,15 +1527,20 @@ export default function TransactionLedger({
                                 {row.transaction_id}
                               </td>
                               <td className="whitespace-nowrap px-4 py-3">
+                                {(() => {
+                                  const displayStatus = (u?.status || row.status || "").toString()
+                                  return (
                                 <span
                                   className={cn(
                                     "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold capitalize leading-none",
-                                    statusClass(row.status),
+                                    statusClass(displayStatus),
                                   )}
                                 >
-                                  {statusIcon(row.status)}
-                                  <span className="leading-none">{row.status}</span>
+                                  {statusIcon(displayStatus)}
+                                  <span className="leading-none">{displayStatus}</span>
                                 </span>
+                                  )
+                                })()}
                               </td>
                               <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-foreground">
                                 {u?.ledger_type_label ?? "Money (USD)"}
@@ -1502,7 +1558,8 @@ export default function TransactionLedger({
                                       dateStyle: "medium",
                                       timeStyle: "short",
                                     })
-                                  : ledgerKind === "bp" && u?.bp_status_label === "Processing"
+                                  : ledgerKind === "bp" &&
+                                      (u?.bp_status_label === "Processing" || u?.bp_status_label === "Holding")
                                     ? "Pending"
                                     : "—"}
                               </td>

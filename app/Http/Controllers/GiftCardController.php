@@ -55,8 +55,8 @@ class GiftCardController extends Controller
         $user = Auth::user();
         $search = $request->input('search', '');
         $countryFilter = $request->input('country', 'USA'); // Default to USA
-        $perPage = $request->input('per_page', 12);
-        $currentPage = $request->input('page', 1);
+        $perPage = 20; // Exactly 20 cards per API/scroll page
+        $currentPage = max(1, (int) $request->input('page', 1));
 
         // Available countries in Phaze API
         $availableCountries = [
@@ -69,13 +69,17 @@ class GiftCardController extends Controller
             'Japan' => 'Japan',
         ];
 
-        // Fetch one page from Phaze API (Phaze uses ?currentPage= — already paginated server-side).
-        $pagePayload = $this->giftCardService->getGiftBrandsPagePayload($countryFilter, (int) $currentPage);
+        // Real Phaze-backed chunk: page N returns the next 20 brands (fetches Phaze as needed).
+        // With search: filter the full country catalog first, then paginate matches.
+        $searchTrimmed = is_string($search) ? trim($search) : '';
+        $pagePayload = $searchTrimmed !== ''
+            ? $this->giftCardService->searchGiftBrandsChunk($countryFilter, $searchTrimmed, $currentPage, $perPage)
+            : $this->giftCardService->getGiftBrandsChunk($countryFilter, $currentPage, $perPage);
         $brands = $pagePayload['brands'] ?? [];
 
         // Ensure brands is an array
         if (! is_array($brands)) {
-            Log::warning('GiftCardController: getGiftBrandsPagePayload returned non-array brands', [
+            Log::warning('GiftCardController: brand chunk returned non-array brands', [
                 'country' => $countryFilter,
                 'currentPage' => $currentPage,
                 'type' => gettype($brands),
@@ -92,44 +96,11 @@ class GiftCardController extends Controller
             ]);
         }
 
-        // Apply search filter if provided (filters the current Phaze page only)
-        if ($search && ! empty($brands)) {
-            $searchLower = strtolower($search);
-            $brands = array_filter($brands, function ($brand) use ($searchLower) {
-                $brandName = strtolower($brand['productName'] ?? '');
-
-                return strpos($brandName, $searchLower) !== false;
-            });
-            // Re-index array after filter
-            $brands = array_values($brands);
-        }
-
-        // Do not slice again by $currentPage/$perPage — that duplicated Phaze pagination and emptied page 2+.
         $paginatedBrands = array_values($brands);
 
         $apiTotal = $pagePayload['total'] ?? null;
-        $apiLastPage = $pagePayload['last_page'] ?? null;
-        $apiPerPage = $pagePayload['per_page'] ?? null;
-
-        $n = count($paginatedBrands);
-        $step = max(1, $apiPerPage ?? $n ?: (int) $perPage);
-
-        if ($apiLastPage !== null) {
-            $lastPage = max(1, (int) $apiLastPage);
-        } elseif ($n === 0 && (int) $currentPage > 1) {
-            $lastPage = max(1, (int) $currentPage - 1);
-        } else {
-            // Unknown Phaze totals: allow "next" while this page has rows; stop when user hits an empty page
-            $lastPage = $n > 0 ? (int) $currentPage + 1 : max(1, (int) $currentPage);
-        }
-
-        if ($apiTotal !== null) {
-            $total = (int) $apiTotal;
-        } elseif ($n > 0) {
-            $total = (((int) $currentPage - 1) * $step) + $n;
-        } else {
-            $total = 0;
-        }
+        $lastPage = (int) ($pagePayload['last_page'] ?? 1);
+        $hasMore = (bool) ($pagePayload['has_more'] ?? false);
 
         // Ensure all brands have productName for display (already handled in service, but double-check)
         $paginatedBrands = array_map(function ($brand) {
@@ -167,20 +138,20 @@ class GiftCardController extends Controller
             return $this->withGiftedEligibility($brand);
         }, $paginatedBrands);
 
-        $from = $n > 0 ? $total - $n + 1 : 0;
-        $to = $n > 0 ? $total : 0;
-        if ($apiTotal !== null && $to > $apiTotal) {
-            $to = $apiTotal;
-        }
+        $n = count($paginatedBrands);
+        $from = $n > 0 ? (($currentPage - 1) * $perPage) + 1 : null;
+        $to = $n > 0 ? (($currentPage - 1) * $perPage) + $n : null;
+        $total = (int) ($apiTotal ?? ((($currentPage - 1) * $perPage) + $n));
 
         $giftCards = [
             'data' => $paginatedBrands,
-            'current_page' => (int) $currentPage,
+            'current_page' => $currentPage,
             'last_page' => $lastPage,
-            'per_page' => (int) $perPage,
+            'per_page' => $perPage,
             'total' => $total,
             'from' => $from,
             'to' => $to,
+            'has_more' => $hasMore && $n > 0,
             'links' => $this->generatePaginationLinks($currentPage, $lastPage, $request),
         ];
 
@@ -1564,15 +1535,30 @@ class GiftCardController extends Controller
     }
 
     /**
-     * Get gift card brands (API endpoint)
-     * Note: This endpoint is deprecated - we now use organization-created gift cards
+     * Get gift card brands page (JSON) — used for scroll pagination against Phaze `?currentPage=`.
      */
     public function getBrands(Request $request)
     {
-        // Return empty array since we no longer fetch brands from external API
+        $search = (string) $request->input('search', '');
+        $countryFilter = (string) $request->input('country', 'USA');
+        $currentPage = max(1, (int) $request->input('page', 1));
+        $searchTrimmed = trim($search);
+
+        $pagePayload = $searchTrimmed !== ''
+            ? $this->giftCardService->searchGiftBrandsChunk($countryFilter, $searchTrimmed, $currentPage, 20)
+            : $this->giftCardService->getGiftBrandsChunk($countryFilter, $currentPage, 20);
+        $brands = is_array($pagePayload['brands'] ?? null) ? $pagePayload['brands'] : [];
+
+        $brands = array_map(fn (array $brand) => $this->withGiftedEligibility($brand), $brands);
+
         return response()->json([
             'success' => true,
-            'brands' => [],
+            'brands' => $brands,
+            'current_page' => $currentPage,
+            'last_page' => $pagePayload['last_page'] ?? 1,
+            'has_more' => (bool) ($pagePayload['has_more'] ?? false),
+            'total' => $pagePayload['total'] ?? null,
+            'per_page' => $pagePayload['per_page'] ?? 20,
         ]);
     }
 

@@ -163,20 +163,50 @@
                 <span class="value"><strong>{{ $giftCard->brand_name }}</strong></span>
             </div>
 
-            <div class="info-row" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #d1d5db;">
-                <span class="label">{{ $giftCard->card_number ? 'Card Number' : 'Voucher Code' }}:</span>
-                <span class="value"></span>
-            </div>
-            <div style="text-align: center; margin: 10px 0;">
-                <span class="card-number">{{ $giftCard->card_number ?? $giftCard->voucher ?? 'N/A' }}</span>
-            </div>
-
             @php
+                $pdfCredentials = \App\Support\PhazeGiftCardPayload::resolveForDisplay($giftCard);
                 $faceAmount = (float) ($giftCard->meta['gift_card_face_value'] ?? $giftCard->amount);
                 $platformFee = (float) ($giftCard->meta['platform_fee'] ?? $giftCard->meta['biu_fee'] ?? 0);
                 $totalCharged = (float) ($giftCard->meta['gift_card_total_charged'] ?? ($faceAmount + $platformFee));
                 $currency = $giftCard->currency ?? 'USD';
             @endphp
+
+            @if($pdfCredentials['card_number'])
+            <div class="info-row" style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #d1d5db;">
+                <span class="label">Card Number:</span>
+                <span class="value"></span>
+            </div>
+            <div style="text-align: center; margin: 10px 0;">
+                <span class="card-number">{{ $pdfCredentials['card_number'] }}</span>
+            </div>
+            @endif
+
+            @if($pdfCredentials['pin'])
+            <div class="info-row" style="margin-top: 10px;">
+                <span class="label">PIN:</span>
+                <span class="value"></span>
+            </div>
+            <div style="text-align: center; margin: 8px 0;">
+                <span class="card-number">{{ $pdfCredentials['pin'] }}</span>
+            </div>
+            @endif
+
+            @if($pdfCredentials['voucher'])
+            <div class="info-row" style="margin-top: 10px;">
+                <span class="label">Voucher Code:</span>
+                <span class="value"></span>
+            </div>
+            <div style="text-align: center; margin: 8px 0;">
+                <span class="card-number">{{ $pdfCredentials['voucher'] }}</span>
+            </div>
+            @endif
+
+            @if($pdfCredentials['claim_url'])
+            <div class="info-row" style="margin-top: 10px;">
+                <span class="label">Redemption Link:</span>
+                <span class="value" style="word-break: break-all; text-align: left;">{{ $pdfCredentials['claim_url'] }}</span>
+            </div>
+            @endif
 
             <div class="info-row" style="margin-top: 15px;">
                 <span class="label">Gift Card Amount:</span>
@@ -227,7 +257,7 @@
 
     <div class="note">
         <strong>📌 Important:</strong> Please keep this receipt for your records. Your gift card is ready to use.
-        The card number and expiry date are shown above. If you have any questions, please contact our support team.
+        Card number, PIN (when provided), and expiry date are shown above. If you have any questions, please contact our support team.
     </div>
 
     <div class="footer">

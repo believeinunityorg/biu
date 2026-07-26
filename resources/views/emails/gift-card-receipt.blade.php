@@ -143,17 +143,42 @@
                     <span class="value">{{ $orderNumber }}</span>
                 </div>
 
-                @if($giftCard->card_number)
+                @php
+                    $displayCredentials = \App\Support\PhazeGiftCardPayload::resolveForDisplay($giftCard);
+                @endphp
+
+                @if($displayCredentials['card_number'])
                 <div class="receipt-item">
                     <span class="label">Card Number:</span>
-                    <span class="value card-number">{{ $giftCard->card_number }}</span>
+                    <span class="value card-number">{{ $displayCredentials['card_number'] }}</span>
                 </div>
                 @endif
 
-                @if($giftCard->voucher)
+                @if($displayCredentials['pin'])
+                <div class="receipt-item">
+                    <span class="label">PIN:</span>
+                    <span class="value card-number">{{ $displayCredentials['pin'] }}</span>
+                </div>
+                @endif
+
+                @if($displayCredentials['voucher'])
                 <div class="receipt-item">
                     <span class="label">Voucher Code:</span>
-                    <span class="value card-number">{{ $giftCard->voucher }}</span>
+                    <span class="value card-number">{{ $displayCredentials['voucher'] }}</span>
+                </div>
+                @endif
+
+                @if($giftCard->expires_at)
+                <div class="receipt-item">
+                    <span class="label">Expires:</span>
+                    <span class="value">{{ $giftCard->expires_at->format('F j, Y') }}</span>
+                </div>
+                @endif
+
+                @if($displayCredentials['claim_url'])
+                <div class="receipt-item">
+                    <span class="label">Redemption Link:</span>
+                    <span class="value"><a href="{{ $displayCredentials['claim_url'] }}">{{ $displayCredentials['claim_url'] }}</a></span>
                 </div>
                 @endif
             </div>
@@ -218,10 +243,30 @@
                     <span class="value">{{ $giftCard->brand_name }}</span>
                 </div>
 
+                @php
+                    $instantCredentials = \App\Support\PhazeGiftCardPayload::resolveForDisplay($giftCard);
+                @endphp
+
+                @if($instantCredentials['card_number'])
                 <div class="receipt-item">
                     <span class="label">Card Number:</span>
-                    <span class="value card-number">{{ $giftCard->card_number ?? 'N/A' }}</span>
+                    <span class="value card-number">{{ $instantCredentials['card_number'] }}</span>
                 </div>
+                @endif
+
+                @if($instantCredentials['pin'])
+                <div class="receipt-item">
+                    <span class="label">PIN:</span>
+                    <span class="value card-number">{{ $instantCredentials['pin'] }}</span>
+                </div>
+                @endif
+
+                @if($instantCredentials['voucher'])
+                <div class="receipt-item">
+                    <span class="label">Voucher Code:</span>
+                    <span class="value card-number">{{ $instantCredentials['voucher'] }}</span>
+                </div>
+                @endif
 
                 <div class="receipt-item">
                     <span class="label">Amount:</span>

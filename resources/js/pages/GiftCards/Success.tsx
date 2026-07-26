@@ -20,11 +20,23 @@ import ProfileLayout from "@/components/frontend/layout/user-profile-layout"
 import { useState } from "react"
 import { motion } from "framer-motion"
 import jsPDF from "jspdf"
+import {
+    formatGiftCardNumber,
+    resolveGiftCardCredentials,
+} from "@/lib/gift-card-credentials"
 
 interface GiftCard {
     id: number
     voucher: string | null
     card_number: string | null
+    pin?: string | null
+    barcode?: string | null
+    barcode_url?: string | null
+    qr_code?: string | null
+    qr_code_url?: string | null
+    claim_url?: string | null
+    redemption_instructions?: string | null
+    how_to_use?: string | null
     amount: number
     brand_name: string
     currency: string
@@ -70,7 +82,8 @@ export default function SuccessPage({
     scheduledFulfillmentAt,
     user,
 }: SuccessProps) {
-    const [copied, setCopied] = useState(false)
+    const [copied, setCopied] = useState<string | null>(null)
+    const credentials = resolveGiftCardCredentials(giftCard, phazePurchaseData)
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -87,17 +100,13 @@ export default function SuccessPage({
     const orderNumber =
         (typeof giftCard.meta?.orderId === 'string' && giftCard.meta.orderId) || `GC-${giftCard.id}`
 
-    const copyToClipboard = (text: string) => {
+    const copyToClipboard = (text: string, type: string = 'code') => {
         navigator.clipboard.writeText(text)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
+        setCopied(type)
+        setTimeout(() => setCopied(null), 2000)
     }
 
-    const formatCardNumber = (cardNumber: string | null) => {
-        if (!cardNumber) return null
-        // Format as XXXX-XXXX-XXXX-XXXX
-        return cardNumber.replace(/(\d{4})(?=\d)/g, '$1-')
-    }
+    const formatCardNumber = (cardNumber: string | null) => formatGiftCardNumber(cardNumber)
 
     const generatePDFReceipt = () => {
         const pdf = new jsPDF({
@@ -228,7 +237,7 @@ export default function SuccessPage({
         yPos += 8
 
         // Card Number - Prominently displayed
-        if (giftCard.card_number) {
+        if (credentials.card_number) {
             yPos += 10
             pdf.setFont('helvetica', 'normal')
             pdf.setTextColor(...darkGray)
@@ -242,15 +251,28 @@ export default function SuccessPage({
             pdf.setFont('helvetica', 'bold')
             pdf.setFontSize(16)
             pdf.setTextColor(...primaryColor)
-            const formattedCardNumber = formatCardNumber(giftCard.card_number) || giftCard.card_number
+            const formattedCardNumber = formatCardNumber(credentials.card_number) || credentials.card_number
             pdf.text(formattedCardNumber, 105, yPos + 6, { align: 'center' })
 
             pdf.setFontSize(10)
             yPos += 15
         }
 
+        if (credentials.pin) {
+            yPos += 5
+            pdf.setFont('helvetica', 'normal')
+            pdf.setTextColor(...darkGray)
+            pdf.text('PIN:', 20, yPos)
+            pdf.setFont('helvetica', 'bold')
+            pdf.setFontSize(14)
+            pdf.setTextColor(...primaryColor)
+            pdf.text(credentials.pin, 80, yPos)
+            pdf.setFontSize(10)
+            yPos += 8
+        }
+
         // Voucher Code
-        if (giftCard.voucher) {
+        if (credentials.voucher) {
             yPos += 5
             pdf.setFont('helvetica', 'normal')
             pdf.setTextColor(...darkGray)
@@ -258,7 +280,7 @@ export default function SuccessPage({
             pdf.setFont('helvetica', 'bold')
             pdf.setFontSize(12)
             pdf.setTextColor(...primaryColor)
-            pdf.text(giftCard.voucher, 80, yPos)
+            pdf.text(credentials.voucher, 80, yPos)
             pdf.setFontSize(10)
             yPos += 8
         }
@@ -510,73 +532,123 @@ export default function SuccessPage({
                                         </div>
                                     </div>
 
-                                    {/* Voucher Code - Enhanced */}
-                                    {!pendingFulfillment && giftCard.voucher && (
-                                        <div className="space-y-3">
-                                            <Label className="text-base font-semibold block">Voucher Code</Label>
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-1 p-5 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 font-mono text-xl font-bold text-center border-2 border-dashed border-primary/30 shadow-inner">
-                                                    {giftCard.voucher}
-                                                </div>
-                                                <Button
-                                                    variant="outline"
-                                                    size="lg"
-                                                    className="h-14 w-14 p-0"
-                                                    onClick={() => copyToClipboard(giftCard.voucher!)}
-                                                >
-                                                    {copied ? (
-                                                        <CheckCircle className="h-5 w-5 text-green-600" />
-                                                    ) : (
-                                                        <Copy className="h-5 w-5" />
-                                                    )}
-                                                </Button>
-                                            </div>
-                                            <motion.p
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                className={`text-sm mt-2 text-center font-medium ${
-                                                    copied
-                                                        ? 'text-green-600 dark:text-green-400'
-                                                        : 'text-muted-foreground'
-                                                }`}
-                                            >
-                                                {copied ? '✓ Copied to clipboard!' : 'Click the copy button to copy this code'}
-                                            </motion.p>
-                                        </div>
-                                    )}
-
                                     {/* Card Number - Show if available */}
-                                    {!pendingFulfillment && giftCard.card_number && (
+                                    {!pendingFulfillment && credentials.card_number && (
                                         <div className="space-y-3">
                                             <Label className="text-base font-semibold block">Card Number</Label>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex-1 p-5 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 font-mono text-xl font-bold text-center border-2 border-dashed border-primary/30 shadow-inner">
-                                                    {formatCardNumber(giftCard.card_number)}
+                                                    {formatCardNumber(credentials.card_number)}
                                                 </div>
                                                 <Button
                                                     variant="outline"
                                                     size="lg"
                                                     className="h-14 w-14 p-0"
-                                                    onClick={() => copyToClipboard(giftCard.card_number!)}
+                                                    onClick={() => copyToClipboard(credentials.card_number!, 'card')}
                                                 >
-                                                    {copied ? (
+                                                    {copied === 'card' ? (
                                                         <CheckCircle className="h-5 w-5 text-green-600" />
                                                     ) : (
                                                         <Copy className="h-5 w-5" />
                                                     )}
                                                 </Button>
                                             </div>
-                                            <motion.p
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                className={`text-sm mt-2 text-center font-medium ${
-                                                    copied
-                                                        ? 'text-green-600 dark:text-green-400'
-                                                        : 'text-muted-foreground'
-                                                }`}
+                                            <p className={`text-sm mt-2 text-center font-medium ${
+                                                copied === 'card'
+                                                    ? 'text-green-600 dark:text-green-400'
+                                                    : 'text-muted-foreground'
+                                            }`}>
+                                                {copied === 'card' ? '✓ Copied to clipboard!' : 'Click the copy button to copy this card number'}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* PIN — required for online redemption on brands like Walmart */}
+                                    {!pendingFulfillment && credentials.pin && (
+                                        <div className="space-y-3">
+                                            <Label className="text-base font-semibold block">PIN</Label>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 p-5 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 font-mono text-xl font-bold text-center border-2 border-dashed border-primary/30 shadow-inner">
+                                                    {credentials.pin}
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    size="lg"
+                                                    className="h-14 w-14 p-0"
+                                                    onClick={() => copyToClipboard(credentials.pin!, 'pin')}
+                                                >
+                                                    {copied === 'pin' ? (
+                                                        <CheckCircle className="h-5 w-5 text-green-600" />
+                                                    ) : (
+                                                        <Copy className="h-5 w-5" />
+                                                    )}
+                                                </Button>
+                                            </div>
+                                            <p className={`text-sm mt-2 text-center font-medium ${
+                                                copied === 'pin'
+                                                    ? 'text-green-600 dark:text-green-400'
+                                                    : 'text-muted-foreground'
+                                            }`}>
+                                                {copied === 'pin' ? '✓ Copied to clipboard!' : 'Required for online checkout for some brands'}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Voucher Code - Enhanced */}
+                                    {!pendingFulfillment && credentials.voucher && (
+                                        <div className="space-y-3">
+                                            <Label className="text-base font-semibold block">Voucher Code</Label>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1 p-5 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 font-mono text-xl font-bold text-center border-2 border-dashed border-primary/30 shadow-inner">
+                                                    {credentials.voucher}
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    size="lg"
+                                                    className="h-14 w-14 p-0"
+                                                    onClick={() => copyToClipboard(credentials.voucher!, 'voucher')}
+                                                >
+                                                    {copied === 'voucher' ? (
+                                                        <CheckCircle className="h-5 w-5 text-green-600" />
+                                                    ) : (
+                                                        <Copy className="h-5 w-5" />
+                                                    )}
+                                                </Button>
+                                            </div>
+                                            <p className={`text-sm mt-2 text-center font-medium ${
+                                                copied === 'voucher'
+                                                    ? 'text-green-600 dark:text-green-400'
+                                                    : 'text-muted-foreground'
+                                            }`}>
+                                                {copied === 'voucher' ? '✓ Copied to clipboard!' : 'Click the copy button to copy this code'}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {!pendingFulfillment && credentials.claim_url && (
+                                        <div className="space-y-2">
+                                            <Label className="text-base font-semibold block">Redemption Link</Label>
+                                            <a
+                                                href={credentials.claim_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-sm text-primary underline break-all"
                                             >
-                                                {copied ? '✓ Copied to clipboard!' : 'Click the copy button to copy this card number'}
-                                            </motion.p>
+                                                {credentials.claim_url}
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    {!pendingFulfillment && giftCard.expires_at && (
+                                        <div className="p-4 rounded-lg border bg-card">
+                                            <p className="text-xs text-muted-foreground mb-1">Expiry Date</p>
+                                            <p className="font-semibold text-sm">
+                                                {new Date(giftCard.expires_at).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric',
+                                                })}
+                                            </p>
                                         </div>
                                     )}
 
@@ -619,17 +691,20 @@ export default function SuccessPage({
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3 pt-6">
-                                {!pendingFulfillment && (giftCard.voucher || giftCard.card_number) ? (
+                                {!pendingFulfillment && (credentials.voucher || credentials.card_number || credentials.pin) ? (
                                     <Button
                                         className="w-full justify-start bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-                                        onClick={() => copyToClipboard(giftCard.voucher || giftCard.card_number || '')}
+                                        onClick={() => copyToClipboard(
+                                            credentials.voucher || credentials.card_number || credentials.pin || '',
+                                            'redeem'
+                                        )}
                                     >
-                                        {copied ? (
+                                        {copied === 'redeem' ? (
                                             <CheckCircle className="h-4 w-4 mr-2" />
                                         ) : (
                                             <Copy className="h-4 w-4 mr-2" />
                                         )}
-                                        {copied ? 'Code copied!' : 'Redeem — Copy Code'}
+                                        {copied === 'redeem' ? 'Code copied!' : 'Redeem — Copy Code'}
                                     </Button>
                                 ) : pendingFulfillment ? (
                                     <Button className="w-full justify-start" disabled>

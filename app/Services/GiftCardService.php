@@ -593,13 +593,25 @@ class GiftCardService
     }
 
     /**
-     * Get purchase details from Phaze API by purchase/transaction ID
+     * Get purchase/transaction details from Phaze.
      *
-     * @param  string  $purchaseId  The Phaze purchase/transaction ID
-     * @return array|null Purchase details from Phaze API
+     * Prefer orderId — Phaze's live transaction endpoint is GET /transaction/{orderId}.
+     * GET /purchase/{id} is not available on current API versions (returns 404).
+     *
+     * @param  string  $purchaseId  Phaze transaction id (numeric) — used only as a weak fallback label
+     * @param  string|null  $orderId  Our/Phaze order UUID (preferred)
+     * @return array<string, mixed>|null
      */
-    public function getPurchaseDetails(string $purchaseId): ?array
+    public function getPurchaseDetails(string $purchaseId, ?string $orderId = null): ?array
     {
+        if (is_string($orderId) && trim($orderId) !== '') {
+            $byOrder = $this->lookupTransactionByOrderId($orderId);
+            if ($byOrder !== null) {
+                return $byOrder;
+            }
+        }
+
+        // Legacy path — kept for compatibility; often 404 on current Phaze API.
         try {
             $endpoint = '/purchase/'.$purchaseId;
             $apiKey = $this->getApiKey();
@@ -610,14 +622,9 @@ class GiftCardService
                 return null;
             }
 
-            // Generate signature
             $apiSecret = $this->getApiSecret();
-            $signature = null;
-            if (! empty($apiSecret)) {
-                $signature = $this->generateSignature('GET', $endpoint, null);
-            }
+            $signature = ! empty($apiSecret) ? $this->generateSignature('GET', $endpoint, null) : null;
 
-            // Prepare headers
             $headers = [
                 'API-Key' => $apiKey,
                 'Content-Type' => 'application/json',
@@ -628,21 +635,22 @@ class GiftCardService
                 $headers['Signature'] = $signature;
             }
 
-            // Make request with cURL
             $response = $this->makeCurlRequest('GET', $endpoint, $headers);
 
-            if (! $response) {
-                // Try without signature as fallback
-                if ($signature) {
-                    unset($headers['Signature']);
-                    $response = $this->makeCurlRequest('GET', $endpoint, $headers);
-                }
+            if (! $response && $signature) {
+                unset($headers['Signature']);
+                $response = $this->makeCurlRequest('GET', $endpoint, $headers);
+            }
+
+            if ($response && $this->isPhazeErrorResponse($response)) {
+                return null;
             }
 
             return $response;
         } catch (\Exception $e) {
             Log::error('Error fetching purchase details from Phaze API: '.$e->getMessage(), [
                 'purchase_id' => $purchaseId,
+                'order_id' => $orderId,
             ]);
 
             return null;
@@ -650,17 +658,20 @@ class GiftCardService
     }
 
     /**
-     * Lookup transaction by order ID from Phaze API
-     * This is a fallback method - webhooks are preferred for real-time updates
+     * Lookup transaction by order ID from Phaze API (GET /transaction/{orderId}).
+     * Preferred way to refresh status + voucher credentials after purchase.
      *
-     * @param  string  $orderId  The order ID to lookup
-     * @return array|null Transaction data or null on failure
+     * @return array<string, mixed>|null Transaction data or null on failure
      */
     public function lookupTransactionByOrderId(string $orderId): ?array
     {
         try {
-            $endpoint = '/transaction/'.urlencode($orderId);
-            $baseUrl = $this->getBaseUrl();
+            $orderId = trim($orderId);
+            if ($orderId === '') {
+                return null;
+            }
+
+            $endpoint = '/transaction/'.rawurlencode($orderId);
             $apiKey = $this->getApiKey();
 
             if (empty($apiKey)) {
@@ -669,14 +680,9 @@ class GiftCardService
                 return null;
             }
 
-            // Generate signature
             $apiSecret = $this->getApiSecret();
-            $signature = null;
-            if (! empty($apiSecret)) {
-                $signature = $this->generateSignature('GET', $endpoint, null);
-            }
+            $signature = ! empty($apiSecret) ? $this->generateSignature('GET', $endpoint, null) : null;
 
-            // Prepare headers
             $headers = [
                 'API-Key' => $apiKey,
                 'Content-Type' => 'application/json',
@@ -687,30 +693,25 @@ class GiftCardService
                 $headers['Signature'] = $signature;
             }
 
-            // Make request with cURL
+            // makeCurlRequest already returns decoded JSON (or error payload with httpStatusCode).
             $response = $this->makeCurlRequest('GET', $endpoint, $headers);
 
-            if (! $response) {
-                // Try without signature as fallback
-                if ($signature) {
-                    unset($headers['Signature']);
-                    $response = $this->makeCurlRequest('GET', $endpoint, $headers);
-                }
+            if (! $response && $signature) {
+                unset($headers['Signature']);
+                $response = $this->makeCurlRequest('GET', $endpoint, $headers);
             }
 
-            if ($response && isset($response['httpCode']) && $response['httpCode'] >= 200 && $response['httpCode'] < 300) {
-                $data = json_decode($response['body'], true);
+            if (! $response || $this->isPhazeErrorResponse($response)) {
+                Log::warning('Phaze transaction lookup failed', [
+                    'order_id' => $orderId,
+                    'http_status' => $response['httpStatusCode'] ?? null,
+                    'error' => $response['error'] ?? $response['message'] ?? null,
+                ]);
 
-                return $data;
+                return null;
             }
 
-            Log::warning('Phaze transaction lookup failed', [
-                'order_id' => $orderId,
-                'http_code' => $response['httpCode'] ?? null,
-                'response' => $response['body'] ?? null,
-            ]);
-
-            return null;
+            return $response;
         } catch (\Exception $e) {
             Log::error('Error looking up transaction by order ID: '.$e->getMessage(), [
                 'order_id' => $orderId,
@@ -719,6 +720,23 @@ class GiftCardService
 
             return null;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $response
+     */
+    private function isPhazeErrorResponse(array $response): bool
+    {
+        if (isset($response['httpStatusCode']) && (int) $response['httpStatusCode'] >= 400) {
+            return true;
+        }
+
+        // Successful transaction payloads include status; pure error objects usually do not.
+        if (isset($response['error']) && ! isset($response['status']) && ! isset($response['orderId']) && ! isset($response['id'])) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

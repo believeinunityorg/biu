@@ -21,6 +21,8 @@ import { useState } from "react"
 interface GiftCard {
     id: number
     voucher: string | null
+    card_number?: string | null
+    pin?: string | null
     amount: number
     brand: string | null
     brand_name: string | null
@@ -244,27 +246,77 @@ export default function MyCardsPage({ giftCards, user }: MyCardsProps) {
                                             </div>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
-                                            {card.voucher && (
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground mb-2">Voucher Code</p>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="flex-1 p-2 rounded bg-muted font-mono text-sm text-center">
-                                                            {card.voucher}
+                                            {!['pending_fulfillment', 'processing', 'capacity_reached', 'failed'].includes(card.status) && (
+                                                <>
+                                                    {card.card_number && (
+                                                        <div>
+                                                            <p className="text-xs text-muted-foreground mb-2">Card Number</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 p-2 rounded bg-muted font-mono text-sm text-center">
+                                                                    {card.card_number}
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8"
+                                                                    onClick={() => copyToClipboard(card.card_number!, card.id)}
+                                                                >
+                                                                    {copiedId === card.id ? (
+                                                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                                                    ) : (
+                                                                        <Copy className="h-4 w-4" />
+                                                                    )}
+                                                                </Button>
+                                                            </div>
                                                         </div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            onClick={() => copyToClipboard(card.voucher!, card.id)}
-                                                        >
-                                                            {copiedId === card.id ? (
-                                                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                                            ) : (
-                                                                <Copy className="h-4 w-4" />
-                                                            )}
-                                                        </Button>
-                                                    </div>
-                                                </div>
+                                                    )}
+
+                                                    {card.pin && (
+                                                        <div>
+                                                            <p className="text-xs text-muted-foreground mb-2">PIN</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 p-2 rounded bg-muted font-mono text-sm text-center">
+                                                                    {card.pin}
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8"
+                                                                    onClick={() => copyToClipboard(card.pin!, card.id + 100000)}
+                                                                >
+                                                                    {copiedId === card.id + 100000 ? (
+                                                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                                                    ) : (
+                                                                        <Copy className="h-4 w-4" />
+                                                                    )}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {card.voucher && (
+                                                        <div>
+                                                            <p className="text-xs text-muted-foreground mb-2">Voucher Code</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-1 p-2 rounded bg-muted font-mono text-sm text-center">
+                                                                    {card.voucher}
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8"
+                                                                    onClick={() => copyToClipboard(card.voucher!, card.id)}
+                                                                >
+                                                                    {copiedId === card.id ? (
+                                                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                                                    ) : (
+                                                                        <Copy className="h-4 w-4" />
+                                                                    )}
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
                                             )}
 
                                             <div className="space-y-2">

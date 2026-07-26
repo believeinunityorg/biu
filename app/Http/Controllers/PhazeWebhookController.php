@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\GiftCardStatus;
 use App\Models\GiftCard;
 use App\Services\GiftCardRevenueShareService;
+use App\Support\PhazeGiftCardPayload;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -56,8 +57,8 @@ class PhazeWebhookController extends Controller
 
             // Extract transaction data from payload
             $transactionId = $payload['id'] ?? null;
-            $orderId = $payload['orderID'] ?? null;
-            $status = $payload['status'] ?? null;
+            $orderId = $payload['orderID'] ?? $payload['orderId'] ?? null;
+            $status = PhazeGiftCardPayload::normalizeProviderStatus($payload['status'] ?? null);
             $productId = $payload['productId'] ?? null;
             $externalUserId = $payload['externalUserId'] ?? null;
             $voucher = $payload['voucher'] ?? null;
@@ -143,43 +144,45 @@ class PhazeWebhookController extends Controller
             $totalCommission = $providerCommission ?? $giftCard->total_commission;
 
             $existingMeta = $giftCard->meta ?? [];
-            $updateData = [
-                'external_id' => $transactionId ?? $giftCard->external_id,
-                'commission_percentage' => $commissionPercentage ?? $giftCard->commission_percentage,
-                'total_commission' => $totalCommission ?? $giftCard->total_commission,
-                'platform_commission' => $platformCommission ?? $giftCard->platform_commission,
-                'nonprofit_commission' => $nonprofitCommission ?? $giftCard->nonprofit_commission,
-                'merchant_revenue' => $merchantRevenue,
-                'meta' => array_merge($existingMeta, [
-                    'phaze_purchase' => $payload,
+            $credentialUpdates = PhazeGiftCardPayload::buildCredentialUpdates(
+                $giftCard,
+                $payload,
+                [
                     'phaze_webhook' => $payload,
                     'phaze_status' => $status,
                     'phaze_updated_at' => now()->toIso8601String(),
                     'orderId' => $orderId ?? $existingMeta['orderId'] ?? null,
                     'phaze_transaction_id' => $transactionId,
                     'commission_calculation' => $commissionCalculation,
-                ]),
-            ];
+                ]
+            );
 
-            // Update voucher if provided
-            if ($voucher) {
+            $updateData = array_merge($credentialUpdates, [
+                'external_id' => $transactionId ?? $giftCard->external_id,
+                'commission_percentage' => $commissionPercentage ?? $giftCard->commission_percentage,
+                'total_commission' => $totalCommission ?? $giftCard->total_commission,
+                'platform_commission' => $platformCommission ?? $giftCard->platform_commission,
+                'nonprofit_commission' => $nonprofitCommission ?? $giftCard->nonprofit_commission,
+                'merchant_revenue' => $merchantRevenue,
+            ]);
+
+            // Legacy webhook field still honored if extractor did not find voucher elsewhere
+            if ($voucher && empty($updateData['voucher'])) {
                 $updateData['voucher'] = $voucher;
             }
 
-            // Update card_number if provided in webhook
-            if (isset($payload['cardNumber']) && !empty($payload['cardNumber'])) {
-                $updateData['card_number'] = $payload['cardNumber'];
-            }
-
-            // Update status based on Phaze transaction status
-            if ($status === 'failed') {
-                $updateData['status'] = 'failed';
+            // Update status based on Phaze transaction status ("processed" = success in Phaze admin)
+            if (PhazeGiftCardPayload::isProviderFailedStatus($status)) {
+                $updateData['status'] = GiftCardStatus::Failed->value;
                 Log::warning('Phaze transaction failed', [
                     'gift_card_id' => $giftCard->id,
                     'error' => $error,
                 ]);
-            } elseif ($status === 'completed' || $status === 'success') {
+            } elseif (PhazeGiftCardPayload::isProviderSuccessStatus($status)) {
                 $updateData['status'] = GiftCardStatus::Completed->value;
+                if (! $giftCard->fulfilled_at) {
+                    $updateData['fulfilled_at'] = now();
+                }
             }
 
             $giftCard->update($updateData);

@@ -8,6 +8,7 @@ use App\Models\GiftCard;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Support\BrpParticipationModule;
+use App\Support\PhazeGiftCardPayload;
 use App\Services\ParticipationActivityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -633,22 +634,10 @@ class GiftCardRedemptionService
         $purchaseAmount = (float) $giftCard->amount;
         $revenueSplit = GiftCardRevenueShareService::calculateFromPhazeResponse($phazePurchaseResult, $purchaseAmount);
 
-        $existingMeta = $giftCard->meta ?? [];
-        $updateData = [
-            'external_id' => $phazePurchaseResult['id'] ?? $giftCard->external_id,
-            'voucher' => $phazePurchaseResult['voucher'] ?? $giftCard->voucher,
-            'phaze_disbursement_id' => $phazePurchaseResult['id'] ?? null,
-            'status' => GiftCardStatus::Completed->value,
-            'fulfilled_at' => now(),
-            'fulfillment_locked_at' => null,
-            'failure_reason' => null,
-            'commission_percentage' => $revenueSplit['commission_percentage'],
-            'total_commission' => $revenueSplit['total_commission'],
-            'platform_commission' => $revenueSplit['platform_commission'],
-            'nonprofit_commission' => $revenueSplit['nonprofit_commission'],
-            'merchant_revenue' => $revenueSplit['merchant_revenue'],
-            'meta' => array_merge($existingMeta, [
-                'phaze_purchase' => $phazePurchaseResult,
+        $credentialUpdates = PhazeGiftCardPayload::buildCredentialUpdates(
+            $giftCard,
+            $phazePurchaseResult,
+            [
                 'phaze_purchase_id' => $phazePurchaseResult['id'] ?? null,
                 'phaze_status' => $phazePurchaseResult['status'] ?? 'pending',
                 'phaze_initial_response' => $phazePurchaseResult,
@@ -658,14 +647,22 @@ class GiftCardRedemptionService
                     'order_id' => $orderId,
                 ],
                 'commission_calculation' => $revenueSplit['commission_calculation'],
-            ]),
-        ];
+            ]
+        );
 
-        if (! empty($phazePurchaseResult['cardNumber'])) {
-            $updateData['card_number'] = $phazePurchaseResult['cardNumber'];
-        } elseif (! empty($phazePurchaseResult['card_number'])) {
-            $updateData['card_number'] = $phazePurchaseResult['card_number'];
-        }
+        $updateData = array_merge($credentialUpdates, [
+            'external_id' => $phazePurchaseResult['id'] ?? $giftCard->external_id,
+            'phaze_disbursement_id' => $phazePurchaseResult['id'] ?? $giftCard->phaze_disbursement_id,
+            'status' => GiftCardStatus::Completed->value,
+            'fulfilled_at' => now(),
+            'fulfillment_locked_at' => null,
+            'failure_reason' => null,
+            'commission_percentage' => $revenueSplit['commission_percentage'],
+            'total_commission' => $revenueSplit['total_commission'],
+            'platform_commission' => $revenueSplit['platform_commission'],
+            'nonprofit_commission' => $revenueSplit['nonprofit_commission'],
+            'merchant_revenue' => $revenueSplit['merchant_revenue'],
+        ]);
 
         $giftCard->update($updateData);
 

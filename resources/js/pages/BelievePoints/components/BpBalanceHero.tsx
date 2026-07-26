@@ -1,13 +1,17 @@
 import { CalendarClock, Clock, Coins, Gift, Info, Plus, RefreshCw, Wallet } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
+import {
+  ProcessingBatchesList,
+  type ProcessingBpBatch,
+} from "@/components/believe-points/ProcessingBatchesList"
 
 type BpBalanceHeroProps = {
   balance: number
   processingBalance: number
   processingReleaseHint?: string | null
   /** Open processing lots grouped by Available On date */
-  processingBatches?: Array<{ amount: number; available_on: string | null }>
+  processingBatches?: ProcessingBpBatch[]
   giftedBalance?: number
   holdingBalance?: number
   formatPoints: (value: number | string) => string
@@ -22,65 +26,6 @@ type QuickAction = {
   label: string
   icon: typeof Plus
   onClick: () => void
-}
-
-function formatBatchDateParts(iso: string | null | undefined): { date: string; time: string } | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return {
-    date: d.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }),
-    time: d.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    }),
-  }
-}
-
-function formatBatchWhen(iso: string | null | undefined): string {
-  const parts = formatBatchDateParts(iso)
-  if (!parts) return "TBD"
-  // Compact single-line label for narrow Processing column
-  const shortDate = parts.date.replace(/,\s*\d{4}$/, "")
-  return `${shortDate} · ${parts.time}`
-}
-
-function ProcessingBatchesList({
-  batches,
-  formatPoints,
-}: {
-  batches: Array<{ amount: number; available_on: string | null }>
-  formatPoints: (value: number | string) => string
-}) {
-  return (
-    <ul className="mt-2 flex w-full flex-col gap-1">
-      {batches.map((batch, i) => (
-        <li
-          key={`${batch.available_on ?? "tbd"}-${i}`}
-          className="grid h-7 w-full grid-cols-[1fr_auto_1fr] items-center gap-x-1 rounded-full border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-amber-50/90 px-2 text-[10px] leading-none shadow-sm dark:border-amber-800/60 dark:from-amber-950/50 dark:via-amber-950/30 dark:to-amber-950/50"
-        >
-          <span className="flex items-center gap-1 justify-self-start whitespace-nowrap font-bold tabular-nums text-amber-950 dark:text-amber-50">
-            <Coins className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-            <span>
-              {formatPoints(batch.amount)}
-              <span className="ml-0.5 font-semibold text-amber-700/80 dark:text-amber-300/80">BP</span>
-            </span>
-          </span>
-          <span className="flex items-center justify-center gap-1 justify-self-center whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-            <CalendarClock className="h-3 w-3 shrink-0 text-amber-700/80 dark:text-amber-300/80" aria-hidden />
-            <span>Available On</span>
-          </span>
-          <span className="justify-self-end whitespace-nowrap text-right font-semibold tabular-nums text-amber-900 dark:text-amber-100">
-            {formatBatchWhen(batch.available_on)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  )
 }
 
 function BalanceColumn({
@@ -98,7 +43,7 @@ function BalanceColumn({
   value: string
   availableOnLabel?: string | null
   availableOnDate?: string | null
-  batches?: Array<{ amount: number; available_on: string | null }>
+  batches?: ProcessingBpBatch[]
   formatPoints?: (value: number | string) => string
   badge?: { text: string; className: string }
   valueClassName: string

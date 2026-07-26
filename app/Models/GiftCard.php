@@ -15,6 +15,7 @@ class GiftCard extends Model
         'external_id',
         'voucher',
         'card_number',
+        'pin',
         'amount',
         'platform_fee',
         'platform_fee_biu_share',

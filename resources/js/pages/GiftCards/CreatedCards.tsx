@@ -30,6 +30,8 @@ import InputError from "@/components/input-error"
 interface GiftCard {
     id: number
     voucher: string | null
+    card_number?: string | null
+    pin?: string | null
     amount: number
     platform_fee?: number | null
     platform_fee_biu_share?: number | null
@@ -440,10 +442,24 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
                                                     </div>
                                                 </div>
                                             </div>
-                                            {card.voucher && (
-                                                <p className="text-xs text-muted-foreground font-mono pl-13">
-                                                    Voucher: {card.voucher}
-                                                </p>
+                                            {!['pending_fulfillment', 'processing', 'capacity_reached', 'failed'].includes(card.status) && (
+                                                <>
+                                                    {card.card_number && (
+                                                        <p className="text-xs text-muted-foreground font-mono pl-13">
+                                                            Card: {card.card_number}
+                                                        </p>
+                                                    )}
+                                                    {card.pin && (
+                                                        <p className="text-xs text-muted-foreground font-mono pl-13">
+                                                            PIN: {card.pin}
+                                                        </p>
+                                                    )}
+                                                    {card.voucher && (
+                                                        <p className="text-xs text-muted-foreground font-mono pl-13">
+                                                            Voucher: {card.voucher}
+                                                        </p>
+                                                    )}
+                                                </>
                                             )}
                                             {card.status === 'pending_fulfillment' && card.failure_reason && (
                                                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-1 pl-13">

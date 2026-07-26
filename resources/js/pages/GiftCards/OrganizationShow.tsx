@@ -19,11 +19,27 @@ import {
 } from "lucide-react"
 import AppSidebarLayout from "@/layouts/app/app-sidebar-layout"
 import { useState } from "react"
+import {
+    formatGiftCardNumber,
+    isPhazeFailedStatus,
+    isPhazeSuccessStatus,
+    labelPhazeField,
+    labelPhazeStatus,
+    resolveGiftCardCredentials,
+} from "@/lib/gift-card-credentials"
 
 interface GiftCard {
     id: number
     voucher: string | null
     card_number: string | null
+    pin?: string | null
+    barcode?: string | null
+    barcode_url?: string | null
+    qr_code?: string | null
+    qr_code_url?: string | null
+    claim_url?: string | null
+    redemption_instructions?: string | null
+    how_to_use?: string | null
     amount: number
     platform_fee?: number | null
     platform_fee_biu_share?: number | null
@@ -52,6 +68,8 @@ interface OrganizationShowProps {
     giftCard: GiftCard
     phazePurchaseData?: any
     phazeDisbursementData?: any
+    phazeFlatFields?: Record<string, string | number>
+    showAllProviderFields?: boolean
     user?: {
         name: string
         email: string
@@ -62,8 +80,17 @@ interface OrganizationShowProps {
     } | null
 }
 
-export default function OrganizationShowPage({ giftCard, phazePurchaseData, phazeDisbursementData, user, organization }: OrganizationShowProps) {
+export default function OrganizationShowPage({
+    giftCard,
+    phazePurchaseData,
+    phazeDisbursementData,
+    phazeFlatFields,
+    showAllProviderFields = true,
+    user,
+    organization,
+}: OrganizationShowProps) {
     const [copied, setCopied] = useState<string | null>(null)
+    const credentials = resolveGiftCardCredentials(giftCard, phazePurchaseData)
 
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('en-US', {
@@ -96,11 +123,7 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
         setTimeout(() => setCopied(null), 2000)
     }
 
-    const formatCardNumber = (cardNumber: string | null) => {
-        if (!cardNumber) return null
-        // Format as XXXX-XXXX-XXXX-XXXX
-        return cardNumber.replace(/(\d{4})(?=\d)/g, '$1-')
-    }
+    const formatCardNumber = (cardNumber: string | null) => formatGiftCardNumber(cardNumber)
 
     const getMetaValue = (key: string) => {
         return giftCard.meta?.[key] || null
@@ -197,18 +220,18 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                 </div>
 
                                 {/* Card Number */}
-                                {giftCard.card_number && (
+                                {credentials.card_number && (
                                     <div>
                                         <p className="text-sm font-medium mb-3">Card Number</p>
                                         <div className="flex items-center gap-2">
                                             <div className="flex-1 p-4 rounded-lg bg-muted font-mono text-xl font-semibold text-center border-2 border-dashed">
-                                                {formatCardNumber(giftCard.card_number)}
+                                                {formatCardNumber(credentials.card_number)}
                                             </div>
                                             <Button
                                                 variant="outline"
                                                 size="icon"
                                                 className="h-12 w-12"
-                                                onClick={() => copyToClipboard(giftCard.card_number!, 'card')}
+                                                onClick={() => copyToClipboard(credentials.card_number!, 'card')}
                                             >
                                                 {copied === 'card' ? (
                                                     <CheckCircle className="h-5 w-5 text-green-600" />
@@ -223,19 +246,42 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                     </div>
                                 )}
 
-                                {/* Voucher Code */}
-                                {giftCard.voucher && (
+                                {credentials.pin && (
                                     <div>
-                                        <p className="text-sm font-medium mb-3">Voucher Code</p>
+                                        <p className="text-sm font-medium mb-3">PIN</p>
                                         <div className="flex items-center gap-2">
                                             <div className="flex-1 p-4 rounded-lg bg-muted font-mono text-xl font-semibold text-center border-2 border-dashed">
-                                                {giftCard.voucher}
+                                                {credentials.pin}
                                             </div>
                                             <Button
                                                 variant="outline"
                                                 size="icon"
                                                 className="h-12 w-12"
-                                                onClick={() => copyToClipboard(giftCard.voucher!, 'voucher')}
+                                                onClick={() => copyToClipboard(credentials.pin!, 'pin')}
+                                            >
+                                                {copied === 'pin' ? (
+                                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                                ) : (
+                                                    <Copy className="h-5 w-5" />
+                                                )}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Voucher Code */}
+                                {credentials.voucher && (
+                                    <div>
+                                        <p className="text-sm font-medium mb-3">Voucher Code</p>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-1 p-4 rounded-lg bg-muted font-mono text-xl font-semibold text-center border-2 border-dashed">
+                                                {credentials.voucher}
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-12 w-12"
+                                                onClick={() => copyToClipboard(credentials.voucher!, 'voucher')}
                                             >
                                                 {copied === 'voucher' ? (
                                                     <CheckCircle className="h-5 w-5 text-green-600" />
@@ -247,6 +293,57 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                         <p className="text-xs text-muted-foreground mt-2 text-center">
                                             {copied === 'voucher' ? '✓ Copied to clipboard!' : 'Click the copy button to copy this code'}
                                         </p>
+                                    </div>
+                                )}
+
+                                {credentials.claim_url && (
+                                    <div>
+                                        <p className="text-sm font-medium mb-2">Redemption Link</p>
+                                        <a
+                                            href={credentials.claim_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-sm text-primary underline break-all"
+                                        >
+                                            {credentials.claim_url}
+                                        </a>
+                                    </div>
+                                )}
+
+                                {(credentials.barcode_url || credentials.qr_code_url || credentials.barcode || credentials.qr_code) && (
+                                    <div className="space-y-3">
+                                        <p className="text-sm font-medium">Barcode / QR Code</p>
+                                        <div className="flex flex-wrap items-center gap-4">
+                                            {credentials.barcode_url && (
+                                                <img
+                                                    src={credentials.barcode_url}
+                                                    alt="Gift card barcode"
+                                                    className="max-h-24 rounded border bg-white p-2"
+                                                />
+                                            )}
+                                            {credentials.qr_code_url && (
+                                                <img
+                                                    src={credentials.qr_code_url}
+                                                    alt="Gift card QR code"
+                                                    className="max-h-32 rounded border bg-white p-2"
+                                                />
+                                            )}
+                                        </div>
+                                        {credentials.barcode && (
+                                            <p className="font-mono text-sm break-all">{credentials.barcode}</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {(credentials.redemption_instructions || credentials.how_to_use) && (
+                                    <div className="rounded-lg border p-4 dark:border-gray-700">
+                                        <p className="text-sm font-medium mb-2">Redemption Instructions</p>
+                                        <div
+                                            className="text-sm text-muted-foreground prose prose-sm max-w-none dark:prose-invert"
+                                            dangerouslySetInnerHTML={{
+                                                __html: credentials.redemption_instructions || credentials.how_to_use || '',
+                                            }}
+                                        />
                                     </div>
                                 )}
 
@@ -459,13 +556,13 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                                     <div className="p-4 rounded-lg border dark:border-gray-700">
                                                         <p className="text-xs text-muted-foreground mb-1">Status</p>
                                                         <Badge className={
-                                                            phazePurchaseData.status === 'completed' || phazePurchaseData.status === 'success'
+                                                            isPhazeSuccessStatus(phazePurchaseData.status)
                                                                 ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200'
-                                                                : phazePurchaseData.status === 'failed'
+                                                                : isPhazeFailedStatus(phazePurchaseData.status)
                                                                 ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200'
                                                                 : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200'
                                                         }>
-                                                            {phazePurchaseData.status.charAt(0).toUpperCase() + phazePurchaseData.status.slice(1)}
+                                                            {labelPhazeStatus(phazePurchaseData.status)}
                                                         </Badge>
                                                     </div>
                                                 )}
@@ -524,26 +621,36 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                             </div>
 
                                             {/* Additional Phaze purchase fields */}
-                                            {(phazePurchaseData.externalUserId || phazePurchaseData.voucher || phazePurchaseData.cardNumber || phazePurchaseData.card_number || phazePurchaseData.error) && (
+                                            {(phazePurchaseData.externalUserId ||
+                                                credentials.voucher ||
+                                                credentials.card_number ||
+                                                credentials.pin ||
+                                                phazePurchaseData.error) && (
                                                 <div className="mt-4 pt-4 border-t dark:border-gray-700">
                                                     <h4 className="text-sm font-semibold mb-3 dark:text-white">Additional Details</h4>
                                                     <div className="space-y-2 text-sm">
                                                         {phazePurchaseData.externalUserId && (
-                                                            <div className="flex justify-between">
+                                                            <div className="flex justify-between gap-4">
                                                                 <span className="text-muted-foreground">External User ID:</span>
                                                                 <span className="font-medium dark:text-white">{phazePurchaseData.externalUserId}</span>
                                                             </div>
                                                         )}
-                                                        {phazePurchaseData.voucher && (
-                                                            <div className="flex justify-between">
+                                                        {credentials.voucher && (
+                                                            <div className="flex justify-between gap-4">
                                                                 <span className="text-muted-foreground">Voucher Code:</span>
-                                                                <span className="font-medium dark:text-white font-mono">{phazePurchaseData.voucher}</span>
+                                                                <span className="font-medium dark:text-white font-mono">{credentials.voucher}</span>
                                                             </div>
                                                         )}
-                                                        {(phazePurchaseData.cardNumber || phazePurchaseData.card_number) && (
-                                                            <div className="flex justify-between">
+                                                        {credentials.card_number && (
+                                                            <div className="flex justify-between gap-4">
                                                                 <span className="text-muted-foreground">Card Number:</span>
-                                                                <span className="font-medium dark:text-white font-mono">{formatCardNumber(phazePurchaseData.cardNumber || phazePurchaseData.card_number)}</span>
+                                                                <span className="font-medium dark:text-white font-mono">{formatCardNumber(credentials.card_number)}</span>
+                                                            </div>
+                                                        )}
+                                                        {credentials.pin && (
+                                                            <div className="flex justify-between gap-4">
+                                                                <span className="text-muted-foreground">PIN:</span>
+                                                                <span className="font-medium dark:text-white font-mono">{credentials.pin}</span>
                                                             </div>
                                                         )}
                                                         {phazePurchaseData.error && (
@@ -552,6 +659,20 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                                                 <p className="text-sm text-red-700 dark:text-red-300">{phazePurchaseData.error}</p>
                                                             </div>
                                                         )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {showAllProviderFields && phazeFlatFields && Object.keys(phazeFlatFields).length > 0 && (
+                                                <div className="mt-4 pt-4 border-t dark:border-gray-700">
+                                                    <h4 className="text-sm font-semibold mb-3 dark:text-white">All Provider Fields</h4>
+                                                    <div className="space-y-2 text-sm">
+                                                        {Object.entries(phazeFlatFields).map(([key, value]) => (
+                                                            <div key={key} className="flex justify-between gap-4">
+                                                                <span className="text-muted-foreground shrink-0">{labelPhazeField(key)}</span>
+                                                                <span className="font-medium dark:text-white font-mono text-right break-all">{String(value)}</span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             )}
@@ -597,24 +718,34 @@ export default function OrganizationShowPage({ giftCard, phazePurchaseData, phaz
                                 <CardTitle className="text-lg">Actions</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {giftCard.voucher && (
+                                {credentials.voucher && (
                                     <Button
                                         variant="outline"
                                         className="w-full justify-start"
-                                        onClick={() => copyToClipboard(giftCard.voucher!, 'voucher')}
+                                        onClick={() => copyToClipboard(credentials.voucher!, 'voucher')}
                                     >
                                         <Copy className="h-4 w-4 mr-2" />
                                         Copy Voucher Code
                                     </Button>
                                 )}
-                                {giftCard.card_number && (
+                                {credentials.card_number && (
                                     <Button
                                         variant="outline"
                                         className="w-full justify-start"
-                                        onClick={() => copyToClipboard(giftCard.card_number!, 'card')}
+                                        onClick={() => copyToClipboard(credentials.card_number!, 'card')}
                                     >
                                         <Copy className="h-4 w-4 mr-2" />
                                         Copy Card Number
+                                    </Button>
+                                )}
+                                {credentials.pin && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-start"
+                                        onClick={() => copyToClipboard(credentials.pin!, 'pin')}
+                                    >
+                                        <Copy className="h-4 w-4 mr-2" />
+                                        Copy PIN
                                     </Button>
                                 )}
                             </CardContent>

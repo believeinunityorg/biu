@@ -41,7 +41,15 @@ function formatBatchDateParts(iso: string | null | undefined): { date: string; t
   }
 }
 
-function ProcessingBatchesCard({
+function formatBatchWhen(iso: string | null | undefined): string {
+  const parts = formatBatchDateParts(iso)
+  if (!parts) return "TBD"
+  // Compact single-line label for narrow Processing column
+  const shortDate = parts.date.replace(/,\s*\d{4}$/, "")
+  return `${shortDate} · ${parts.time}`
+}
+
+function ProcessingBatchesList({
   batches,
   formatPoints,
 }: {
@@ -49,39 +57,28 @@ function ProcessingBatchesCard({
   formatPoints: (value: number | string) => string
 }) {
   return (
-    <ul className="mt-1.5 divide-y divide-amber-200/60 overflow-hidden rounded-md border border-amber-200/70 bg-amber-50/50 dark:divide-amber-800/40 dark:border-amber-800/50 dark:bg-amber-950/30">
-      {batches.map((batch, i) => {
-        const parts = formatBatchDateParts(batch.available_on)
-        return (
-          <li
-            key={`${batch.available_on ?? "tbd"}-${i}`}
-            className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5 px-2 py-1.5"
-          >
-            <span className="text-[11px] font-bold tabular-nums leading-none text-amber-950 dark:text-amber-50">
+    <ul className="mt-2 flex w-full flex-col gap-1">
+      {batches.map((batch, i) => (
+        <li
+          key={`${batch.available_on ?? "tbd"}-${i}`}
+          className="grid h-7 w-full grid-cols-[1fr_auto_1fr] items-center gap-x-1 rounded-full border border-amber-200/80 bg-gradient-to-r from-amber-50/90 via-amber-50/50 to-amber-50/90 px-2 text-[10px] leading-none shadow-sm dark:border-amber-800/60 dark:from-amber-950/50 dark:via-amber-950/30 dark:to-amber-950/50"
+        >
+          <span className="flex items-center gap-1 justify-self-start whitespace-nowrap font-bold tabular-nums text-amber-950 dark:text-amber-50">
+            <Coins className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            <span>
               {formatPoints(batch.amount)}
-              <span className="ml-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700/75 dark:text-amber-300/75">
-                BP
-              </span>
+              <span className="ml-0.5 font-semibold text-amber-700/80 dark:text-amber-300/80">BP</span>
             </span>
-
-            <div className="min-w-0 text-right">
-              <p className="inline-flex items-center justify-end gap-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-                <CalendarClock className="h-2.5 w-2.5 shrink-0 text-amber-700/80 dark:text-amber-300/80" aria-hidden />
-                Available On
-              </p>
-              {parts ? (
-                <p className="mt-0.5 text-[10px] font-semibold tabular-nums leading-tight text-amber-900 dark:text-amber-100">
-                  {parts.date}
-                  <span className="mx-1 font-normal text-amber-700/50 dark:text-amber-300/50">·</span>
-                  <span className="font-medium text-amber-800/90 dark:text-amber-200/90">{parts.time}</span>
-                </p>
-              ) : (
-                <p className="mt-0.5 text-[10px] text-amber-700/80 dark:text-amber-300/80">TBD</p>
-              )}
-            </div>
-          </li>
-        )
-      })}
+          </span>
+          <span className="flex items-center justify-center gap-1 justify-self-center whitespace-nowrap text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+            <CalendarClock className="h-3 w-3 shrink-0 text-amber-700/80 dark:text-amber-300/80" aria-hidden />
+            <span>Available On</span>
+          </span>
+          <span className="justify-self-end whitespace-nowrap text-right font-semibold tabular-nums text-amber-900 dark:text-amber-100">
+            {formatBatchWhen(batch.available_on)}
+          </span>
+        </li>
+      ))}
     </ul>
   )
 }
@@ -95,6 +92,7 @@ function BalanceColumn({
   formatPoints,
   badge,
   valueClassName,
+  contentAlign = "start",
 }: {
   label: string
   value: string
@@ -104,16 +102,32 @@ function BalanceColumn({
   formatPoints?: (value: number | string) => string
   badge?: { text: string; className: string }
   valueClassName: string
+  contentAlign?: "start" | "center"
 }) {
-  const multi = (batches?.length ?? 0) > 1
+  const centered = contentAlign === "center"
 
   return (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-1 text-muted-foreground">
+    <div
+      className={cn(
+        "min-w-0 flex-1",
+        centered && "flex flex-col items-center justify-center self-stretch text-center",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-1 text-muted-foreground",
+          centered && "justify-center",
+        )}
+      >
         <span className="text-xs font-medium">{label}</span>
         <Info className="h-3 w-3 shrink-0 opacity-50" aria-hidden />
       </div>
-      <div className="mt-1 flex flex-wrap items-baseline gap-2">
+      <div
+        className={cn(
+          "mt-1 flex flex-wrap items-baseline gap-2",
+          centered && "justify-center",
+        )}
+      >
         <span className={cn("text-3xl font-bold tracking-tight tabular-nums sm:text-4xl", valueClassName)}>
           {value}
         </span>
@@ -129,8 +143,13 @@ function BalanceColumn({
           </span>
         )}
       </div>
-      {!multi && availableOnDate && (
-        <p className="mt-1 inline-flex max-w-full items-center gap-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200">
+      {availableOnDate && (
+        <p
+          className={cn(
+            "mt-1 inline-flex max-w-full items-center gap-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200",
+            centered && "justify-center",
+          )}
+        >
           <CalendarClock className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
           <span className="truncate">
             <span className="text-muted-foreground">{availableOnLabel ?? "Available On"}</span>{" "}
@@ -138,9 +157,9 @@ function BalanceColumn({
           </span>
         </p>
       )}
-      {multi && batches && formatPoints && (
-        <ProcessingBatchesCard batches={batches} formatPoints={formatPoints} />
-      )}
+      {batches && formatPoints && batches.length > 1 ? (
+        <ProcessingBatchesList batches={batches} formatPoints={formatPoints} />
+      ) : null}
     </div>
   )
 }
@@ -225,9 +244,9 @@ export function BpBalanceHero({
   onMoveToWallet,
 }: BpBalanceHeroProps) {
   const totalBalance = balance + processingBalance
-  const hasMultipleBatches = processingBatches.length > 1
+  const showBatchList = processingBalance > 0 && processingBatches.length > 0
   const availableOnDate =
-    processingBalance > 0 && !hasMultipleBatches
+    processingBalance > 0 && processingBatches.length <= 1
       ? parseAvailableOnDate(processingReleaseHint)
       : null
 
@@ -276,8 +295,9 @@ export function BpBalanceHero({
             value={formatPoints(processingBalance)}
             availableOnLabel={availableOnDate ? "Available On" : null}
             availableOnDate={availableOnDate}
-            batches={processingBalance > 0 ? processingBatches : []}
+            batches={showBatchList ? processingBatches : undefined}
             formatPoints={formatPoints}
+            contentAlign={showBatchList && processingBatches.length > 1 ? "start" : "center"}
             valueClassName="text-amber-700 dark:text-amber-300"
             badge={
               processingBalance > 0
@@ -292,6 +312,7 @@ export function BpBalanceHero({
           <BalanceColumn
             label="Available"
             value={formatPoints(balance)}
+            contentAlign="center"
             valueClassName="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
             badge={
               balance > 0

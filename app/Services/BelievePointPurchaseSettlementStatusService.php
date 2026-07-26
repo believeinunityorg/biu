@@ -163,6 +163,10 @@ final class BelievePointPurchaseSettlementStatusService
             'stripe_balance_transaction_id' => $purchase->stripe_balance_transaction_id,
             'current_bp_owner' => $primaryOwner,
             'current_bp_owners' => $owners,
+            /** Expected Available On for Processing BP (supporter-facing). */
+            'available_on' => $purchase->points_released
+                ? null
+                : ($purchase->points_available_at ?? $purchase->stripe_funds_available_at)?->toIso8601String(),
         ];
     }
 

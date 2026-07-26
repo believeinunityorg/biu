@@ -1,4 +1,4 @@
-import { Coins, Info, Plus, RefreshCw, Wallet } from "lucide-react"
+import { CalendarClock, Clock, Coins, Gift, Info, Plus, RefreshCw, Wallet } from "lucide-react"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
 
@@ -6,7 +6,10 @@ type BpBalanceHeroProps = {
   balance: number
   processingBalance: number
   processingReleaseHint?: string | null
+  /** Open processing lots grouped by Available On date */
+  processingBatches?: Array<{ amount: number; available_on: string | null }>
   giftedBalance?: number
+  holdingBalance?: number
   formatPoints: (value: number | string) => string
   onRefunds: () => void
   onAddPoints: () => void
@@ -21,19 +24,89 @@ type QuickAction = {
   onClick: () => void
 }
 
+function formatBatchDateParts(iso: string | null | undefined): { date: string; time: string } | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return {
+    date: d.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    time: d.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  }
+}
+
+function ProcessingBatchesCard({
+  batches,
+  formatPoints,
+}: {
+  batches: Array<{ amount: number; available_on: string | null }>
+  formatPoints: (value: number | string) => string
+}) {
+  return (
+    <ul className="mt-1.5 divide-y divide-amber-200/60 overflow-hidden rounded-md border border-amber-200/70 bg-amber-50/50 dark:divide-amber-800/40 dark:border-amber-800/50 dark:bg-amber-950/30">
+      {batches.map((batch, i) => {
+        const parts = formatBatchDateParts(batch.available_on)
+        return (
+          <li
+            key={`${batch.available_on ?? "tbd"}-${i}`}
+            className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5 px-2 py-1.5"
+          >
+            <span className="text-[11px] font-bold tabular-nums leading-none text-amber-950 dark:text-amber-50">
+              {formatPoints(batch.amount)}
+              <span className="ml-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700/75 dark:text-amber-300/75">
+                BP
+              </span>
+            </span>
+
+            <div className="min-w-0 text-right">
+              <p className="inline-flex items-center justify-end gap-1 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                <CalendarClock className="h-2.5 w-2.5 shrink-0 text-amber-700/80 dark:text-amber-300/80" aria-hidden />
+                Available On
+              </p>
+              {parts ? (
+                <p className="mt-0.5 text-[10px] font-semibold tabular-nums leading-tight text-amber-900 dark:text-amber-100">
+                  {parts.date}
+                  <span className="mx-1 font-normal text-amber-700/50 dark:text-amber-300/50">·</span>
+                  <span className="font-medium text-amber-800/90 dark:text-amber-200/90">{parts.time}</span>
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[10px] text-amber-700/80 dark:text-amber-300/80">TBD</p>
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 function BalanceColumn({
   label,
   value,
-  hint,
+  availableOnLabel,
+  availableOnDate,
+  batches,
+  formatPoints,
   badge,
   valueClassName,
 }: {
   label: string
   value: string
-  hint?: string | null
+  availableOnLabel?: string | null
+  availableOnDate?: string | null
+  batches?: Array<{ amount: number; available_on: string | null }>
+  formatPoints?: (value: number | string) => string
   badge?: { text: string; className: string }
   valueClassName: string
 }) {
+  const multi = (batches?.length ?? 0) > 1
+
   return (
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-1 text-muted-foreground">
@@ -56,18 +129,95 @@ function BalanceColumn({
           </span>
         )}
       </div>
-      {hint && (
-        <p className="mt-1 text-[11px] leading-snug text-amber-700/90 dark:text-amber-300/90">{hint}</p>
+      {!multi && availableOnDate && (
+        <p className="mt-1 inline-flex max-w-full items-center gap-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200">
+          <CalendarClock className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+          <span className="truncate">
+            <span className="text-muted-foreground">{availableOnLabel ?? "Available On"}</span>{" "}
+            <span className="font-semibold tabular-nums">{availableOnDate}</span>
+          </span>
+        </p>
+      )}
+      {multi && batches && formatPoints && (
+        <ProcessingBatchesCard batches={batches} formatPoints={formatPoints} />
       )}
     </div>
   )
+}
+
+function SecondaryBalanceTile({
+  label,
+  note,
+  value,
+  icon: Icon,
+  tone = "purple",
+}: {
+  label: string
+  note?: string
+  value: string
+  icon: typeof Gift
+  tone?: "purple" | "blue"
+}) {
+  const isPurple = tone === "purple"
+
+  return (
+    <div
+      className={cn(
+        "relative flex min-w-0 items-center gap-2.5 overflow-hidden rounded-xl border px-2.5 py-2.5 shadow-sm",
+        isPurple
+          ? "border-purple-200/80 bg-gradient-to-br from-purple-50/90 via-white to-blue-50/40 dark:border-purple-800/50 dark:from-purple-950/40 dark:via-gray-950 dark:to-blue-950/20"
+          : "border-blue-200/80 bg-gradient-to-br from-blue-50/90 via-white to-purple-50/40 dark:border-blue-800/50 dark:from-blue-950/40 dark:via-gray-950 dark:to-purple-950/20",
+      )}
+    >
+      <div
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute -right-4 -top-4 h-14 w-14 rounded-full blur-xl",
+          isPurple ? "bg-purple-500/15" : "bg-blue-500/15",
+        )}
+      />
+      <div
+        className={cn(
+          "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white shadow-sm",
+          isPurple
+            ? "bg-gradient-to-br from-purple-600 to-purple-500 shadow-purple-600/20"
+            : "bg-gradient-to-br from-blue-600 to-blue-500 shadow-blue-600/20",
+        )}
+      >
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+      </div>
+      <div className="relative min-w-0 flex-1">
+        <p className="truncate text-[11px] font-semibold leading-tight text-foreground">{label}</p>
+        {note ? (
+          <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">{note}</p>
+        ) : null}
+      </div>
+      <p className="relative shrink-0 text-right">
+        <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-sm font-bold tabular-nums leading-none text-transparent">
+          {value}
+        </span>
+        <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          BP
+        </span>
+      </p>
+    </div>
+  )
+}
+
+/** Parse “Available On Jul 29, 2026” → date portion for the labeled row */
+function parseAvailableOnDate(hint: string | null | undefined): string | null {
+  if (!hint) return null
+  const match = hint.match(/^Available On\s+(.+)$/i)
+  return match?.[1]?.trim() || hint
 }
 
 export function BpBalanceHero({
   balance,
   processingBalance,
   processingReleaseHint,
+  processingBatches = [],
   giftedBalance = 0,
+  holdingBalance = 0,
   formatPoints,
   onRefunds,
   onAddPoints,
@@ -75,10 +225,15 @@ export function BpBalanceHero({
   onMoveToWallet,
 }: BpBalanceHeroProps) {
   const totalBalance = balance + processingBalance
+  const hasMultipleBatches = processingBatches.length > 1
+  const availableOnDate =
+    processingBalance > 0 && !hasMultipleBatches
+      ? parseAvailableOnDate(processingReleaseHint)
+      : null
 
   const actions: QuickAction[] = [
     { id: "add", label: "Add BP", icon: Plus, onClick: onAddPoints },
-    ...(showWalletAction && onMoveToWallet
+    ...(showWalletAction && onMoveToWallet && balance > 0
       ? [{ id: "wallet", label: "To Wallet", icon: Wallet, onClick: onMoveToWallet }]
       : []),
     { id: "refunds", label: "Refunds", icon: RefreshCw, onClick: onRefunds },
@@ -100,7 +255,7 @@ export function BpBalanceHero({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">Believe Points</p>
               <p className="text-xs text-muted-foreground">
-                Total:{" "}
+                Total BP:{" "}
                 <motion.span
                   key={totalBalance}
                   initial={{ opacity: 0.6 }}
@@ -108,7 +263,7 @@ export function BpBalanceHero({
                   transition={{ duration: 0.2 }}
                   className="font-semibold tabular-nums text-foreground"
                 >
-                  {formatPoints(totalBalance)} BP
+                  {formatPoints(totalBalance)}
                 </motion.span>
               </p>
             </div>
@@ -119,7 +274,10 @@ export function BpBalanceHero({
           <BalanceColumn
             label="Processing"
             value={formatPoints(processingBalance)}
-            hint={processingBalance > 0 ? processingReleaseHint : null}
+            availableOnLabel={availableOnDate ? "Available On" : null}
+            availableOnDate={availableOnDate}
+            batches={processingBalance > 0 ? processingBatches : []}
+            formatPoints={formatPoints}
             valueClassName="text-amber-700 dark:text-amber-300"
             badge={
               processingBalance > 0
@@ -146,27 +304,31 @@ export function BpBalanceHero({
           />
         </div>
 
-        {giftedBalance > 0 && (
-          <div className="mt-4 rounded-lg border border-violet-200/80 bg-violet-50/80 px-3 py-2.5 dark:border-violet-800/50 dark:bg-violet-950/25">
-            <p className="text-[11px] font-medium text-violet-800 dark:text-violet-200">
-              Gifted BP:{" "}
-              <span className="font-bold tabular-nums">{formatPoints(giftedBalance)} BP</span>
-              <span className="font-normal text-violet-700/90 dark:text-violet-300/90">
-                {" "}
-                — for donations only; cannot move to wallet
-              </span>
-            </p>
-          </div>
-        )}
+        <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-border/60 pt-3">
+          <SecondaryBalanceTile
+            label="On Hold"
+            note="Pending invites"
+            value={formatPoints(holdingBalance)}
+            icon={Clock}
+            tone="purple"
+          />
+          <SecondaryBalanceTile
+            label="Gifted"
+            note="Received gifts"
+            value={formatPoints(giftedBalance)}
+            icon={Gift}
+            tone="blue"
+          />
+        </div>
 
         <div className="mt-4 space-y-1 text-[11px] leading-snug text-muted-foreground">
           <p>
-            <span className="font-semibold text-purple-600 dark:text-purple-400">Processing:</span>{" "}
-            Funding is in progress. Can be used for selected transactions.
+            <span className="font-semibold text-amber-700 dark:text-amber-300">Processing:</span>{" "}
+            Funding in progress — see Available On for when it becomes spendable.
           </p>
           <p>
             <span className="font-semibold text-emerald-600 dark:text-emerald-400">Available:</span>{" "}
-            Funds have settled. Can be used for all eligible transactions.
+            Settled funds for all eligible transactions.
           </p>
         </div>
       </div>

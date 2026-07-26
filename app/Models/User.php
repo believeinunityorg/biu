@@ -1082,16 +1082,82 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function nextProcessingBelievePointsReleaseAt(): ?\Illuminate\Support\Carbon
     {
-        /** @var BelievePointPurchase|null $purchase */
-        $purchase = BelievePointPurchase::query()
-            ->where('user_id', $this->id)
-            ->where('status', 'completed')
-            ->where('points_released', false)
-            ->whereNotNull('points_available_at')
-            ->orderBy('points_available_at')
-            ->first(['points_available_at']);
+        $batches = $this->processingBelievePointsBatches();
+        $first = $batches[0] ?? null;
+        if ($first === null || empty($first['available_on'])) {
+            return null;
+        }
 
-        return $purchase?->points_available_at;
+        return \Illuminate\Support\Carbon::parse($first['available_on']);
+    }
+
+    /**
+     * Open Processing BP lots grouped by expected Available On date (earliest first).
+     *
+     * @return list<array{amount: float, available_on: string|null}>
+     */
+    public function processingBelievePointsBatches(): array
+    {
+        $lots = BelievePointProcessingLot::query()
+            ->with(['purchase:id,points_available_at,stripe_funds_available_at,points_released,status'])
+            ->where('user_id', $this->id)
+            ->whereNull('released_at')
+            ->where('amount', '>', 0)
+            ->orderBy('id')
+            ->get();
+
+        $byDate = [];
+
+        if ($lots->isNotEmpty()) {
+            foreach ($lots as $lot) {
+                $purchase = $lot->purchase;
+                if ($purchase && ($purchase->points_released || $purchase->status !== 'completed')) {
+                    continue;
+                }
+                $at = $purchase?->points_available_at
+                    ?? $purchase?->stripe_funds_available_at
+                    ?? null;
+                $key = $at ? $at->format('Y-m-d H:i') : '_unknown';
+                if (! isset($byDate[$key])) {
+                    $byDate[$key] = [
+                        'amount' => 0.0,
+                        'available_on' => $at?->toIso8601String(),
+                        'sort' => $at?->timestamp ?? PHP_INT_MAX,
+                    ];
+                }
+                $byDate[$key]['amount'] = round($byDate[$key]['amount'] + (float) $lot->amount, 2);
+            }
+        } else {
+            // Fallback when lots were never created for older purchases.
+            $purchases = BelievePointPurchase::query()
+                ->where('user_id', $this->id)
+                ->where('status', 'completed')
+                ->where('points_released', false)
+                ->where('points', '>', 0)
+                ->orderBy('points_available_at')
+                ->get(['id', 'points', 'points_available_at', 'stripe_funds_available_at']);
+
+            foreach ($purchases as $purchase) {
+                $at = $purchase->points_available_at ?? $purchase->stripe_funds_available_at;
+                $key = $at ? $at->format('Y-m-d H:i') : '_unknown';
+                if (! isset($byDate[$key])) {
+                    $byDate[$key] = [
+                        'amount' => 0.0,
+                        'available_on' => $at?->toIso8601String(),
+                        'sort' => $at?->timestamp ?? PHP_INT_MAX,
+                    ];
+                }
+                $byDate[$key]['amount'] = round($byDate[$key]['amount'] + (float) $purchase->points, 2);
+            }
+        }
+
+        $batches = array_values($byDate);
+        usort($batches, static fn (array $a, array $b): int => ($a['sort'] ?? 0) <=> ($b['sort'] ?? 0));
+
+        return array_map(static fn (array $row): array => [
+            'amount' => round((float) $row['amount'], 2),
+            'available_on' => $row['available_on'],
+        ], $batches);
     }
 
     /**

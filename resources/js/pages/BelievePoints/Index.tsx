@@ -74,6 +74,7 @@ interface Purchase {
   settlement_status?: string
   settlement_date?: string | null
   settlement_reference?: string | null
+  available_on?: string | null
   current_bp_owner?: { id: number; name: string | null; email: string | null } | null
 }
 
@@ -163,6 +164,7 @@ interface PageProps {
   currentBalance: number
   processingBalance?: number
   processingReleaseAt?: string | null
+  processingBatches?: Array<{ amount: number; available_on: string | null }>
   minPurchaseAmount: number
   maxPurchaseAmount: number
   purchaseSettings?: PurchaseSettings
@@ -181,6 +183,7 @@ interface PageProps {
   walletTransfers?: WalletTransferActivity[]
   walletLedger?: BpWalletLedgerPagination
   giftedBalance?: number
+  holdingBalance?: number
   flash?: {
     success?: string
     error?: string
@@ -278,6 +281,8 @@ export default function BelievePointsIndex({
     walletLedger,
     walletTransfer,
     giftedBalance = 0,
+    holdingBalance = 0,
+    processingBatches = [],
   } = page.props
   const purchaseSettings = purchaseSettingsProp ?? {
     brp_value: 0.005,
@@ -677,7 +682,7 @@ export default function BelievePointsIndex({
         }
         setWalletTransferAmount("")
         setWalletTransferOpen(false)
-        router.reload({ only: ["walletTransfers", "currentBalance", "processingBalance", "processingReleaseAt", "walletLedger"] })
+        router.reload({ only: ["walletTransfers", "currentBalance", "processingBalance", "processingReleaseAt", "processingBatches", "walletLedger"] })
       } else {
         // Definitive failure — allow a fresh idempotency key on the next attempt
         walletTransferIdempotencyKeyRef.current = null
@@ -697,46 +702,60 @@ export default function BelievePointsIndex({
     setWalletTransferOpen(true)
   }
 
+  const formatAvailableOnLabel = (iso: string | null | undefined): string | null => {
+    if (!iso) return null
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return null
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
+  }
+
   const getPurchaseStatusBadge = (purchase: Purchase) => {
     if (purchase.status === "completed" && purchase.points_released === false) {
-      const requireBridge = purchaseSettings?.require_bridge_reserve_confirmation === true
-      const stripeAt = purchase.stripe_funds_available_at ?? purchase.points_available_at
-      const stripeReady = stripeAt ? new Date(stripeAt).getTime() <= Date.now() : false
-      const bridgeReady = Boolean(purchase.bridge_reserve_confirmed_at)
+      const availableOn =
+        formatAvailableOnLabel(purchase.available_on) ||
+        formatAvailableOnLabel(purchase.points_available_at) ||
+        formatAvailableOnLabel(purchase.stripe_funds_available_at)
 
-      if (requireBridge && stripeReady && !bridgeReady) {
-        return (
+      return (
+        <div className="flex max-w-[220px] flex-col items-end gap-0.5 text-right">
           <Badge
             variant="secondary"
             className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
           >
-            Processing · Awaiting reserve
+            Processing
           </Badge>
-        )
-      }
-
-      const releaseAt = stripeAt ? new Date(stripeAt) : null
-      const onHold = releaseAt && releaseAt.getTime() > Date.now()
-      return (
-        <Badge
-          variant="secondary"
-          className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-        >
-          {onHold ? "Processing · Awaiting settlement" : "Releasing…"}
-        </Badge>
+          {availableOn && (
+            <span className="text-[10px] font-medium tabular-nums text-amber-800/90 dark:text-amber-200/90">
+              Available On {availableOn}
+            </span>
+          )}
+        </div>
       )
     }
 
-    const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; className?: string; label?: string }> = {
-      completed: { variant: "default", className: "bg-emerald-600 hover:bg-emerald-600/90 border-0", label: "Available" },
-      pending: { variant: "secondary", label: "Pending" },
+    const config: Record<
+      string,
+      { variant: "default" | "secondary" | "destructive" | "outline"; className?: string; label?: string }
+    > = {
+      completed: {
+        variant: "default",
+        className: "bg-emerald-600 hover:bg-emerald-600/90 border-0",
+        label: "Available",
+      },
+      pending: { variant: "secondary", label: "Processing payment" },
       failed: { variant: "destructive", label: "Failed" },
-      cancelled: { variant: "destructive", label: "Cancelled" },
+      cancelled: { variant: "outline", label: "Cancelled" },
     }
-    const item = config[purchase.status] ?? { variant: "outline" as const, label: purchase.status }
+    const item = config[purchase.status] ?? { variant: "outline" as const, label: "Activity" }
     return (
-      <Badge variant={item.variant} className={cn("capitalize", item.className)}>
-        {item.label ?? purchase.status}
+      <Badge variant={item.variant} className={cn(item.className)}>
+        {item.label}
       </Badge>
     )
   }
@@ -746,25 +765,28 @@ export default function BelievePointsIndex({
     const bridgeComplete = ["payment_processed", "completed", "settled", "funds_received"].includes(bridgeState)
     const effectiveStatus = transfer.status === "submitted" && bridgeComplete ? "completed" : transfer.status
 
-    const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; className?: string; label: string }> = {
+    const config: Record<
+      string,
+      { variant: "default" | "secondary" | "destructive" | "outline"; className?: string; label: string }
+    > = {
       completed: {
         variant: "default",
         className: "bg-emerald-600 hover:bg-emerald-600/90 border-0",
         label: "In wallet",
       },
       submitted: { variant: "secondary", label: "Processing" },
-      pending: { variant: "secondary", label: "Pending" },
+      pending: { variant: "secondary", label: "Processing" },
       failed: { variant: "destructive", label: "Failed" },
-      refunded: { variant: "outline", label: "Refunded" },
+      refunded: { variant: "outline", label: "Returned" },
     }
 
     const item = config[effectiveStatus] ?? {
       variant: "outline" as const,
-      label: effectiveStatus.replace(/_/g, " "),
+      label: "Activity",
     }
 
     return (
-      <Badge variant={item.variant} className={cn("capitalize", item.className)}>
+      <Badge variant={item.variant} className={cn(item.className)}>
         {item.label}
       </Badge>
     )
@@ -793,15 +815,14 @@ export default function BelievePointsIndex({
     if (!iso) return null
     const releaseAt = new Date(iso)
     if (Number.isNaN(releaseAt.getTime())) return null
-    const ms = releaseAt.getTime() - Date.now()
-    if (ms <= 0) return "Releasing to available balance…"
-    const hours = Math.ceil(ms / (1000 * 60 * 60))
-    if (hours <= 1) {
-      const minutes = Math.max(1, Math.ceil(ms / (1000 * 60)))
-      return `Available in ~${minutes} min`
-    }
-    if (hours < 24) return `Available in ~${hours}h`
-    return `Available ${releaseAt.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+    const dateLabel = releaseAt.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
+    return `Available On ${dateLabel}`
   }
 
   const scrollToAddPoints = () => {
@@ -838,15 +859,20 @@ export default function BelievePointsIndex({
               balance={localBalance}
               processingBalance={processingBalance}
               processingReleaseHint={formatProcessingReleaseHint(processingReleaseAt)}
+              processingBatches={processingBatches}
               giftedBalance={giftedBalance}
+              holdingBalance={holdingBalance}
               formatPoints={formatPoints}
               onRefunds={() => router.visit(route("believe-points.refunds"))}
               onAddPoints={scrollToAddPoints}
-              showWalletAction={Boolean(
-                walletTransfer?.enabled ||
-                  walletTransfer?.eligible ||
-                  walletTransfer?.sandbox_unavailable,
-              )}
+              showWalletAction={
+                localBalance > 0 &&
+                Boolean(
+                  walletTransfer?.enabled ||
+                    walletTransfer?.eligible ||
+                    walletTransfer?.sandbox_unavailable,
+                )
+              }
               onMoveToWallet={openMoveToWalletPopup}
             />
 
@@ -1582,39 +1608,18 @@ export default function BelievePointsIndex({
                           {item.purchase.status === "failed" && item.purchase.failure_message && (
                             <p className="mt-2 text-xs leading-snug text-destructive">
                               {item.purchase.failure_message}
-                              {item.purchase.failure_code ? ` (${item.purchase.failure_code})` : ""}
                             </p>
                           )}
-                          {item.purchase.bp_status && (
-                            <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                              <p>
-                                BP: <span className="capitalize font-medium text-foreground">{item.purchase.bp_status}</span>
-                                {" · "}
-                                Settlement:{" "}
-                                <span className="capitalize font-medium text-foreground">
-                                  {item.purchase.settlement_status ?? "processing"}
+                          {item.purchase.status === "completed" &&
+                            item.purchase.points_released &&
+                            item.purchase.settlement_date && (
+                              <p className="mt-2 text-[11px] text-muted-foreground">
+                                Available since{" "}
+                                <span className="font-medium tabular-nums text-foreground">
+                                  {formatAvailableOnLabel(item.purchase.settlement_date)}
                                 </span>
                               </p>
-                              {item.purchase.settlement_date && (
-                                <p>
-                                  Settled:{" "}
-                                  {new Date(item.purchase.settlement_date).toLocaleDateString(undefined, {
-                                    month: "short",
-                                    day: "numeric",
-                                    year: "numeric",
-                                  })}
-                                </p>
-                              )}
-                              {item.purchase.settlement_reference && (
-                                <p className="truncate" title={item.purchase.settlement_reference}>
-                                  Ref: {item.purchase.settlement_reference}
-                                </p>
-                              )}
-                              {item.purchase.current_bp_owner?.name && (
-                                <p>Owner: {item.purchase.current_bp_owner.name}</p>
-                              )}
-                            </div>
-                          )}
+                            )}
                         </li>
                         )
                       }
@@ -1694,7 +1699,7 @@ export default function BelievePointsIndex({
             <BpCardHeader
               icon={History}
               title="Wallet ledger"
-              description="Believe Point transactions only — debits, credits, and running balances that reconcile to your dashboard totals."
+              description="Your Believe Point activity — purchases, Available dates, transfers, and adjustments."
             />
             <CardContent className={bpCardContentClassName}>
               <BpWalletLedger ledger={walletLedger} />

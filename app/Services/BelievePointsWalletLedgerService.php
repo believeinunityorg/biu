@@ -102,6 +102,7 @@ final class BelievePointsWalletLedgerService
                 'available_balance' => $available,
                 'gifted_balance' => $gifted,
                 'running_balance' => round($available + $processing, 2),
+                'available_on' => $event['available_on'] ?? null,
             ];
         }
 
@@ -472,19 +473,28 @@ final class BelievePointsWalletLedgerService
             }
 
             $createdAt = $purchase->created_at ?? now();
+            $expectedAvailableAt = $purchase->points_available_at
+                ?? $purchase->stripe_funds_available_at
+                ?? null;
+
             $events[] = [
                 'id' => 'purchase-'.$purchase->id,
                 'sort_at' => $createdAt->toIso8601String(),
                 'sort_key' => (int) $purchase->id,
                 'date' => $createdAt->toIso8601String(),
                 'transaction_number' => self::purchaseTransactionNumber($purchase),
-                'description' => 'Believe Point purchase (processing)',
+                'description' => $purchase->points_released
+                    ? 'Believe Point purchase'
+                    : 'Believe Point purchase — processing',
                 'entry_type' => 'purchase_processing',
                 'credit' => $points,
                 'debit' => 0.0,
                 'delta_available' => 0.0,
                 'delta_processing' => $points,
                 'delta_gifted' => 0.0,
+                'available_on' => $expectedAvailableAt
+                    ? Carbon::parse($expectedAvailableAt)->toIso8601String()
+                    : null,
             ];
 
             if ($purchase->points_released) {
@@ -497,15 +507,15 @@ final class BelievePointsWalletLedgerService
                     'sort_at' => Carbon::parse($settlementAt)->toIso8601String(),
                     'sort_key' => (int) $purchase->id + 500000,
                     'date' => Carbon::parse($settlementAt)->toIso8601String(),
-                    'transaction_number' => BelievePointPurchaseSettlementStatusService::settlementReference($purchase)
-                        ?? ('bp_settlement:purchase:'.$purchase->id),
-                    'description' => 'Settlement complete — Processing → Available',
+                    'transaction_number' => 'BP-Available-'.$purchase->id,
+                    'description' => 'Became Available',
                     'entry_type' => 'settlement',
                     'credit' => $points,
                     'debit' => 0.0,
                     'delta_available' => $points,
                     'delta_processing' => -$points,
                     'delta_gifted' => 0.0,
+                    'available_on' => Carbon::parse($settlementAt)->toIso8601String(),
                 ];
             }
         }
@@ -652,13 +662,41 @@ final class BelievePointsWalletLedgerService
             ];
         }
 
+        foreach (BelievePointsLedgerEntry::query()
+            ->where('user_id', $user->id)
+            ->where('entry_type', BelievePointsLedgerEntry::TYPE_ADMIN_ADJUSTMENT)
+            ->orderBy('id')
+            ->get() as $entry) {
+            $amount = round((float) $entry->amount, 2);
+            if ($amount == 0.0) {
+                continue;
+            }
+            $at = $entry->created_at ?? now();
+            $meta = is_array($entry->metadata) ? $entry->metadata : [];
+            $bucket = (string) ($meta['bucket'] ?? 'available');
+            $credit = $amount > 0 ? $amount : 0.0;
+            $debit = $amount < 0 ? abs($amount) : 0.0;
+            $events[] = [
+                'id' => 'adjustment-'.$entry->id,
+                'sort_at' => Carbon::parse($at)->toIso8601String(),
+                'sort_key' => 3500000 + (int) $entry->id,
+                'date' => Carbon::parse($at)->toIso8601String(),
+                'transaction_number' => (string) ($meta['transaction_number'] ?? ('BP-ADJ-'.$entry->id)),
+                'description' => trim((string) ($entry->description ?: 'Balance adjustment')),
+                'entry_type' => 'adjustment',
+                'credit' => $credit,
+                'debit' => $debit,
+                'delta_available' => $bucket === 'processing' || $bucket === 'gifted' ? 0.0 : $amount,
+                'delta_processing' => $bucket === 'processing' ? $amount : 0.0,
+                'delta_gifted' => $bucket === 'gifted' ? $amount : 0.0,
+            ];
+        }
+
         return self::dedupeEventsById($events);
     }
 
     private static function purchaseTransactionNumber(BelievePointPurchase $purchase): string
     {
-        $pi = trim((string) ($purchase->stripe_payment_intent_id ?? ''));
-
-        return $pi !== '' ? $pi : 'believe_points_purchase:'.$purchase->id;
+        return 'BP-Purchase-'.$purchase->id;
     }
 }

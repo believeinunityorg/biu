@@ -1,6 +1,11 @@
 import { Link } from "@inertiajs/react"
-import { ChevronRight, Gift, Info, Sparkles } from "lucide-react"
+import { CalendarClock, ChevronRight, Gift, Info, Sparkles } from "lucide-react"
 
+import {
+  formatProcessingReleaseLabel,
+  ProcessingBatchesList,
+  type ProcessingBpBatch,
+} from "@/components/believe-points/ProcessingBatchesList"
 import { cn } from "@/lib/utils"
 
 interface PointsUser {
@@ -13,6 +18,8 @@ interface PointsUser {
   reward_points_total?: number
   believe_points?: number
   processing_believe_points?: number
+  processing_believe_points_batches?: ProcessingBpBatch[]
+  processing_believe_points_release_at?: string | null
   believe_points_total?: number
   gifted_believe_points?: number
   holding_believe_points?: number
@@ -29,26 +36,51 @@ function MetricColumn({
   value,
   badge,
   valueClassName,
+  availableOnDate,
+  contentAlign = "start",
 }: {
   label: string
   value: string
   badge?: { text: string; className: string }
   valueClassName: string
+  availableOnDate?: string | null
+  contentAlign?: "start" | "center"
 }) {
+  const centered = contentAlign === "center"
+
   return (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center gap-1 text-muted-foreground">
+    <div
+      className={cn(
+        "min-w-0 flex-1",
+        centered && "flex flex-col items-center justify-center self-stretch text-center",
+      )}
+    >
+      <div className={cn("flex items-center gap-1 text-muted-foreground", centered && "justify-center")}>
         <span className="text-sm">{label}</span>
         <Info className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
       </div>
-      <div className="mt-1 flex items-center gap-2">
-        <span className={cn("text-xl font-bold", valueClassName)}>{value}</span>
+      <div className={cn("mt-1 flex flex-wrap items-center gap-2", centered ? "justify-center" : "justify-start")}>
+        <span className={cn("text-xl font-bold tabular-nums", valueClassName)}>{value}</span>
         {badge && (
           <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium leading-none", badge.className)}>
             {badge.text}
           </span>
         )}
       </div>
+      {availableOnDate && (
+        <p
+          className={cn(
+            "mt-1 inline-flex max-w-full items-center gap-1 text-[10px] leading-snug text-amber-800 dark:text-amber-200",
+            centered && "justify-center",
+          )}
+        >
+          <CalendarClock className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
+          <span className="whitespace-nowrap">
+            <span className="text-muted-foreground">Available On</span>{" "}
+            <span className="font-semibold tabular-nums">{availableOnDate}</span>
+          </span>
+        </p>
+      )}
     </div>
   )
 }
@@ -73,6 +105,13 @@ export function PointsBalanceSummary({ user }: { user: PointsUser }) {
   const believeTotal = believeAvailable + believeProcessing
   const giftedBelieve = Number(user?.gifted_believe_points) || 0
   const holdingBelieve = Number(user?.holding_believe_points) || 0
+  const processingBatches = user?.processing_believe_points_batches ?? []
+  const hasMultipleBatches = believeProcessing > 0 && processingBatches.length > 1
+  const singleAvailableOn =
+    believeProcessing > 0 && processingBatches.length <= 1
+      ? formatProcessingReleaseLabel(user?.processing_believe_points_release_at) ||
+        formatProcessingReleaseLabel(processingBatches[0]?.available_on)
+      : null
 
   return (
     <div className="space-y-3">
@@ -141,34 +180,48 @@ export function PointsBalanceSummary({ user }: { user: PointsUser }) {
               <ChevronRight className="h-5 w-5" />
             </span>
           </Link>
-          <div className="mt-2.5 flex items-stretch gap-3 border-t border-purple-200/70 pt-2.5 dark:border-purple-800/70">
-            <MetricColumn
-              label="Processing"
-              value={fmt(believeProcessing)}
-              valueClassName="text-purple-700 dark:text-purple-300"
-              badge={
-                believeProcessing > 0
-                  ? {
-                      text: "Processing",
-                      className: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
-                    }
-                  : undefined
-              }
-            />
-            <div className="w-px self-stretch bg-purple-200/70 dark:bg-purple-800/70" />
-            <MetricColumn
-              label="Available"
-              value={fmt(believeAvailable)}
-              valueClassName="text-purple-700 dark:text-purple-300"
-              badge={
-                believeAvailable > 0
-                  ? {
-                      text: "Available",
-                      className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
-                    }
-                  : undefined
-              }
-            />
+          <div className="mt-2.5 border-t border-purple-200/70 pt-2.5 dark:border-purple-800/70">
+            <div className="flex items-stretch gap-3">
+              <MetricColumn
+                label="Processing"
+                value={fmt(believeProcessing)}
+                valueClassName="text-amber-700 dark:text-amber-300"
+                availableOnDate={singleAvailableOn}
+                contentAlign="center"
+                badge={
+                  believeProcessing > 0
+                    ? {
+                        text: "Processing",
+                        className: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
+                      }
+                    : undefined
+                }
+              />
+              <div className="w-px self-stretch bg-purple-200/70 dark:bg-purple-800/70" />
+              <MetricColumn
+                label="Available"
+                value={fmt(believeAvailable)}
+                valueClassName="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
+                contentAlign="center"
+                badge={
+                  believeAvailable > 0
+                    ? {
+                        text: "Available",
+                        className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300",
+                      }
+                    : undefined
+                }
+              />
+            </div>
+            {hasMultipleBatches ? (
+              <div className="min-w-0">
+                <ProcessingBatchesList
+                  batches={processingBatches}
+                  formatPoints={fmt}
+                  variant="compact"
+                />
+              </div>
+            ) : null}
           </div>
           <Link
             href={route("believe-points.index")}
@@ -197,14 +250,14 @@ export function PointsBalanceSummary({ user }: { user: PointsUser }) {
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <div className="space-y-1">
           <p>
-            <span className="font-semibold text-purple-600 dark:text-purple-400">Processing:</span>{" "}
+            <span className="font-semibold text-amber-700 dark:text-amber-300">Processing:</span>{" "}
             <span className="text-muted-foreground">
-              Funding is in progress. Can be used for selected transactions.
+              Funding in progress — see Available On for when it becomes spendable.
             </span>
           </p>
           <p>
             <span className="font-semibold text-emerald-600 dark:text-emerald-400">Available:</span>{" "}
-            <span className="text-muted-foreground">Funds have settled. Can be used for all eligible transactions.</span>
+            <span className="text-muted-foreground">Settled funds for all eligible transactions.</span>
           </p>
         </div>
       </div>

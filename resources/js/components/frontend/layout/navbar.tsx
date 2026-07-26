@@ -104,6 +104,8 @@ interface SharedData extends Record<string, unknown> {
       believe_points?: number // Added believe_points
       /** Believe points still settling (funding in progress). */
       processing_believe_points?: number
+      processing_believe_points_batches?: Array<{ amount: number; available_on: string | null }>
+      processing_believe_points_release_at?: string | null
       /** Total believe points (available + processing). */
       believe_points_total?: number
       /** Gifted bucket (retail gift cards, etc.); purchased balance is `believe_points`. */
@@ -575,7 +577,7 @@ export default function Navbar() {
                                               <Coins className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                                           </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent className="w-[22rem] max-w-[92vw]" align="end" forceMount>
+                                      <DropdownMenuContent className="w-[24rem] max-w-[92vw]" align="end" forceMount>
                                           <div className="p-3">
                                               <PointsBalanceSummary user={auth.user} />
                                           </div>
@@ -734,7 +736,7 @@ export default function Navbar() {
                                         <Coins className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-[22rem] max-w-[92vw]" align="end" forceMount>
+                                    <DropdownMenuContent className="w-[24rem] max-w-[92vw]" align="end" forceMount>
                                       <div className="p-3">
                                         <PointsBalanceSummary user={auth.user} />
                                       </div>

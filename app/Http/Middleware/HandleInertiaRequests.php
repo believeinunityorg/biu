@@ -239,6 +239,12 @@ class HandleInertiaRequests extends Middleware
                         'reward_points_total' => $user->totalRewardPointsBalance(),
                         'believe_points' => $user->believe_points ?? 0,
                         'processing_believe_points' => $user->processing_believe_points ?? 0,
+                        'processing_believe_points_batches' => ((float) ($user->processing_believe_points ?? 0) > 0)
+                            ? $user->processingBelievePointsBatches()
+                            : [],
+                        'processing_believe_points_release_at' => ((float) ($user->processing_believe_points ?? 0) > 0)
+                            ? $user->nextProcessingBelievePointsReleaseAt()?->toIso8601String()
+                            : null,
                         'donateable_believe_points' => round(
                             (float) ($user->believe_points ?? 0) + (float) ($user->processing_believe_points ?? 0),
                             2
@@ -321,6 +327,7 @@ class HandleInertiaRequests extends Middleware
         $warning = $request->session()->pull('warning');
         $importErrors = $request->session()->pull('import_errors');
         $kioskServiceRequest = $request->session()->pull('kiosk_service_request');
+        $twilioTest = $request->session()->pull('twilio_test');
 
         return [
             ...parent::share($request),
@@ -354,6 +361,7 @@ class HandleInertiaRequests extends Middleware
                     'import_errors' => $importErrors,
                     'kiosk_service_request' => $kioskServiceRequest,
                     'youtube_upload_path' => $request->session()->pull('youtube_upload_path'),
+                    'twilio_test' => $twilioTest,
                 ])
             ),
             'browser_publish_url' => fn () => $request->session()->pull('browser_publish_url'),

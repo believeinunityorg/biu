@@ -59,7 +59,10 @@ interface PageProps {
       reward_points_total?: number
       believe_points?: number
       processing_believe_points?: number
+      processing_believe_points_batches?: Array<{ amount: number; available_on: string | null }>
+      processing_believe_points_release_at?: string | null
       gifted_believe_points?: number
+      holding_believe_points?: number
     }
   }
   recentDonations: Donation[]

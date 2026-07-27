@@ -26,12 +26,20 @@ final class UnifiedLedgerWalletAmountResolver
             return $stored === 0.0 ? null : $stored;
         }
 
-        if ($ledgerType !== UnifiedLedgerType::BP) {
-            return null;
-        }
-
         if (isset($meta['bp_wallet_delta']) && is_numeric($meta['bp_wallet_delta'])) {
             return round((float) $meta['bp_wallet_delta'], 2);
+        }
+
+        // Gift cards, marketplace, courses, raffles, etc. store positive Money amounts with
+        // payment_method=believe_points. Wallet Amount must show BP leaving the supporter (−).
+        if (self::isBelievePointsPaidSpend($transaction, $meta)) {
+            $points = round(abs($stored), 2);
+
+            return $points > 0.0 ? -$points : null;
+        }
+
+        if ($ledgerType !== UnifiedLedgerType::BP) {
+            return null;
         }
 
         $source = (string) ($meta['source'] ?? '');
@@ -61,20 +69,83 @@ final class UnifiedLedgerWalletAmountResolver
             }
 
             // Legacy rows stored positive amounts for debits (donation spend, etc.).
-            return self::isBpDebitEvent($source, $type) ? -$points : $stored;
+            return self::isBpDebitEvent($source, $type, $transaction, $meta) ? -$points : $stored;
         }
 
         return $stored !== 0.0 ? $stored : null;
     }
 
-    private static function isBpDebitEvent(string $source, string $type): bool
+    /**
+     * Commerce / product rows paid with Believe Points (not deposits or refunds that restore BP).
+     *
+     * @param  array<string, mixed>|null  $meta
+     */
+    public static function isBelievePointsPaidSpend(Transaction $transaction, ?array $meta = null): bool
     {
-        return in_array($source, [
+        $meta ??= is_array($transaction->meta) ? $transaction->meta : [];
+
+        $pm = strtolower((string) ($transaction->payment_method ?? ''));
+        if ($pm !== 'believe_points') {
+            return false;
+        }
+
+        // Org/recipient deposits and refunds that restore BP stay credits (+).
+        if (in_array((string) $transaction->type, ['deposit', 'credit', 'refund'], true)) {
+            return false;
+        }
+
+        if ($transaction->status === Transaction::STATUS_REFUND) {
+            return false;
+        }
+
+        // Explicit ledger roles that credit the wallet.
+        $role = strtolower((string) ($meta['ledger_role'] ?? ''));
+        if (in_array($role, ['bp_credit', 'wallet_transfer_refund', 'gift_claim', 'gift_received'], true)) {
+            return false;
+        }
+
+        $source = strtolower((string) ($meta['source'] ?? ''));
+        if (in_array($source, [
+            'believe_points_purchase_bp',
+            'believe_points_purchase',
+            'bp_gift_claimed',
+            'bp_gift_received',
+        ], true)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    private static function isBpDebitEvent(string $source, string $type, Transaction $transaction, array $meta): bool
+    {
+        if (in_array($source, [
             'bp_redemption',
             'believe_points_donation',
-        ], true)
-            || in_array($type, [
-                'bp_redemption',
-            ], true);
+            'gift_card_purchase',
+        ], true)) {
+            return true;
+        }
+
+        if (in_array($type, [
+            'bp_redemption',
+            'gift_card_purchase',
+        ], true)) {
+            return true;
+        }
+
+        $rt = ltrim((string) ($transaction->related_type ?? ''), '\\');
+        if ($rt !== '' && (str_ends_with($rt, 'GiftCard') || class_basename($rt) === 'GiftCard')) {
+            return true;
+        }
+
+        if (! empty($meta['gift_card_id'])) {
+            return true;
+        }
+
+        return false;
     }
 }

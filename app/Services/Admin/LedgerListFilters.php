@@ -45,9 +45,30 @@ final class LedgerListFilters
         }
 
         if ($ledgerType === UnifiedLedgerType::MONEY) {
+            // Money rows, excluding BP-paid commerce spends that are presented as BP.
             $query->where(function (Builder $q) {
                 $q->where('ledger_type', UnifiedLedgerType::MONEY)
                     ->orWhereNull('ledger_type');
+            })->where(function (Builder $q) {
+                $q->whereNull('payment_method')
+                    ->orWhere('payment_method', '!=', 'believe_points')
+                    ->orWhereIn('type', ['deposit', 'credit', 'refund']);
+            });
+
+            return;
+        }
+
+        if ($ledgerType === UnifiedLedgerType::BP) {
+            $query->where(function (Builder $q) {
+                $q->where('ledger_type', UnifiedLedgerType::BP)
+                    ->orWhere(function (Builder $spend) {
+                        $spend->where('payment_method', 'believe_points')
+                            ->whereNotIn('type', ['deposit', 'credit', 'refund'])
+                            ->where(function (Builder $stored) {
+                                $stored->whereNull('ledger_type')
+                                    ->orWhere('ledger_type', UnifiedLedgerType::MONEY);
+                            });
+                    });
             });
 
             return;

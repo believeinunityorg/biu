@@ -9,6 +9,8 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Support\BrpParticipationModule;
 use App\Support\PhazeGiftCardPayload;
+use App\Support\UnifiedLedgerBpStatus;
+use App\Support\UnifiedLedgerType;
 use App\Services\ParticipationActivityService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -140,6 +142,8 @@ class GiftCardRedemptionService
                 'related_id' => $giftCard->id,
                 'related_type' => GiftCard::class,
                 'type' => 'purchase',
+                'ledger_type' => UnifiedLedgerType::BP,
+                'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
                 'status' => Transaction::STATUS_PENDING,
                 'amount' => $pointsRequired,
                 'fee' => $platformFee,
@@ -148,6 +152,8 @@ class GiftCardRedemptionService
                 'transaction_id' => 'believe_points_gift_card_pending_'.$giftCard->id,
                 'meta' => array_merge($feeMeta, [
                     'gift_card_id' => $giftCard->id,
+                    'ledger_type' => UnifiedLedgerType::BP,
+                    'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
                     'believe_points_used' => $pointsRequired,
                     'believe_points_from_gifted' => $fromGifted,
                     'believe_points_from_purchased' => round(max(0, $pointsRequired - $fromGifted), 2),
@@ -727,9 +733,13 @@ class GiftCardRedemptionService
 
         $transaction->update([
             'status' => Transaction::STATUS_COMPLETED,
+            'ledger_type' => UnifiedLedgerType::BP,
+            'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
             'transaction_id' => 'believe_points_gift_card_'.$giftCard->id,
             'processed_at' => now(),
             'meta' => array_merge($transaction->meta ?? [], $ledgerSlice, [
+                'ledger_type' => UnifiedLedgerType::BP,
+                'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
                 'phaze_purchase_id' => $giftCard->external_id,
                 'phaze_status' => $meta['phaze_status'] ?? null,
                 'fulfillment_status' => GiftCardStatus::Completed->value,

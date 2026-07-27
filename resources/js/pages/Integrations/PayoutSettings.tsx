@@ -14,7 +14,7 @@ import {
   Loader2,
   Wallet,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 interface Readiness {
   preferred_payout_method: string | null
@@ -77,6 +77,14 @@ export default function PayoutSettings({
     m.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   )
 
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "")
+    if (!hash) return
+    window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 100)
+  }, [])
+
   return (
     <AppLayout>
       <Head title="Payout settings" />
@@ -101,7 +109,7 @@ export default function PayoutSettings({
           </div>
         ) : null}
 
-        <Card className="mb-6">
+        <Card id="readiness-payout-settings" className="scroll-mt-24 mb-6">
           <CardContent className="pt-6 space-y-4">
             <form onSubmit={savePreferred} className="space-y-4">
               <div>

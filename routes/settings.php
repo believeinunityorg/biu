@@ -70,6 +70,8 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|admin|car
         Route::middleware('role:organization|organization_pending|care_alliance')->group(function () {
             Route::get('settings/setup-checklist', [OrganizationSetupChecklistController::class, 'index'])
                 ->name('setup-checklist.index');
+            Route::get('settings/setup-checklist/status', [OrganizationSetupChecklistController::class, 'status'])
+                ->name('setup-checklist.status');
 
             Route::get('settings/pay-as-you-go', [PayAsYouGoServicesController::class, 'index'])
                 ->name('pay-as-you-go.index');

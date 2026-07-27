@@ -111,6 +111,14 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
         gift_card_terms_approved: organization?.gift_card_terms_approved || false,
     })
 
+    useEffect(() => {
+        const hash = window.location.hash.replace(/^#/, "")
+        if (!hash) return
+        window.setTimeout(() => {
+            document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }, 100)
+    }, [])
+
     const canAdminRetry = (card: GiftCard) =>
         isAdmin &&
         card.payment_method === 'believe_points' &&
@@ -649,7 +657,10 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
                     {/* Sidebar - Gift Card Terms (Organization Only) */}
                     {!isAdmin && auth?.user?.role === "organization" && (
                         <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-                            <Card className="bg-white dark:bg-transparent border-gray-200 dark:border-gray-800 shadow-sm">
+                            <Card
+                                id="gift_card_terms"
+                                className="scroll-mt-24 bg-white dark:bg-transparent border-gray-200 dark:border-gray-800 shadow-sm"
+                            >
                                 <CardHeader className="pb-4">
                                     <CardTitle className="text-gray-900 dark:text-white flex items-center gap-2">
                                         <Gift className="h-5 w-5 text-pink-500" />

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Data\OrganizationReadinessModules;
 use App\Data\OrganizationSetupChecklistItems;
 use App\Models\AiChatConversation;
 use App\Models\AiVideo;
@@ -9,6 +10,7 @@ use App\Models\Campaign;
 use App\Models\FacebookAccount;
 use App\Models\Newsletter;
 use App\Models\Organization;
+use App\Models\OrganizationProduct;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\UserLivestream;
@@ -27,14 +29,9 @@ class OrganizationSetupChecklistService
      *     percent: int,
      *     completed: int,
      *     total: int,
-     *     sections: list<array{
-     *         id: string,
-     *         label: string,
-     *         completed: int,
-     *         total: int,
-     *         percent: int,
-     *         items: list<array<string, mixed>>
-     *     }>
+     *     remaining: int,
+     *     modules: list<array<string, mixed>>,
+     *     sections: list<array<string, mixed>>
      * }|null
      */
     public function forOrganization(?Organization $organization, ?User $user): ?array
@@ -46,20 +43,45 @@ class OrganizationSetupChecklistService
         $organization->loadMissing(['emailConnections', 'livestreams', 'bridgeIntegration']);
 
         $statusById = $this->resolveStatuses($organization, $user);
+        $completedAtById = $this->resolveCompletedAt($organization, $user);
 
         $items = collect(OrganizationSetupChecklistItems::all())
-            ->map(function (array $def) use ($statusById) {
+            ->map(function (array $def) use ($statusById, $completedAtById) {
                 $status = $statusById[$def['id']] ?? 'not_started';
+                $href = $this->itemHref($def);
 
                 return [
                     'id' => $def['id'],
+                    'module' => $def['module'],
                     'section' => $def['section'],
                     'label' => $def['label'],
                     'description' => $def['description'],
                     'route' => $def['route'],
+                    'anchor' => $def['anchor'],
+                    'weight' => $def['weight'],
+                    'href' => $href,
                     'route_label' => $this->actionLabel($status, $def['route_label']),
                     'status' => $status,
+                    'completed_at' => $completedAtById[$def['id']] ?? null,
                 ];
+            })
+            ->values()
+            ->all();
+
+        $modules = collect(OrganizationReadinessModules::all())
+            ->map(function (array $moduleDef) use ($items) {
+                $moduleItems = collect($items)->where('module', $moduleDef['id'])->values();
+                $stats = $this->moduleStats($moduleItems->all());
+
+                $firstIncomplete = collect($moduleItems)
+                    ->first(fn (array $item) => $item['status'] !== 'completed');
+
+                return array_merge($moduleDef, $stats, [
+                    'items' => $moduleItems->all(),
+                    'first_incomplete' => $firstIncomplete,
+                    'next_module' => $this->nextModuleId($moduleDef['id']),
+                    'prev_module' => $this->prevModuleId($moduleDef['id']),
+                ]);
             })
             ->values()
             ->all();
@@ -67,16 +89,14 @@ class OrganizationSetupChecklistService
         $sections = collect($items)
             ->groupBy('section')
             ->map(function ($sectionItems, $sectionId) {
-                $completed = $sectionItems->where('status', 'completed')->count();
-                $total = $sectionItems->count();
-                $percent = $total > 0 ? (int) round(($completed / $total) * 100) : 100;
+                $stats = $this->moduleStats($sectionItems->values()->all());
 
                 return [
                     'id' => (string) $sectionId,
                     'label' => $sectionId === OrganizationSetupChecklistItems::SECTION_SYSTEM ? 'System' : 'Tools',
-                    'completed' => $completed,
-                    'total' => $total,
-                    'percent' => $percent,
+                    'completed' => $stats['completed'],
+                    'total' => $stats['total'],
+                    'percent' => $stats['percent'],
                     'items' => $sectionItems->values()->all(),
                 ];
             })
@@ -85,16 +105,105 @@ class OrganizationSetupChecklistService
             ->values()
             ->all();
 
-        $completed = collect($items)->where('status', 'completed')->count();
-        $total = count($items);
-        $percent = $total > 0 ? (int) round(($completed / $total) * 100) : 100;
+        $overall = $this->moduleStats($items);
 
         return [
-            'percent' => $percent,
-            'completed' => $completed,
-            'total' => $total,
+            'percent' => $overall['percent'],
+            'completed' => $overall['completed'],
+            'total' => $overall['total'],
+            'remaining' => max(0, $overall['total'] - $overall['completed']),
+            'modules' => $modules,
             'sections' => $sections,
         ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $items
+     * @return array{
+     *     completed: int,
+     *     total: int,
+     *     percent: int,
+     *     status_color: 'green'|'yellow'|'red',
+     *     weighted_completed: float,
+     *     weighted_total: float
+     * }
+     */
+    private function moduleStats(array $items): array
+    {
+        $total = count($items);
+        $completed = collect($items)->where('status', 'completed')->count();
+
+        $weightedTotal = collect($items)->sum(fn (array $item) => (int) ($item['weight'] ?? 1));
+        $weightedCompleted = collect($items)
+            ->where('status', 'completed')
+            ->sum(fn (array $item) => (int) ($item['weight'] ?? 1));
+
+        $percent = $weightedTotal > 0
+            ? (int) round(($weightedCompleted / $weightedTotal) * 100)
+            : 100;
+
+        return [
+            'completed' => $completed,
+            'total' => $total,
+            'percent' => $percent,
+            'status_color' => $this->statusColor($percent),
+            'weighted_completed' => $weightedCompleted,
+            'weighted_total' => $weightedTotal,
+        ];
+    }
+
+    /**
+     * @return 'green'|'yellow'|'red'
+     */
+    private function statusColor(int $percent): string
+    {
+        if ($percent >= 100) {
+            return 'green';
+        }
+
+        if ($percent > 0) {
+            return 'yellow';
+        }
+
+        return 'red';
+    }
+
+    /**
+     * @param  array<string, mixed>  $def
+     */
+    private function itemHref(array $def): string
+    {
+        $url = route($def['route']);
+
+        if (filled($def['anchor'] ?? null)) {
+            return $url.'#'.($def['anchor']);
+        }
+
+        return $url;
+    }
+
+    private function nextModuleId(string $moduleId): ?string
+    {
+        $ids = OrganizationReadinessModules::ids();
+        $index = array_search($moduleId, $ids, true);
+
+        if ($index === false || $index >= count($ids) - 1) {
+            return null;
+        }
+
+        return $ids[$index + 1];
+    }
+
+    private function prevModuleId(string $moduleId): ?string
+    {
+        $ids = OrganizationReadinessModules::ids();
+        $index = array_search($moduleId, $ids, true);
+
+        if ($index === false || $index <= 0) {
+            return null;
+        }
+
+        return $ids[$index - 1];
     }
 
     /**
@@ -168,16 +277,38 @@ class OrganizationSetupChecklistService
         $engagementStarted = Newsletter::query()->where('organization_id', $organization->id)->exists();
         $campaignStarted = Campaign::query()->where('organization_id', $organization->id)->exists();
 
+        $profileComplete = $this->profileInformationComplete($organization, $user);
+        $profilePartial = ! $profileComplete && $this->profileInformationPartial($organization, $user);
+
+        $boardComplete = $this->onboardingService->boardMembersAreComplete($organization);
+        $boardPartial = ! $boardComplete
+            && $organization->boardMembers()->where('is_active', true)->exists();
+
+        $giftCardApproved = (bool) $organization->gift_card_terms_approved;
+
+        $marketplaceListing = OrganizationProduct::query()
+            ->where('organization_id', $organization->id)
+            ->first();
+        $marketplaceComplete = $marketplaceListing !== null
+            && in_array((string) ($marketplaceListing->status ?? ''), ['active', 'approved'], true);
+        $marketplacePartial = $marketplaceListing !== null && ! $marketplaceComplete;
+
         return [
-            'integrations' => $this->status($integrationCount >= 2, $integrationCount === 1),
-            'payout_settings' => $this->status($payoutReady, $payoutPreferenceSet && ! $payoutReady),
+            'profile_information' => $this->status($profileComplete, $profilePartial),
+            'team_members' => $this->status($boardComplete, $boardPartial),
             'email_invites' => $this->status($emailConnectionCount > 0, $emailInvitesSent && $emailConnectionCount === 0),
+
+            'organization_verification' => $this->status($verificationComplete, $verificationPartial),
+            'payout_settings' => $this->status($payoutReady, $payoutPreferenceSet && ! $payoutReady),
+            'gift_card_agreement' => $this->status($giftCardApproved, false),
+            'marketplace_agreement' => $this->status($marketplaceComplete, $marketplacePartial),
+
+            'integrations' => $this->status($integrationCount >= 2, $integrationCount === 1),
             'social_media' => $this->status($facebookConnected, $facebookPartial),
             'youtube' => $this->status(filled($organization->youtube_access_token ?? null), $youtubePartial),
             'stripe_payouts' => $this->status($stripeReady, $stripeStarted && ! $stripeReady),
             'paypal_payouts' => $this->status($paypalReady, $paypalStarted && ! $paypalReady),
             'dropbox' => $this->status($dropboxConnected, false),
-            'organization_verification' => $this->status($verificationComplete, $verificationPartial),
 
             'ai_chat' => $this->status($aiChatUsed, false),
             'pay_as_you_go' => $this->status($paygPurchased, ! $paygPurchased && ($paygUsed || $paygHasBalance)),
@@ -189,6 +320,45 @@ class OrganizationSetupChecklistService
             'engagement' => $this->status($engagementStarted, false),
             'auto_drip_campaign' => $this->status($campaignStarted, false),
         ];
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function resolveCompletedAt(Organization $organization, User $user): array
+    {
+        $timestamps = [];
+
+        if ((bool) $organization->gift_card_terms_approved) {
+            $timestamps['gift_card_agreement'] = $organization->gift_card_terms_approved_at?->toIso8601String();
+        }
+
+        if ($organization->onboarding_completed_at) {
+            $timestamps['organization_verification'] = $organization->onboarding_completed_at->toIso8601String();
+        }
+
+        if ($user->ownership_verified_at) {
+            $timestamps['organization_verification'] = $user->ownership_verified_at->toIso8601String();
+        }
+
+        return $timestamps;
+    }
+
+    private function profileInformationComplete(Organization $organization, User $user): bool
+    {
+        $hasLogo = filled($user->image);
+        $hasMission = filled(trim((string) ($organization->mission ?? '')))
+            || filled(trim((string) ($organization->description ?? '')));
+        $hasName = filled(trim((string) ($organization->name ?? '')));
+
+        return $hasLogo && $hasMission && $hasName;
+    }
+
+    private function profileInformationPartial(Organization $organization, User $user): bool
+    {
+        return filled($user->image)
+            || filled(trim((string) ($organization->mission ?? '')))
+            || filled(trim((string) ($organization->description ?? '')));
     }
 
     private function connectedIntegrationCount(Organization $organization): int

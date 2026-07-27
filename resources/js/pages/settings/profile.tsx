@@ -98,6 +98,14 @@ export default function ProfileEdit({
   const showOrgProfileCard =
     profileSettingsVariant === "alliance" || profileSettingsVariant === "organization"
 
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "")
+    if (!hash) return
+    window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 100)
+  }, [])
+
   // Profile photo upload states
   const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -674,7 +682,10 @@ const getCroppedImage = async (
           </Card>
         )}
           {/* Profile / organization logo */}
-          <Card className="bg-white dark:bg-transparent border-gray-200 dark:border-gray-800 shadow-sm">
+          <Card
+            id="readiness-profile-information"
+            className="scroll-mt-24 bg-white dark:bg-transparent border-gray-200 dark:border-gray-800 shadow-sm"
+          >
             <CardHeader className="pb-4">
               <CardTitle className="text-gray-900 dark:text-white flex items-center gap-2">
                 <Camera className="h-5 w-5 text-purple-500" />

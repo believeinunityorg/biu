@@ -154,6 +154,10 @@ class GiftCardRedemptionService
                     'gift_card_id' => $giftCard->id,
                     'ledger_type' => UnifiedLedgerType::BP,
                     'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
+                    'event_name' => 'Transfer BP to Gift Card Module',
+                    'description' => trim((string) ($validated['brand_name'] ?? '')) !== ''
+                        ? 'Purchased '.trim((string) $validated['brand_name']).' Gift Card'
+                        : 'Transfer BP to Gift Card Module',
                     'believe_points_used' => $pointsRequired,
                     'believe_points_from_gifted' => $fromGifted,
                     'believe_points_from_purchased' => round(max(0, $pointsRequired - $fromGifted), 2),
@@ -162,6 +166,10 @@ class GiftCardRedemptionService
                     'brand' => $validated['brand_name'],
                     'fulfillment_status' => GiftCardStatus::PendingFulfillment->value,
                     'gift_card_sales' => $faceValue,
+                    'from_type' => 'module',
+                    'from_name' => 'General Module',
+                    'to_type' => 'module',
+                    'to_name' => 'Gift Card Module',
                 ]),
             ]);
 

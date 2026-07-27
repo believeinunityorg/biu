@@ -164,7 +164,7 @@ class UnifiedLedgerFlatFileMapper
             'available_at' => (string) ($ledgerFields['available_at'] ?? ''),
             'current_owner' => (string) ($ledgerFields['current_owner'] ?? ''),
             'brp_activity_type' => (string) ($ledgerFields['brp_activity_label'] ?? 'N/A'),
-            'module' => $this->moduleTableLabel($module),
+            'module' => $this->moduleCellLabel($module, $unified),
             'event' => (string) ($unified['event_name'] ?? $meta['event_name'] ?? ''),
             'transaction_type' => $this->humanizeTransactionType((string) ($unified['transaction_type'] ?? '')),
             'from_type' => (string) ($unified['from_type'] ?? ''),
@@ -395,14 +395,6 @@ class UnifiedLedgerFlatFileMapper
      */
     private function partiesSummary(array $unified): string
     {
-        $module = (string) ($unified['module'] ?? '');
-
-        if ($module === 'believe_points') {
-            $name = trim((string) (($unified['from_name'] ?? '') !== '' ? $unified['from_name'] : ($unified['from_type'] ?? '')));
-
-            return $name !== '' ? 'Purchaser: '.$name : '';
-        }
-
         $from = trim((string) (($unified['from_name'] ?? '') !== '' ? $unified['from_name'] : ($unified['from_type'] ?? '')));
         $to = trim((string) (($unified['to_name'] ?? '') !== '' ? $unified['to_name'] : ($unified['to_type'] ?? '')));
 
@@ -421,21 +413,49 @@ class UnifiedLedgerFlatFileMapper
         return $from.' → '.$to;
     }
 
-    /** Same labels as moduleTableLabel() in ledger.tsx. */
+    /** Same labels as moduleTableLabel() / moduleCellLabel() in ledger.tsx. */
+    private function moduleCellLabel(string $module, array $unified): string
+    {
+        $tt = strtolower((string) ($unified['transaction_type'] ?? ''));
+        $event = strtolower((string) ($unified['event_name'] ?? ''));
+
+        if (
+            $tt === 'bp_redemption'
+            || $tt === 'believe_points_wallet_transfer'
+            || str_contains($event, 'transfer to bridge wallet')
+        ) {
+            return 'Bridge Wallet';
+        }
+
+        if ($module === 'believe_points') {
+            return 'General';
+        }
+
+        $hubType = strtolower((string) ($unified['connection_hub_type'] ?? ''));
+        if (in_array($module, ['connection_hub', 'course'], true) && $hubType === 'events') {
+            return 'Events';
+        }
+        if (in_array($module, ['connection_hub', 'course'], true)) {
+            return 'Learning Hub';
+        }
+
+        return $this->moduleTableLabel($module);
+    }
+
     private function moduleTableLabel(string $module): string
     {
         return match ($module) {
             'donation' => 'Donation',
             'fundme' => 'Support a project',
             'campaign' => 'Campaign',
-            'believe_points' => 'Believe Points',
+            'believe_points' => 'General',
             'reward' => 'Reward',
             'wallet' => 'Wallet',
             'marketplace' => 'Marketplace',
-            'gift_card' => 'Gift card',
+            'gift_card' => 'Gift Card',
             'servicehub' => 'Service Hub',
-            'course' => 'Course',
-            'connection_hub' => 'Connection Hub',
+            'course' => 'Learning Hub',
+            'connection_hub' => 'Learning Hub',
             'merchant_hub' => 'Merchant Hub',
             'organization_subscription' => 'Org sub',
             'supporter_subscription' => 'Supporter sub',

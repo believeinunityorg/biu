@@ -59,7 +59,25 @@ class UnifiedLedgerWalletAmountResolverTest extends TestCase
             'ledger_type' => UnifiedLedgerType::BP,
             'currency' => 'BP',
             'amount' => 50,
+            'payment_method' => 'believe_points',
             'meta' => ['source' => 'bp_settlement'],
+        ]);
+
+        $this->assertSame(0.0, UnifiedLedgerWalletAmountResolver::resolve($t));
+    }
+
+    public function test_bp_settlement_with_positive_wallet_delta_still_zero(): void
+    {
+        $t = new Transaction([
+            'type' => 'bp_settlement',
+            'ledger_type' => UnifiedLedgerType::BP,
+            'currency' => 'BP',
+            'amount' => 100,
+            'payment_method' => 'believe_points',
+            'meta' => [
+                'source' => 'bp_settlement',
+                'bp_wallet_delta' => 0,
+            ],
         ]);
 
         $this->assertSame(0.0, UnifiedLedgerWalletAmountResolver::resolve($t));

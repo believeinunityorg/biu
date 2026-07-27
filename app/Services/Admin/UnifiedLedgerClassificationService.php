@@ -28,8 +28,35 @@ final class UnifiedLedgerClassificationService
      */
     public static function classify(Transaction $transaction): array
     {
+        $meta = is_array($transaction->meta) ? $transaction->meta : [];
+
+        // Gift cards / marketplace / courses paid with BP must present as BP even when an older
+        // write stored ledger_type=Money (or left it null).
+        if (UnifiedLedgerWalletAmountResolver::isBelievePointsPaidSpend($transaction, $meta)) {
+            $stored = $transaction->ledger_type;
+            if ($stored === null
+                || $stored === ''
+                || $stored === UnifiedLedgerType::MONEY
+                || ! in_array($stored, UnifiedLedgerType::all(), true)) {
+                $bpMeta = array_merge($meta, [
+                    'bp_status' => $meta['bp_status'] ?? UnifiedLedgerBpStatus::AVAILABLE,
+                ]);
+
+                return [
+                    'ledger_type' => UnifiedLedgerType::BP,
+                    'bp_status' => self::inferBpStatus(UnifiedLedgerType::BP, $transaction, $bpMeta),
+                    'brp_activity_type' => UnifiedLedgerBrpActivity::NA,
+                    'current_owner' => self::inferCurrentOwner(UnifiedLedgerType::BP, $transaction, $meta),
+                    'available_at' => self::inferAvailableAt(UnifiedLedgerType::BP, $transaction, $bpMeta),
+                ];
+            }
+        }
+
         if ($transaction->ledger_type && in_array($transaction->ledger_type, UnifiedLedgerType::all(), true)) {
             $bpStatus = UnifiedLedgerBpStatus::normalize($transaction->bp_status);
+            if ($bpStatus === null && $transaction->ledger_type === UnifiedLedgerType::BP) {
+                $bpStatus = self::inferBpStatus(UnifiedLedgerType::BP, $transaction, $meta);
+            }
 
             return [
                 'ledger_type' => $transaction->ledger_type,
@@ -42,7 +69,6 @@ final class UnifiedLedgerClassificationService
             ];
         }
 
-        $meta = is_array($transaction->meta) ? $transaction->meta : [];
         $ledgerType = self::inferLedgerType($transaction, $meta);
 
         return [
@@ -160,6 +186,11 @@ final class UnifiedLedgerClassificationService
             return UnifiedLedgerType::BP;
         }
 
+        // Gift cards, marketplace, courses, raffles, etc. paid with Believe Points.
+        if (UnifiedLedgerWalletAmountResolver::isBelievePointsPaidSpend($transaction, $meta)) {
+            return UnifiedLedgerType::BP;
+        }
+
         return UnifiedLedgerType::MONEY;
     }
 
@@ -183,6 +214,11 @@ final class UnifiedLedgerClassificationService
 
         if ($transaction->status === Transaction::STATUS_REFUND) {
             return UnifiedLedgerBpStatus::REVERSED;
+        }
+
+        // BP-paid commerce spends leave Available immediately (not Processing settlement).
+        if (UnifiedLedgerWalletAmountResolver::isBelievePointsPaidSpend($transaction, $meta)) {
+            return UnifiedLedgerBpStatus::AVAILABLE;
         }
 
         return UnifiedLedgerBpStatus::PROCESSING;

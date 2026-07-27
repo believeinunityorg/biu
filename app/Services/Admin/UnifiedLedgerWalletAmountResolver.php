@@ -78,10 +78,12 @@ final class UnifiedLedgerWalletAmountResolver
     /**
      * Commerce / product rows paid with Believe Points (not deposits or refunds that restore BP).
      *
-     * @param  array<string, mixed>  $meta
+     * @param  array<string, mixed>|null  $meta
      */
-    private static function isBelievePointsPaidSpend(Transaction $transaction, array $meta): bool
+    public static function isBelievePointsPaidSpend(Transaction $transaction, ?array $meta = null): bool
     {
+        $meta ??= is_array($transaction->meta) ? $transaction->meta : [];
+
         $pm = strtolower((string) ($transaction->payment_method ?? ''));
         if ($pm !== 'believe_points') {
             return false;

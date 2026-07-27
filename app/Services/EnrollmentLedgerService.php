@@ -49,10 +49,11 @@ final class EnrollmentLedgerService
         $hubType = (string) ($course->type ?? '');
         $isEvent = ConnectionHubType::usesEventSemantics($hubType);
         $courseName = (string) $course->name;
+        $isBelievePoints = (string) ($enrollment->payment_method ?? '') === 'believe_points';
 
         return array_filter([
             'source' => 'course_enrollment',
-            'ledger_type' => UnifiedLedgerType::MONEY,
+            'ledger_type' => $isBelievePoints ? UnifiedLedgerType::BP : UnifiedLedgerType::MONEY,
             'connection_hub_type' => in_array($hubType, ConnectionHubType::VALUES, true) ? $hubType : null,
             'course_id' => $course->id,
             'course_name' => $courseName,
@@ -104,11 +105,13 @@ final class EnrollmentLedgerService
             $meta = array_merge($meta, BiuPlatformFeeService::connectionHubLedgerMetaSlice($course, $saleAmount));
         }
 
+        $isBelievePoints = (string) ($enrollment->payment_method ?? '') === 'believe_points';
+
         $updates = [
             'related_id' => $enrollment->id,
             'related_type' => Enrollment::class,
-            'ledger_type' => UnifiedLedgerType::MONEY,
-            'bp_status' => UnifiedLedgerBpStatus::NA,
+            'ledger_type' => $isBelievePoints ? UnifiedLedgerType::BP : UnifiedLedgerType::MONEY,
+            'bp_status' => $isBelievePoints ? UnifiedLedgerBpStatus::AVAILABLE : UnifiedLedgerBpStatus::NA,
             'brp_activity_type' => UnifiedLedgerBrpActivity::NA,
             'amount' => $saleAmount,
             'meta' => $meta,
@@ -375,6 +378,9 @@ final class EnrollmentLedgerService
                 'related_id' => $enrollment->id,
                 'related_type' => Enrollment::class,
                 'type' => 'enrollment',
+                'ledger_type' => UnifiedLedgerType::BP,
+                'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
+                'brp_activity_type' => UnifiedLedgerBrpActivity::NA,
                 'status' => Transaction::STATUS_COMPLETED,
                 'amount' => $saleAmount,
                 'fee' => 0,
@@ -385,6 +391,7 @@ final class EnrollmentLedgerService
                     [
                         'pricing_type' => 'paid',
                         'believe_points_used' => $saleAmount,
+                        'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
                     ],
                     BiuPlatformFeeService::connectionHubLedgerMetaSlice($course, $saleAmount)
                 ),

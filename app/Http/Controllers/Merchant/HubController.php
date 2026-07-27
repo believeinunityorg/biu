@@ -228,7 +228,7 @@ class HubController extends Controller
                 ], 400);
             }
 
-            $userPoints = $user->currentBelievePoints();
+            $userPoints = $user->purchasedBelievePointsBalance();
             $receiptCode = 'RED-'.strtoupper(Str::random(8));
 
             // BIU: Pay with Cash (full amount) — Stripe

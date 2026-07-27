@@ -97,7 +97,13 @@ export default function CheckoutShipping({ offer, defaultPaymentMethod = 'cash' 
       ? Number(selectedMethod?.charged_total ?? basketTotal + stripeProcessingFeeAddon)
       : basketTotal
   const hasEnoughPoints = offer.userPoints >= offer.pointsRequired
-  const believePointsBalance = Number(auth?.user?.believe_points ?? 0)
+  const believePointsBalance = Number(
+    auth?.user?.purchased_believe_points ??
+      Math.max(
+        0,
+        Number(auth?.user?.believe_points ?? 0) - Number(auth?.user?.gifted_believe_points ?? 0)
+      )
+  )
   const hasEnoughBelievePoints = believePointsBalance >= basketTotal
 
   const quoteRates = async () => {

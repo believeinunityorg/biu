@@ -108,8 +108,11 @@ interface SharedData extends Record<string, unknown> {
       processing_believe_points_release_at?: string | null
       /** Total believe points (available + processing). */
       believe_points_total?: number
-      /** Gifted bucket (retail gift cards, etc.); purchased balance is `believe_points`. */
+      /** Gift BP reporting (spendable only in Gift Cards). Purchased = Available − Gift. */
       gifted_believe_points?: number
+      purchased_believe_points?: number
+      donateable_believe_points?: number
+      holding_believe_points?: number
       role?: string // Ensure role is also present
       email_verified_at?: string | null // Email verification status
       care_alliance?: { slug: string; name: string } | null

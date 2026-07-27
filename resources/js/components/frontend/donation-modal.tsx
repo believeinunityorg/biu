@@ -118,7 +118,13 @@ export default function DonationModal({ isOpen, onClose, organization }: Donatio
 
   // Registered organization id (the one that can actually receive donations).
   const currentBalance =
-    parseFloat(String(authUser?.donateable_believe_points ?? authUser?.believe_points ?? "0")) || 0
+    parseFloat(
+      String(
+        authUser?.donateable_believe_points ??
+          authUser?.purchased_believe_points ??
+          "0"
+      )
+    ) || 0
   const availableBalance = parseFloat(String(authUser?.believe_points ?? "0")) || 0
   const processingBalance = parseFloat(String(authUser?.processing_believe_points ?? "0")) || 0
 

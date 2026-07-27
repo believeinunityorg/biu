@@ -567,12 +567,12 @@ class MerchantRedemptionController extends Controller
             } elseif ($paymentMethod === 'believe_points') {
                 $user->refresh();
                 $bpRequired = round($totalAmount, 2);
-                $userBeliefPoints = round((float) ($user->believe_points ?? 0), 2);
+                $userBeliefPoints = $user->purchasedBelievePointsBalance();
                 if ($userBeliefPoints < $bpRequired) {
                     DB::rollBack();
 
                     return back()->withErrors([
-                        'error' => 'Insufficient Believe Points. You need '.number_format($bpRequired, 2).' BP but only have '.number_format($userBeliefPoints, 2).' BP.',
+                        'error' => 'Insufficient purchased Believe Points. You need '.number_format($bpRequired, 2).' BP but only have '.number_format($userBeliefPoints, 2).' BP (Gift BP can only be used for gift cards).',
                     ]);
                 }
             }

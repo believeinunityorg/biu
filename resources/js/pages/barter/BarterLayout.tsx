@@ -40,7 +40,12 @@ export function BarterLayout({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const page = usePage();
   const auth = (page.props as { auth?: { user?: any; organization?: { name: string } } }).auth;
-  const balance = auth?.user?.believe_points ?? 0;
+  const balance =
+    auth?.user?.purchased_believe_points ??
+    Math.max(
+      0,
+      Number(auth?.user?.believe_points ?? 0) - Number(auth?.user?.gifted_believe_points ?? 0)
+    );
   const orgName = auth?.organization?.name ?? "Nonprofit";
 
   const tabs = [

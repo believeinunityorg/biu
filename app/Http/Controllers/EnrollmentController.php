@@ -168,14 +168,16 @@ class EnrollmentController extends Controller
                 $platformFee = $feeBreakdown['platform_fee'];
                 $user->refresh();
 
-                if ($user->believe_points < $pointsRequired) {
+                if ($user->purchasedBelievePointsBalance() < $pointsRequired) {
                     DB::rollBack();
                     if (isset($enrollment)) {
                         $enrollment->update(['status' => 'failed']);
                     }
 
+                    $have = $user->purchasedBelievePointsBalance();
+
                     return redirect()->route('course.show', $course->slug)
-                        ->with('error', "Insufficient Believe Points. You need {$pointsRequired} points but only have {$user->believe_points} points.");
+                        ->with('error', "Insufficient purchased Believe Points. You need {$pointsRequired} points but only have {$have} (Gift BP can only be used for gift cards).");
                 }
 
                 if (! $user->deductBelievePoints($pointsRequired)) {

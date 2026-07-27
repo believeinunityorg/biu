@@ -113,7 +113,7 @@ class BelievePointsToBridgeWalletService
         if (! $this->userHasPurchasedBalance($user, $amount)) {
             return [
                 'success' => false,
-                'message' => 'Insufficient purchased Believe Points. Gifted points cannot be moved to your wallet.',
+                'message' => 'Insufficient purchased Believe Points. Gift BP can only be spent on gift cards.',
                 'error_code' => 'INSUFFICIENT_BELIEVE_POINTS',
             ];
         }
@@ -395,13 +395,14 @@ class BelievePointsToBridgeWalletService
                 }
 
                 $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
-                $availablePurchased = round((float) ($lockedUser->believe_points ?? 0), 2);
+                $availablePurchased = $lockedUser->purchasedBelievePointsBalance();
 
                 if ($availablePurchased + 0.000001 < $amount) {
                     throw new \RuntimeException('INSUFFICIENT_BELIEVE_POINTS');
                 }
 
                 $lockedUser->decrement('believe_points', $amount);
+                $lockedUser->clampGiftBelievePointsReporting();
 
                 $record = BelievePointWalletTransfer::query()->create([
                     'user_id' => $lockedUser->id,
@@ -424,7 +425,7 @@ class BelievePointsToBridgeWalletService
             if ($e->getMessage() === 'INSUFFICIENT_BELIEVE_POINTS') {
                 return [
                     'success' => false,
-                    'message' => 'Insufficient purchased Believe Points. Gifted points cannot be moved to your wallet.',
+                    'message' => 'Insufficient purchased Believe Points. Gift BP can only be spent on gift cards.',
                     'error_code' => 'INSUFFICIENT_BELIEVE_POINTS',
                 ];
             }
@@ -641,7 +642,7 @@ class BelievePointsToBridgeWalletService
 
     private function userHasPurchasedBalance(User $user, float $amount): bool
     {
-        return round((float) ($user->believe_points ?? 0), 2) + 0.000001 >= $amount;
+        return $user->purchasedBelievePointsBalance() + 0.000001 >= $amount;
     }
 
     /**

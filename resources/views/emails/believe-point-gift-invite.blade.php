@@ -37,7 +37,7 @@
         <ol style="font-size: 15px; color: #555; padding-left: 20px; margin: 0 0 20px;">
             <li style="margin-bottom: 8px;">Click the button below.</li>
             <li style="margin-bottom: 8px;">Create your free Believe In Unity account, or sign in if you already have one.</li>
-            <li style="margin-bottom: 8px;">Your gifted Believe Points will automatically be added to your BP Wallet.</li>
+            <li style="margin-bottom: 8px;">Your gift will be added to your Available BP (Gift BP reporting shows it came from a gift).</li>
         </ol>
 
         <p style="text-align: center; margin: 28px 0;">

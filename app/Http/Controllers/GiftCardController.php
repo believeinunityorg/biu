@@ -135,7 +135,7 @@ class GiftCardController extends Controller
                 }
             }
 
-            return $this->withGiftedEligibility($brand);
+            return $this->withGiftCardBpEligibility($brand);
         }, $paginatedBrands);
 
         $n = count($paginatedBrands);
@@ -539,12 +539,25 @@ class GiftCardController extends Controller
             $pointsRequired = BiuPlatformFeeService::giftCardTotalChargedUsd((float) $purchaseAmount);
             $user->refresh();
 
-            if ($user->currentBelievePoints() < $pointsRequired) {
+            $brandNameForPolicy = (string) ($selectedBrand['productName'] ?? $validated['brand_name'] ?? '');
+            $isClosedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($brandNameForPolicy);
+            $eligibleBalance = $isClosedLoop
+                ? $user->currentBelievePoints()
+                : $user->purchasedBelievePointsBalance();
+
+            if ($eligibleBalance < $pointsRequired) {
                 DB::rollBack();
-                $have = $user->currentBelievePoints();
-                $message = $platformFee > 0
-                    ? "Insufficient Believe Points. You need {$pointsRequired} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$have}."
-                    : "Insufficient Believe Points. You need {$pointsRequired} Available BP but only have {$have}.";
+                $haveAvailable = $user->currentBelievePoints();
+                $havePurchased = $user->purchasedBelievePointsBalance();
+                $haveGifted = round((float) ($user->gifted_believe_points ?? 0), 2);
+
+                if ($isClosedLoop) {
+                    $message = $platformFee > 0
+                        ? "Insufficient Believe Points. You need {$pointsRequired} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$haveAvailable}."
+                        : "Insufficient Believe Points. You need {$pointsRequired} Available BP but only have {$haveAvailable}.";
+                } else {
+                    $message = "Visa/Mastercard cannot be purchased with Gift BP. You need {$pointsRequired} purchased BP (Available − Gift) but only have {$havePurchased} (Available {$haveAvailable}, Gift BP {$haveGifted}).";
+                }
 
                 if ($isInertiaRequest) {
                     return back()->withErrors([
@@ -1229,7 +1242,7 @@ class GiftCardController extends Controller
                 $brand['productName'] = 'Gift Card #'.($brand['productId'] ?? 'Unknown');
             }
 
-            $brand = $this->withGiftedEligibility($brand);
+            $brand = $this->withGiftCardBpEligibility($brand);
 
             // All approved nonprofits eligible for beneficiary selection (same idea as /donate).
             $organizations = Organization::query()
@@ -1549,7 +1562,7 @@ class GiftCardController extends Controller
             : $this->giftCardService->getGiftBrandsChunk($countryFilter, $currentPage, 20);
         $brands = is_array($pagePayload['brands'] ?? null) ? $pagePayload['brands'] : [];
 
-        $brands = array_map(fn (array $brand) => $this->withGiftedEligibility($brand), $brands);
+        $brands = array_map(fn (array $brand) => $this->withGiftCardBpEligibility($brand), $brands);
 
         return response()->json([
             'success' => true,
@@ -1901,10 +1914,13 @@ class GiftCardController extends Controller
      * @param  array<string, mixed>  $brand
      * @return array<string, mixed>
      */
-    private function withGiftedEligibility(array $brand): array
+    private function withGiftCardBpEligibility(array $brand): array
     {
         $name = $brand['productName'] ?? '';
-        $brand['allowedForGiftedPoints'] = GiftCardGiftedPointsPolicy::isAllowedForGiftedRedemption($name);
+        // false = Visa/MC — Gift BP cannot pay; purchased BP only
+        $brand['allowsGiftBp'] = GiftCardGiftedPointsPolicy::isClosedLoop(
+            is_string($name) ? $name : null
+        );
 
         return $brand;
     }

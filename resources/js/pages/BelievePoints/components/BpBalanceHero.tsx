@@ -279,8 +279,8 @@ export function BpBalanceHero({
             tone="purple"
           />
           <SecondaryBalanceTile
-            label="Gifted"
-            note="Received gifts"
+            label="Gift BP"
+            note="Gift Card module only"
             value={formatPoints(giftedBalance)}
             icon={Gift}
             tone="blue"

@@ -21,7 +21,7 @@
             </div>
         @endif
         <p style="font-size: 14px; color: #666;">
-            Gifted BP can be used toward closed-loop gift cards (not Visa/Mastercard open-loop cards) and cannot be re-gifted or moved to wallet.
+            These points were added to your Available BP. Gift BP reporting shows how much of your Available BP came from gifts (a subset — not extra BP). Gift BP decreases when you spend Available on closed-loop gift cards.
         </p>
         <p style="text-align: center; margin: 24px 0;">
             <a href="{{ $bpUrl }}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold;">

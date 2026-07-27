@@ -43,7 +43,7 @@ class BarterPointSettlementService
             return false;
         }
 
-        return $user->currentBelievePoints() >= abs($delta);
+        return $user->purchasedBelievePointsBalance() >= abs($delta);
     }
 
     /**

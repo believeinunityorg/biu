@@ -509,6 +509,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user|organization|orga
     Route::post('/livestreams/supporter/schedule', [SupporterLivestreamController::class, 'schedule'])->name('livestreams.supporter.schedule');
     Route::get('/livestreams/supporter/ready/{id}', [SupporterLivestreamController::class, 'ready'])->name('livestreams.supporter.ready')->where('id', '[0-9]+');
     Route::get('/unity-meet/host/user/{id}', [SupporterLivestreamController::class, 'ready'])->name('unity-meet.host.user')->where('id', '[0-9]+');
+    Route::get('/livestreams/supporter/invite-recipients', [SupporterLivestreamController::class, 'searchInviteRecipients'])->name('livestreams.supporter.invite-recipients');
     Route::get('/livestreams/supporter/join', [SupporterLivestreamController::class, 'joinPage'])->name('livestreams.supporter.join');
     Route::post('/livestreams/supporter/join', [SupporterLivestreamController::class, 'joinWithPasscode'])->name('livestreams.supporter.join.submit');
     Route::get('/livestreams/supporter/{id}/edit', [SupporterLivestreamController::class, 'edit'])->name('livestreams.supporter.edit')->where('id', '[0-9]+');

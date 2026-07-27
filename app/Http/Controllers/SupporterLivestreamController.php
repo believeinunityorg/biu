@@ -18,6 +18,7 @@ use App\Support\LivestreamParticipantEmails;
 use App\Support\LivestreamParticipantRoster;
 use App\Support\MeetingRecordingPreference;
 use App\Support\UnityMeetInviteNotifyVia;
+use App\Support\UnityMeetInviteRecipients;
 use App\Support\UserEmailCredits;
 use App\Support\StreamingWorkerSourceUrl;
 use App\Services\ConnectionHubUnityMeetListing;
@@ -1007,6 +1008,20 @@ class SupporterLivestreamController extends Controller
         \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream->fresh(), 'participant_removed');
 
         return redirect()->back()->with('success', 'Participant removed.');
+    }
+
+    /**
+     * Typeahead for Unity Meet invite: verified supporters by name/email.
+     */
+    public function searchInviteRecipients(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $q = trim((string) $request->query('q', ''));
+
+        return response()->json([
+            'results' => UnityMeetInviteRecipients::search($user, $q),
+        ]);
     }
 
     public function inviteParticipant(Request $request, int $id): RedirectResponse

@@ -77,6 +77,13 @@ final class GiftCardLedgerService
         $financials['biu_fee'] = round(max(0.0, $biuFeeShare), 2);
         $financials['believe_biu_fee'] = round(max(0.0, $biuFeeShare), 2);
 
+        $brand = trim((string) ($giftCard->brand_name ?? $meta['brand'] ?? $txMeta['brand'] ?? $txMeta['brand_name'] ?? ''));
+        if ($brand !== '') {
+            $financials['supplier_name'] = $brand;
+        }
+        $financials['supplier_type'] = 'Gift Card';
+        $financials['supplier_cost_amount'] = round(max(0.0, $faceValue), 2);
+
         $provider = $giftCard->total_commission !== null ? (float) $giftCard->total_commission : null;
         $biuShare = $giftCard->platform_commission !== null ? (float) $giftCard->platform_commission : null;
         $org = $giftCard->nonprofit_commission !== null ? (float) $giftCard->nonprofit_commission : null;
@@ -85,26 +92,34 @@ final class GiftCardLedgerService
         if ($provider !== null && $provider > 0) {
             $financials['provider_commission'] = round($provider, 2);
         }
+
+        // Payout columns only when a real commission/share payout occurred — do not echo platform fee alone.
         if ($biuShare !== null && $biuShare > 0) {
             $financials['biu_revenue_share'] = round($biuShare, 2);
             $financials['platform_payout'] = round($biuFeeShare + $biuShare, 2);
-        } else {
+        } elseif ($biuFeeShare > 0 && (($biuShare !== null && $biuShare > 0) || $merchant > 0 || ($provider !== null && $provider > 0))) {
             $financials['platform_payout'] = round($biuFeeShare, 2);
+        } else {
+            unset($financials['platform_payout']);
         }
+
         if ($org !== null && $org > 0) {
             $financials['organization_revenue'] = round($org, 2);
             $financials['organization_payout'] = round($orgFeeShare + $org, 2);
             $financials['net_to_organization'] = round($orgFeeShare + $org, 2);
-        } elseif ($orgFeeShare > 0) {
+        } elseif ($orgFeeShare > 0 && (($biuShare !== null && $biuShare > 0) || $merchant > 0)) {
             $financials['organization_payout'] = round($orgFeeShare, 2);
             $financials['net_to_organization'] = round($orgFeeShare, 2);
+        } else {
+            unset($financials['organization_payout'], $financials['net_to_organization']);
         }
+
         if ($merchant > 0) {
             $financials['merchant_revenue'] = round($merchant, 2);
             $financials['merchant_payout'] = round($merchant, 2);
         } else {
             $financials['merchant_revenue'] = 0.0;
-            $financials['merchant_payout'] = 0.0;
+            unset($financials['merchant_payout']);
         }
 
         $financials['supplier_payout'] = 0.0;

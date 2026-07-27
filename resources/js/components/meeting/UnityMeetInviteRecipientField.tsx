@@ -57,7 +57,7 @@ export default function UnityMeetInviteRecipientField({
     const controller = new AbortController()
     const handle = window.setTimeout(() => {
       setSearching(true)
-      fetch(`${route("livestreams.supporter.invite-recipients")}?q=${encodeURIComponent(q)}`, {
+      fetch(`/livestreams/supporter/invite-recipients?q=${encodeURIComponent(q)}`, {
         headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
         credentials: "same-origin",
         signal: controller.signal,

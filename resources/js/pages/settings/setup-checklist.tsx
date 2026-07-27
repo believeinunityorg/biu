@@ -37,6 +37,19 @@ import type { LucideIcon } from "lucide-react"
 type ItemStatus = "completed" | "in_progress" | "not_started"
 type StatusColor = "green" | "yellow" | "red"
 
+/** Consistent action labels across the entire setup flow. */
+function actionButtonLabel(status: ItemStatus): string {
+  if (status === "completed") return "View"
+  if (status === "in_progress") return "Continue"
+  return "Complete"
+}
+
+const PRIMARY_ACTION_CLASS =
+  "bg-purple-600 text-white hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+
+/** Simple estimate: ~2 minutes per remaining task. */
+const MINUTES_PER_REMAINING_TASK = 2
+
 type ChecklistItem = {
   id: string
   module: string
@@ -49,6 +62,21 @@ type ChecklistItem = {
   status: ItemStatus
   weight: number
   completed_at?: string | null
+}
+
+function countItemStats(items: ChecklistItem[]) {
+  const completed = items.filter((item) => item.status === "completed").length
+  const remaining = items.length - completed
+
+  return { completed, remaining }
+}
+
+function formatEstimatedTime(remaining: number): string {
+  if (remaining <= 0) return "None — you're all set"
+  const minutes = remaining * MINUTES_PER_REMAINING_TASK
+  if (minutes <= 2) return "About 2 minutes"
+
+  return `About ${minutes} minutes`
 }
 
 type ReadinessModule = {
@@ -181,6 +209,63 @@ function formatCompletedDate(iso: string | null | undefined): string | null {
   }
 }
 
+function ReadinessCtaBanner({ percent }: { percent: number }) {
+  if (percent >= 100) return null
+
+  return (
+    <div
+      role="note"
+      className="rounded-xl border border-purple-200/70 bg-purple-50/60 px-4 py-3.5 dark:border-purple-900/50 dark:bg-purple-950/30"
+    >
+      <p className="text-sm font-medium leading-relaxed text-purple-900 dark:text-purple-100">
+        {percent === 0
+          ? "Complete your setup to unlock all Believe In Unity features."
+          : "Finish your organization setup to begin fundraising, accepting donations, and engaging supporters."}
+      </p>
+    </div>
+  )
+}
+
+function CompletionSummaryCard({ items }: { items: ChecklistItem[] }) {
+  const { completed, remaining } = countItemStats(items)
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-5 dark:border-gray-800 dark:bg-gray-900/40">
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Completion summary</h3>
+      <dl className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div>
+          <dt className="text-xs font-medium text-muted-foreground">Completed</dt>
+          <dd className="mt-1 text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{completed}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium text-muted-foreground">Remaining</dt>
+          <dd className="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{remaining}</dd>
+        </div>
+        <div>
+          <dt className="text-xs font-medium text-muted-foreground">Estimated time remaining</dt>
+          <dd className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{formatEstimatedTime(remaining)}</dd>
+        </div>
+      </dl>
+    </div>
+  )
+}
+
+function ItemActionButton({ status, href }: { status: ItemStatus; href: string }) {
+  const label = actionButtonLabel(status)
+  const isCompleted = status === "completed"
+
+  return (
+    <Button
+      size="sm"
+      variant={isCompleted ? "outline" : "default"}
+      className={cn("min-w-[5.5rem] shrink-0", !isCompleted && PRIMARY_ACTION_CLASS)}
+      asChild
+    >
+      <Link href={href}>{label}</Link>
+    </Button>
+  )
+}
+
 function ModuleOverviewCard({ module, index }: { module: ReadinessModule; index: number }) {
   const Icon = MODULE_ICONS[module.id] ?? ClipboardList
   const colors = statusColorClasses(module.status_color)
@@ -268,17 +353,7 @@ function ChecklistItemRow({
             ) : null}
           </div>
         </div>
-        <Button
-          size="sm"
-          variant={item.status === "completed" ? "outline" : "default"}
-          className={cn(
-            "shrink-0",
-            item.status !== "completed" && "bg-purple-600 text-white hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
-          )}
-          asChild
-        >
-          <Link href={item.href}>{item.route_label}</Link>
-        </Button>
+        <ItemActionButton status={item.status} href={item.href} />
       </div>
     </div>
   )
@@ -289,6 +364,8 @@ function OverviewView({ checklist, organizationName }: { checklist: ChecklistPay
 
   return (
     <div className="space-y-6">
+      <ReadinessCtaBanner percent={checklist.percent} />
+
       <div className="rounded-xl border border-purple-200/80 bg-gradient-to-br from-purple-50/80 via-white to-white p-5 dark:border-purple-900/40 dark:from-purple-950/30 dark:via-gray-950 dark:to-gray-950">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -335,8 +412,8 @@ function OverviewView({ checklist, organizationName }: { checklist: ChecklistPay
                 </p>
               </div>
             </div>
-            <Button asChild className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600">
-              <Link href={route("setup-checklist.index", { module: firstIncompleteModule.id })}>Continue Setup</Link>
+            <Button asChild className={PRIMARY_ACTION_CLASS}>
+              <Link href={route("setup-checklist.index", { module: firstIncompleteModule.id })}>Continue</Link>
             </Button>
           </div>
         </div>
@@ -432,16 +509,18 @@ function ModuleDetailView({
               </p>
             </div>
             <Button variant="outline" size="sm" asChild>
-              <Link href={route("governance.onboarding.index")}>Learn More</Link>
+              <Link href={route("governance.onboarding.index")}>Learn more</Link>
             </Button>
           </div>
         </div>
       ) : null}
 
+      <CompletionSummaryCard items={module.items} />
+
       {module.first_incomplete ? (
         <div className="flex justify-center">
-          <Button onClick={scrollToFirstIncomplete} className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600">
-            Complete Setup
+          <Button onClick={scrollToFirstIncomplete} className={PRIMARY_ACTION_CLASS}>
+            Continue
           </Button>
         </div>
       ) : null}
@@ -458,7 +537,7 @@ function ModuleDetailView({
           <div />
         )}
         {nextModule ? (
-          <Button className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-600" asChild>
+          <Button className={PRIMARY_ACTION_CLASS} asChild>
             <Link href={route("setup-checklist.index", { module: nextModule.id })}>
               Next: {nextModule.label}
               <ArrowRight className="ml-2 h-4 w-4" />
@@ -466,7 +545,7 @@ function ModuleDetailView({
           </Button>
         ) : (
           <Button variant="outline" asChild>
-            <Link href={route("setup-checklist.index")}>Back to Overview</Link>
+            <Link href={route("setup-checklist.index")}>View overview</Link>
           </Button>
         )}
       </div>

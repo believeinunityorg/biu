@@ -263,6 +263,18 @@ class UnifiedLedgerFlatFileMapper
         }
 
         if ($ledgerType !== UnifiedLedgerType::BP && $module !== 'believe_points') {
+            // Gift cards / marketplace / courses paid with BP are Money-classified but still move the BP wallet.
+            if ($walletAmount !== null) {
+                return [
+                    'credit' => $walletAmount > 0 ? abs($walletAmount) : null,
+                    'debit' => $walletAmount < 0 ? abs($walletAmount) : null,
+                    'processing' => null,
+                    'available' => null,
+                    'balance_after' => null,
+                    'wallet_amount' => $walletAmount,
+                ];
+            }
+
             return [
                 'credit' => null,
                 'debit' => null,

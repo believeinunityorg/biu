@@ -11,7 +11,7 @@
 > {{ $message }}
 @endif
 
-Accept the gift on Believe In Unity to add it to your **Gifted BP** wallet. You can then spend it on gift cards, Marketplace, Learning Hub, and more.
+Accept the gift on Believe In Unity to add it to your **Available BP**. Gift BP reporting will increase by the same amount so you can see how much you received as gifts.
 
 The sender can cancel until you accept. This offer expires in about **{{ $holdDays }} days**.
 

@@ -5,7 +5,6 @@ import { Head, Link, router, usePage } from "@inertiajs/react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Copy, Check, Play, ArrowLeft, Calendar, Mail, Users, X, Send } from "lucide-react"
 import UnityMeetLayout from "@/layouts/UnityMeetLayout"
 import { PageHead } from "@/components/frontend/PageHead"
@@ -15,6 +14,7 @@ import EmailCreditsMeetingActions from "@/components/meeting/EmailCreditsMeeting
 import UnityMeetInviteChannelPicker, {
   type UnityMeetInviteChannel,
 } from "@/components/meeting/UnityMeetInviteChannelPicker"
+import UnityMeetInviteRecipientField from "@/components/meeting/UnityMeetInviteRecipientField"
 
 const BRAND = {
   from: "#9333ea",
@@ -66,7 +66,6 @@ export default function SupporterReady({
   const [inviteNotifyVia, setInviteNotifyVia] = useState<UnityMeetInviteChannel>("both")
   const isScheduled = livestream.status === "scheduled"
   const invitedCount = livestream.participantEmails?.length ?? 0
-  const showScheduledEmailInvites = Boolean(livestream.scheduledAt) || invitedCount > 0
   const canInviteParticipants = !["ended", "cancelled"].includes(livestream.status ?? "")
   const { credits: emailCreditsLive, canSend: canSendEmailInvites, syncFromServer, applyDelta } =
     useEmailCreditsState(emailCredits)
@@ -183,8 +182,8 @@ export default function SupporterReady({
               {isScheduled
                 ? invitedCount > 0
                   ? `Invitation emails were sent to ${invitedCount} participant${invitedCount === 1 ? "" : "s"}.`
-                  : "Your meeting is on the calendar."
-                : "Invite others with the link below. When you're ready, start the meeting."}
+                  : "Your meeting is on the calendar. Invite guests below anytime."
+                : "Invite guests by email or BIU notification (app + push), then start when ready."}
             </p>
           </div>
         </div>
@@ -213,7 +212,7 @@ export default function SupporterReady({
             </Card>
           ) : null}
 
-          {canInviteParticipants && showScheduledEmailInvites ? (
+          {canInviteParticipants ? (
             <Card>
               <CardHeader className="space-y-3">
                 <CardTitle className="text-base">Send invitation</CardTitle>
@@ -240,44 +239,15 @@ export default function SupporterReady({
                   </p>
                 ) : null}
                 {canSendInvite ? (
-                  <>
-                <Label htmlFor="ready-participant-invite-email" className="sr-only">
-                  Guest email
-                </Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="ready-participant-invite-email"
-                    type="email"
-                    placeholder="guest@example.com"
+                  <UnityMeetInviteRecipientField
+                    inputId="ready-participant-invite-email"
                     value={inviteEmailInput}
-                    onChange={(e) => setInviteEmailInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        addAndSendInvitation()
-                      }
-                    }}
+                    onChange={setInviteEmailInput}
+                    onSubmit={addAndSendInvitation}
                     disabled={invitingParticipant}
+                    submitting={invitingParticipant}
+                    error={participantInviteErrorText}
                   />
-                  <Button
-                    type="button"
-                    className="shrink-0 gap-1.5 text-white"
-                    style={{ background: `linear-gradient(135deg, ${BRAND.from}, ${BRAND.to})` }}
-                    onClick={addAndSendInvitation}
-                    disabled={invitingParticipant || inviteEmailInput.trim() === ""}
-                  >
-                    {invitingParticipant ? "Sending…" : (
-                      <>
-                        <Send className="h-4 w-4" />
-                        Send
-                      </>
-                    )}
-                  </Button>
-                </div>
-                {participantInviteErrorText ? (
-                  <p className="text-sm text-destructive">{participantInviteErrorText}</p>
-                ) : null}
-                  </>
                 ) : null}
               </CardContent>
             </Card>

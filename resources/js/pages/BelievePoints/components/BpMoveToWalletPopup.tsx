@@ -191,7 +191,7 @@ export function BpMoveToWalletPopup({
                         </div>
                       </div>
                       <div className="rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
-                        This cannot be reversed once Bridge processes the transfer. Gifted points cannot be moved.
+                        This cannot be reversed once Bridge processes the transfer.
                       </div>
                     </div>
                   ) : (

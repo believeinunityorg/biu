@@ -71,7 +71,7 @@ interface Props {
 export default function FrontendCourseEnroll({ course, feeBreakdown }: Props) {
   const page = usePage()
   const auth = (page.props as any).auth
-  const currentBalance = parseFloat(auth?.user?.believe_points) || 0
+  const currentBalance = parseFloat(auth?.user?.purchased_believe_points) || Math.max(0, (parseFloat(auth?.user?.believe_points) || 0) - (parseFloat(auth?.user?.gifted_believe_points) || 0))
 
   const { data, setData, post, processing, errors } = useForm({
     terms_accepted: false,
@@ -192,10 +192,10 @@ export default function FrontendCourseEnroll({ course, feeBreakdown }: Props) {
                                   )}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                  Your balance: {currentBalance.toFixed(2)} BP
+                                  Your purchased balance: {currentBalance.toFixed(2)} BP
                                   {hasEnoughPoints && (
                                     <span className="text-green-600 ml-2">
-                                      (You&apos;ll have {(currentBalance - pointsRequired).toFixed(2)} BP remaining)
+                                      (You&apos;ll have {(currentBalance - pointsRequired).toFixed(2)} purchased BP remaining)
                                     </span>
                                   )}
                                 </div>
@@ -206,7 +206,8 @@ export default function FrontendCourseEnroll({ course, feeBreakdown }: Props) {
                               <Alert variant="destructive">
                                 <AlertCircle className="h-4 w-4" />
                                 <AlertDescription>
-                                  You need {pointsRequired.toFixed(2)} BP but only have {currentBalance.toFixed(2)} BP.
+                                  You need {pointsRequired.toFixed(2)} purchased BP but only have {currentBalance.toFixed(2)} BP.
+                                  Gift BP can only be used for gift cards.
                                 </AlertDescription>
                               </Alert>
                             )}

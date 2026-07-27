@@ -35,6 +35,7 @@ class UserController extends Controller
             'reward_points' => $user->reward_points ?? 0,
             'believe_points' => $user->believe_points ?? 0,
             'gifted_believe_points' => $user->gifted_believe_points ?? 0,
+            'purchased_believe_points' => $user->purchasedBelievePointsBalance(),
             'believe_points_total' => $user->totalBelievePointsBalance(),
             'created_at' => $user->created_at,
             'role' => $user->role ?? 'user',
@@ -465,6 +466,7 @@ class UserController extends Controller
                 'reward_points' => $user->reward_points ?? 0,
                 'believe_points' => $user->believe_points ?? 0,
                 'gifted_believe_points' => $user->gifted_believe_points ?? 0,
+                'purchased_believe_points' => $user->purchasedBelievePointsBalance(),
                 'believe_points_total' => $user->totalBelievePointsBalance(),
             ],
         ]);

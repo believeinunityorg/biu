@@ -33,8 +33,8 @@ final class BelievePointsDonationSpendService
             $recipientLocked = User::query()->lockForUpdate()->findOrFail($recipient->id);
 
             $processing = round((float) ($donorLocked->processing_believe_points ?? 0), 2);
-            $available = round((float) ($donorLocked->believe_points ?? 0), 2);
-            $total = round($processing + $available, 2);
+            $purchased = $donorLocked->purchasedBelievePointsBalance();
+            $total = round($processing + $purchased, 2);
 
             if ($total + 0.000001 < $amount) {
                 return null;

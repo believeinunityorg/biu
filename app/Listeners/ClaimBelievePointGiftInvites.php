@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * When a supporter registers with an email that has pending Gift BP invites,
- * release Holding BP into their gifted_believe_points balance.
+ * release Holding BP into their Available BP and increase Gift BP reporting.
  * Also awards cancellation goodwill BRP when applicable.
  */
 class ClaimBelievePointGiftInvites

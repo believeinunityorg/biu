@@ -311,7 +311,7 @@ export default function DonatePage({
   })
 
   const currentBalance =
-    parseFloat(String(authUser?.donateable_believe_points ?? authUser?.believe_points ?? "0")) || 0
+    parseFloat(String(authUser?.donateable_believe_points ?? authUser?.purchased_believe_points ?? "0")) || 0
   const availableBalance = parseFloat(String(authUser?.believe_points ?? "0")) || 0
   const processingBalance = parseFloat(String(authUser?.processing_believe_points ?? "0")) || 0
   const isStripeRail = paymentMethod === "stripe_card" || paymentMethod === "stripe_ach"

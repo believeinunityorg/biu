@@ -71,9 +71,16 @@ class GiftCardRedemptionService
         ) {
             $lockedUser = User::query()->lockForUpdate()->findOrFail($user->id);
 
-            if (! $lockedUser->deductAvailableBelievePointsForGiftCard($pointsRequired)) {
-                throw new \RuntimeException('Insufficient Available Believe Points.');
+            $isClosedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($finalBrandName);
+            $deducted = $lockedUser->deductAvailableBelievePointsForGiftCard($pointsRequired, $isClosedLoop);
+            if ($deducted === null) {
+                $message = $isClosedLoop
+                    ? 'Insufficient Available Believe Points.'
+                    : 'Visa/Mastercard cannot be purchased with Gift BP. Use purchased Believe Points (Available − Gift).';
+                throw new \RuntimeException($message);
             }
+            $fromGifted = $deducted['from_gifted'];
+            $reduceGiftReporting = $fromGifted > 0;
 
             $brandMeta = $selectedBrand ? [
                 'productId' => $selectedBrand['productId'] ?? null,
@@ -109,9 +116,9 @@ class GiftCardRedemptionService
                     'orderId' => $orderId,
                     'productId' => (int) $validated['productId'],
                     'believe_points_used' => $pointsRequired,
-                    'believe_points_from_gifted' => 0.0,
-                    'believe_points_from_purchased' => $pointsRequired,
-                    'allowed_for_gifted_points' => false,
+                    'believe_points_from_gifted' => $fromGifted,
+                    'believe_points_from_purchased' => round(max(0, $pointsRequired - $fromGifted), 2),
+                    'closed_loop' => $reduceGiftReporting,
                     'redemption_submitted_at' => $requestedAt->toIso8601String(),
                     'scheduled_fulfillment_at' => $scheduledAt->toIso8601String(),
                     'fulfillment_audit' => [[
@@ -122,6 +129,7 @@ class GiftCardRedemptionService
                         'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
                         'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
                         'total_charged' => $pointsRequired,
+                        'from_gifted' => $fromGifted,
                         'order_id' => $orderId,
                     ]],
                 ]),
@@ -141,8 +149,9 @@ class GiftCardRedemptionService
                 'meta' => array_merge($feeMeta, [
                     'gift_card_id' => $giftCard->id,
                     'believe_points_used' => $pointsRequired,
-                    'believe_points_from_gifted' => 0.0,
-                    'believe_points_from_purchased' => $pointsRequired,
+                    'believe_points_from_gifted' => $fromGifted,
+                    'believe_points_from_purchased' => round(max(0, $pointsRequired - $fromGifted), 2),
+                    'closed_loop' => $reduceGiftReporting,
                     'phaze_order_id' => $orderId,
                     'brand' => $validated['brand_name'],
                     'fulfillment_status' => GiftCardStatus::PendingFulfillment->value,
@@ -154,7 +163,8 @@ class GiftCardRedemptionService
                 'amount' => $pointsRequired,
                 'face_value' => $faceValue,
                 'platform_fee' => $platformFee,
-                'from_purchased' => $pointsRequired,
+                'from_gifted' => $fromGifted,
+                'closed_loop' => $reduceGiftReporting,
             ]);
 
             return $giftCard;

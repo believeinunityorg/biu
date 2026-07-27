@@ -11,6 +11,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Scale,
   ShoppingCart,
   Wallet,
 } from "lucide-react"
@@ -33,6 +34,8 @@ export interface BpWalletLedgerRow {
   available_balance: number
   gifted_balance: number
   running_balance: number
+  /** When this BP is expected to (or did) become Available — ISO datetime */
+  available_on?: string | null
 }
 
 export interface BpWalletLedgerPagination {
@@ -56,6 +59,72 @@ const fmtDateParts = (iso: string) => {
     date: d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
     time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
   }
+}
+
+function formatAvailableOn(iso: string | null | undefined): { label: string; sub?: string } | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+
+  const dateLabel = d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+  const ms = d.getTime() - Date.now()
+
+  if (ms <= 0) {
+    return { label: dateLabel, sub: "Available" }
+  }
+
+  const hours = Math.ceil(ms / (1000 * 60 * 60))
+  if (hours < 24) {
+    return { label: dateLabel, sub: hours <= 1 ? "Soon" : `In ~${hours}h` }
+  }
+
+  return { label: dateLabel }
+}
+
+function AvailableOnBesideBadge({ row }: { row: BpWalletLedgerRow }) {
+  const formatted = formatAvailableOn(row.available_on)
+  if (!formatted) return null
+
+  const isPending =
+    row.entry_type === "purchase_processing" &&
+    row.available_on != null &&
+    new Date(row.available_on).getTime() > Date.now()
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 text-[11px] font-medium tabular-nums",
+        isPending
+          ? "text-amber-700 dark:text-amber-300"
+          : "text-muted-foreground",
+      )}
+    >
+      <span className="text-muted-foreground/70">Available on</span>
+      <span>{formatted.label}</span>
+      {formatted.sub && isPending && (
+        <span className="font-normal opacity-80">({formatted.sub})</span>
+      )}
+    </span>
+  )
+}
+
+function friendlyTransactionNumber(raw: string, entryType: string): string {
+  const value = (raw || "").trim()
+  if (!value) return "—"
+  // Hide Stripe / Bridge style refs from supporters
+  if (/^(pi_|ch_|py_|txn_|po_|btxn_)/i.test(value) || value.length > 36) {
+    if (entryType === "purchase_processing" || entryType === "purchase") return "Purchase"
+    if (entryType === "settlement") return "Available"
+    if (entryType === "adjustment" || entryType === "admin_adjustment") return "Adjustment"
+    return "Reference"
+  }
+  return value
 }
 
 function resolveBpChange(row: BpWalletLedgerRow): number {
@@ -96,7 +165,7 @@ function entryMeta(entryType: string): EntryMeta {
       }
     case "settlement":
       return {
-        label: "Settlement",
+        label: "Available",
         icon: RefreshCw,
         badgeClass: "border-0 bg-emerald-600 text-white hover:bg-emerald-600/90",
         iconWrapClass: iconDefault,
@@ -129,6 +198,15 @@ function entryMeta(entryType: string): EntryMeta {
         label: "Refund",
         icon: RefreshCw,
         badgeClass: "border-border bg-card text-foreground",
+        iconWrapClass: iconDefault,
+      }
+    case "adjustment":
+    case "admin_adjustment":
+      return {
+        label: "Adjustment",
+        icon: Scale,
+        badgeClass:
+          "border-slate-200 bg-slate-100 text-slate-800 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200",
         iconWrapClass: iconDefault,
       }
     default:
@@ -205,12 +283,18 @@ function LedgerRow({ row, index }: { row: BpWalletLedgerRow; index: number }) {
             <Icon className="h-4 w-4" aria-hidden />
           </div>
           <div className="min-w-0 space-y-1.5">
-            <Badge variant="outline" className={cn("text-[10px] font-semibold uppercase tracking-wide", meta.badgeClass)}>
-              {meta.label}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={cn("text-[10px] font-semibold uppercase tracking-wide", meta.badgeClass)}>
+                {meta.label}
+              </Badge>
+              <AvailableOnBesideBadge row={row} />
+            </div>
             <p className="text-sm font-medium leading-snug text-foreground">{row.description}</p>
-            <p className="truncate font-mono text-[11px] text-muted-foreground" title={row.transaction_number}>
-              {row.transaction_number}
+            <p
+              className="truncate font-mono text-[11px] text-muted-foreground"
+              title={friendlyTransactionNumber(row.transaction_number, row.entry_type)}
+            >
+              {friendlyTransactionNumber(row.transaction_number, row.entry_type)}
             </p>
           </div>
         </div>
@@ -393,7 +477,8 @@ export function BpWalletLedger({ ledger }: { ledger: BpWalletLedgerPagination })
         </div>
         <p className="text-sm font-semibold text-foreground">No wallet activity yet</p>
         <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">
-          Purchases, settlements, and wallet transfers will appear here with running Processing and Available balances.
+          Purchases, Available dates, and wallet transfers will appear here with running Processing and Available
+          balances.
         </p>
       </div>
     )

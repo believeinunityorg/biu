@@ -38,8 +38,8 @@ import { cn } from "@/lib/utils"
 interface Brand {
   productId?: number
   productName?: string
-  /** From server: false for Visa/Mastercard-style open-loop products */
-  allowedForGiftedPoints?: boolean
+  /** False for Visa/Mastercard — Gift BP cannot pay; purchased BP only */
+  allowsGiftBp?: boolean
   productImage?: string
   denominations?: number[]
   valueRestrictions?: {
@@ -101,9 +101,11 @@ export default function PurchaseDetailsPage({
     pageProps.giftCardPurchaseOrganizations ?? giftCardPurchaseOrganizationsProp
   const platformFeeUsd = Number(pageProps.platformFeeUsd ?? platformFeeUsdProp ?? 0.5) || 0
   const auth = (page.props as any).auth
-  const purchasedBelievePoints = parseFloat(auth?.user?.believe_points) || 0
+  const availableBelievePoints = parseFloat(auth?.user?.believe_points) || 0
   const giftedBelievePoints = parseFloat(auth?.user?.gifted_believe_points) || 0
-  const skuAllowsGifted = brand.allowedForGiftedPoints !== false
+  const purchasedBelievePoints = Math.max(0, availableBelievePoints - giftedBelievePoints)
+  const allowsGiftBp = brand.allowsGiftBp !== false
+  const spendableForSku = allowsGiftBp ? availableBelievePoints : purchasedBelievePoints
 
   const isOrgOrAdmin = Boolean(user) && user!.role !== "user" && user!.role !== null
   const Layout = isOrgOrAdmin ? AppSidebarLayout : FrontendLayout
@@ -261,7 +263,8 @@ export default function PurchaseDetailsPage({
   const isValidForm = isValidAmount && selectedOrganizationId
 
   const totalChargedBp = data.amount > 0 ? Number((data.amount + platformFeeUsd).toFixed(2)) : 0
-  const believePointsSufficientForSku = data.amount > 0 && purchasedBelievePoints >= totalChargedBp
+  const believePointsSufficientForSku =
+    data.amount > 0 && spendableForSku >= totalChargedBp
 
   const activeInfoHtml = infoTabs.find((t) => t.id === resolvedInfoTab)?.html
 
@@ -307,7 +310,7 @@ export default function PurchaseDetailsPage({
                     <Globe className="h-3.5 w-3.5" />
                     {country}
                   </span>
-                  {!skuAllowsGifted && (
+                  {!allowsGiftBp && (
                     <Badge className="border-0 bg-slate-950/50 text-[11px] font-medium text-white backdrop-blur-sm">
                       Purchased BP only
                     </Badge>
@@ -324,7 +327,7 @@ export default function PurchaseDetailsPage({
                 <div className="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm backdrop-blur-sm">
                   <Wallet className="h-4 w-4 shrink-0" />
                   <span className="tabular-nums">
-                    {purchasedBelievePoints.toFixed(2)} Available BP
+                    {availableBelievePoints.toFixed(2)} Available BP
                   </span>
                 </div>
               )}
@@ -635,19 +638,33 @@ export default function PurchaseDetailsPage({
                             <p className="mt-0.5 text-sm text-muted-foreground">
                               Available:{" "}
                               <span className="font-medium tabular-nums text-foreground">
-                                {purchasedBelievePoints.toFixed(2)} BP
+                                {availableBelievePoints.toFixed(2)} BP
                               </span>
+                              {!allowsGiftBp && (
+                                <>
+                                  {" "}
+                                  · Purchased:{" "}
+                                  <span className="font-medium tabular-nums text-foreground">
+                                    {purchasedBelievePoints.toFixed(2)}
+                                  </span>
+                                </>
+                              )}
                             </p>
                             {giftedBelievePoints > 0 && (
-                              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                                Gifted BP ({giftedBelievePoints.toFixed(2)}) cannot be used for gift
-                                cards.
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Gift BP:{" "}
+                                <span className="font-medium tabular-nums text-foreground">
+                                  {giftedBelievePoints.toFixed(2)}
+                                </span>
+                                {allowsGiftBp
+                                  ? " — included for this gift card"
+                                  : " — cannot pay for Visa/Mastercard"}
                               </p>
                             )}
                             {believePointsSufficientForSku && (
                               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                                {(purchasedBelievePoints - totalChargedBp).toFixed(2)} BP remaining
-                                after redemption
+                                {(spendableForSku - totalChargedBp).toFixed(2)}{" "}
+                                {allowsGiftBp ? "Available" : "purchased"} BP remaining after redemption
                               </p>
                             )}
                           </div>
@@ -655,9 +672,11 @@ export default function PurchaseDetailsPage({
 
                         {!believePointsSufficientForSku && (
                           <p className="text-sm text-destructive">
-                            {platformFeeUsd > 0
-                              ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${purchasedBelievePoints.toFixed(2)}.`
-                              : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${purchasedBelievePoints.toFixed(2)}.`}
+                            {!allowsGiftBp
+                              ? `Visa/Mastercard needs ${totalChargedBp.toFixed(2)} purchased BP (Gift BP cannot be used). You have ${purchasedBelievePoints.toFixed(2)} purchased.`
+                              : platformFeeUsd > 0
+                                ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
+                                : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${availableBelievePoints.toFixed(2)}.`}
                           </p>
                         )}
 

@@ -905,11 +905,13 @@ class CheckoutController extends Controller
                 $pointsRequired = $tempOrder->total_amount; // 1$ = 1 believe point
                 $user->refresh(); // Get latest balance
 
-                if ($user->believe_points < $pointsRequired) {
+                if ($user->purchasedBelievePointsBalance() < $pointsRequired) {
                     DB::rollBack();
 
+                    $have = $user->purchasedBelievePointsBalance();
+
                     return response()->json([
-                        'error' => "Insufficient Believe Points. You need {$pointsRequired} points but only have {$user->believe_points} points.",
+                        'error' => "Insufficient purchased Believe Points. You need {$pointsRequired} points but only have {$have} (Gift BP can only be used for gift cards).",
                     ], 400);
                 }
 

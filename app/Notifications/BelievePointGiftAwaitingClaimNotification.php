@@ -23,7 +23,7 @@ class BelievePointGiftAwaitingClaimNotification extends Notification
         return [
             'type' => 'gift_awaiting_claim',
             'title' => 'You received a Believe Points gift',
-            'body' => "{$senderName} sent you {$amt} BP. Accept it on Gift BP to add it to your Gifted BP wallet.",
+            'body' => "{$senderName} sent you {$amt} BP. Accept it on Gift BP to add it to your Available balance.",
             'meta' => [
                 'invite_id' => $this->invite->id,
                 'amount' => (float) $this->invite->amount,

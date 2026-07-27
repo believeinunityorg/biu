@@ -33,8 +33,8 @@ import { cn } from "@/lib/utils"
 interface Brand {
   productId?: number
   productName?: string
-  /** False when Visa/Mastercard — Gifted Believe Points cannot be used */
-  allowedForGiftedPoints?: boolean
+  /** False for Visa/Mastercard — Gift BP cannot pay */
+  allowsGiftBp?: boolean
   productImage?: string
   denominations?: number[]
   valueRestrictions?: {
@@ -539,7 +539,7 @@ export default function GiftCardsIndex({
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-80" />
 
                       <div className="absolute top-2.5 left-2.5 flex max-w-[70%] flex-wrap gap-1.5">
-                        {brand.allowedForGiftedPoints === false && (
+                        {brand.allowsGiftBp === false && (
                           <Badge className="border-0 bg-slate-950/80 text-[10px] font-medium text-white backdrop-blur-sm">
                             Purchased BP only
                           </Badge>

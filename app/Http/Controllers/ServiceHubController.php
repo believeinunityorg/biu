@@ -728,8 +728,8 @@ class ServiceHubController extends Controller
             'features' => $package->features ?? [],
         ];
 
-        // Get user's Believe Points balance
-        $userBelievePoints = $user ? $user->believe_points : 0;
+        // Purchased only — Gift BP is spendable only in the Gift Card module.
+        $userBelievePoints = $user ? $user->purchasedBelievePointsBalance() : 0;
 
         // Calculate fees to check if user has enough points (only if gig accepts Believe Points)
         $sellerState = $gig->user->serviceSellerProfile->state ?? null;
@@ -831,9 +831,11 @@ class ServiceHubController extends Controller
                 $pointsRequired = $fees['total_buyer_pays'];
                 $user->refresh();
 
-                if ($user->believe_points < $pointsRequired) {
+                if ($user->purchasedBelievePointsBalance() < $pointsRequired) {
+                    $have = $user->purchasedBelievePointsBalance();
+
                     return back()->withErrors([
-                        'payment_method' => "Insufficient Believe Points. You need {$pointsRequired} points but only have {$user->believe_points} points.",
+                        'payment_method' => "Insufficient purchased Believe Points. You need {$pointsRequired} points but only have {$have} (Gift BP can only be used for gift cards).",
                     ]);
                 }
 

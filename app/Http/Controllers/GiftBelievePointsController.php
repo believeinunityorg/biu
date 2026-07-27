@@ -130,7 +130,8 @@ class GiftBelievePointsController extends Controller
 
         return Inertia::render('GiftCards/GiftBp', [
             'senderBalances' => [
-                'purchased_believe_points' => round((float) ($sender->believe_points ?? 0), 2),
+                'available_believe_points' => round((float) ($sender->believe_points ?? 0), 2),
+                'purchased_believe_points' => $sender->purchasedBelievePointsBalance(),
                 'gifted_believe_points' => round((float) ($sender->gifted_believe_points ?? 0), 2),
                 'holding_believe_points' => round((float) ($sender->holding_believe_points ?? 0), 2),
             ],
@@ -200,7 +201,7 @@ class GiftBelievePointsController extends Controller
 
             return back()->with(
                 'success',
-                "Gift sent to {$recipient->name}. {$amtLabel} BP is holding until they accept ({$days} days)."
+                "Gift of {$amtLabel} BP sent to {$recipient->name}. Added to their Available BP (Gift BP reporting updated)."
             );
         }
 
@@ -214,7 +215,7 @@ class GiftBelievePointsController extends Controller
 
         return back()->with(
             'success',
-            'Invitation sent to '.$invite->recipient_email.'. '.$amtLabel.' BP is holding until they register and claim ('.$days.' days).'
+            'Invitation sent to '.$invite->recipient_email.'. '.$amtLabel.' BP is holding until they register ('.$days.' days).'
         );
     }
 
@@ -230,7 +231,7 @@ class GiftBelievePointsController extends Controller
 
         return back()->with(
             'success',
-            "You collected {$amt} BP. It was added to your Gifted BP wallet."
+            "You collected {$amt} BP. It was added to your Available BP (Gift BP reporting updated)."
         );
     }
 

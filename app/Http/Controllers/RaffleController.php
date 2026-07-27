@@ -302,9 +302,10 @@ class RaffleController extends BaseController
             }
 
             $user->refresh();
-            if ((float) $user->believe_points < $subtotalUsd) {
+            $purchased = $user->purchasedBelievePointsBalance();
+            if ($purchased < $subtotalUsd) {
                 return back()->withErrors([
-                    'payment_method' => 'Insufficient Believe Points. You need '.number_format($subtotalUsd, 2).' points but only have '.number_format((float) $user->believe_points, 2).' points.',
+                    'payment_method' => 'Insufficient purchased Believe Points. You need '.number_format($subtotalUsd, 2).' points but only have '.number_format($purchased, 2).' (Gift BP can only be used for gift cards).',
                 ]);
             }
 
@@ -670,7 +671,7 @@ class RaffleController extends BaseController
             'feePreview' => $feePreview,
             'believePointsEnabled' => (bool) AdminSetting::get('believe_points_enabled', true),
             'believePointsBalance' => $viewer
-                ? round((float) ($viewer->believe_points ?? 0), 2)
+                ? round($viewer->purchasedBelievePointsBalance(), 2)
                 : 0,
         ]);
     }

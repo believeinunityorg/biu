@@ -31,7 +31,7 @@ class BarterNetworkController extends Controller
     public function index(Request $request)
     {
         $org = $request->attributes->get('barter_organization');
-        $balance = $org->user ? $org->user->currentBelievePoints() : 0;
+        $balance = $org->user ? $org->user->purchasedBelievePointsBalance() : 0;
 
         $currentListings = NonprofitBarterListing::where('nonprofit_id', $org->id)
             ->active()
@@ -284,9 +284,9 @@ class BarterNetworkController extends Controller
             }
             $pointsDelta = $required;
             $user = $org->user;
-            if (! $user || $user->currentBelievePoints() < $pointsDelta) {
+            if (! $user || $user->purchasedBelievePointsBalance() < $pointsDelta) {
                 return redirect()->back()->withErrors([
-                    'points_offer' => 'Insufficient Believe Points balance to complete this request.',
+                    'points_offer' => 'Insufficient purchased Believe Points. Gift BP can only be used for gift cards.',
                 ]);
             }
         }
@@ -413,7 +413,7 @@ class BarterNetworkController extends Controller
     public function pointsWallet(Request $request)
     {
         $org = $request->attributes->get('barter_organization');
-        $balance = $org->user ? $org->user->currentBelievePoints() : 0;
+        $balance = $org->user ? $org->user->purchasedBelievePointsBalance() : 0;
 
         return Inertia::render('barter/points-wallet', [
             'balance' => $balance,

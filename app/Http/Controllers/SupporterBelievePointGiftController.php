@@ -44,7 +44,8 @@ class SupporterBelievePointGiftController extends Controller
                 'image' => $recipient->image ? '/storage/'.$recipient->image : null,
             ],
             'senderBalances' => [
-                'purchased_believe_points' => round((float) ($sender->believe_points ?? 0), 2),
+                'available_believe_points' => round((float) ($sender->believe_points ?? 0), 2),
+                'purchased_believe_points' => $sender->purchasedBelievePointsBalance(),
                 'gifted_believe_points' => round((float) ($sender->gifted_believe_points ?? 0), 2),
                 'holding_believe_points' => round((float) ($sender->holding_believe_points ?? 0), 2),
             ],
@@ -85,8 +86,7 @@ class SupporterBelievePointGiftController extends Controller
         );
 
         $amt = BelievePointGiftInviteService::formatAmount((float) $invite->amount);
-        $days = BelievePointGiftInviteService::holdDays();
-        $success = "Gift sent to {$recipient->name}. {$amt} BP is holding until they accept ({$days} days).";
+        $success = "Gift of {$amt} BP sent to {$recipient->name}. Added to their Available BP (Gift BP reporting updated).";
 
         if ($request->header('X-Inertia')) {
             return back()->with('success', $success);

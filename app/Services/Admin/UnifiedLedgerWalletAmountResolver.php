@@ -26,6 +26,15 @@ final class UnifiedLedgerWalletAmountResolver
             return $stored === 0.0 ? null : $stored;
         }
 
+        $sourceEarly = (string) ($meta['source'] ?? '');
+        $typeEarly = (string) $transaction->type;
+
+        // Processing → Available is a status change inside General Module — total BP unchanged.
+        // Check before bp_wallet_delta / spend heuristics so live rows never show ±N.
+        if ($typeEarly === 'bp_settlement' || $sourceEarly === 'bp_settlement') {
+            return 0.0;
+        }
+
         if (isset($meta['bp_wallet_delta']) && is_numeric($meta['bp_wallet_delta'])) {
             return round((float) $meta['bp_wallet_delta'], 2);
         }
@@ -42,13 +51,8 @@ final class UnifiedLedgerWalletAmountResolver
             return null;
         }
 
-        $source = (string) ($meta['source'] ?? '');
-        $type = (string) $transaction->type;
-
-        // Processing → Available moves do not change total BP.
-        if ($type === 'bp_settlement' || $source === 'bp_settlement') {
-            return 0.0;
-        }
+        $source = $sourceEarly;
+        $type = $typeEarly;
 
         // Refunded / reversed BP rows credit the supporter (+BP).
         if (strtoupper((string) ($transaction->currency ?? '')) === 'BP'
@@ -90,7 +94,7 @@ final class UnifiedLedgerWalletAmountResolver
         }
 
         // Org/recipient deposits and refunds that restore BP stay credits (+).
-        if (in_array((string) $transaction->type, ['deposit', 'credit', 'refund'], true)) {
+        if (in_array((string) $transaction->type, ['deposit', 'credit', 'refund', 'bp_settlement'], true)) {
             return false;
         }
 
@@ -110,6 +114,7 @@ final class UnifiedLedgerWalletAmountResolver
             'believe_points_purchase',
             'bp_gift_claimed',
             'bp_gift_received',
+            'bp_settlement',
         ], true)) {
             return false;
         }

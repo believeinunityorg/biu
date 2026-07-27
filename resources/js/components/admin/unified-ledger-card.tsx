@@ -197,13 +197,14 @@ function moduleLabel(m: string) {
     donation: "Donation",
     fundme: "Support a project",
     campaign: "Campaign",
-    believe_points: "Believe Points",
+    believe_points: "General",
     reward: "Reward",
     wallet: "Wallet",
     marketplace: "Marketplace",
-    gift_card: "Gift card",
+    gift_card: "Gift Card",
     servicehub: "Service Hub",
-    course: "Course",
+    connection_hub: "Learning Hub",
+    course: "Learning Hub",
     merchant_hub: "Merchant Hub",
     organization_subscription: "Org subscription",
     supporter_subscription: "Supporter subscription",
@@ -213,6 +214,23 @@ function moduleLabel(m: string) {
     adjustment: "Adjustment",
   }
   return map[m] ?? m.replace(/_/g, " ")
+}
+
+function moduleCellLabel(data: UnifiedLedgerRow): string {
+  const tt = (data.transaction_type || "").toLowerCase()
+  const event = (data.event_name || "").toLowerCase()
+  if (
+    tt === "bp_redemption" ||
+    tt === "believe_points_wallet_transfer" ||
+    event.includes("transfer to bridge wallet")
+  ) {
+    return "Bridge Wallet"
+  }
+  const hubType = (data.connection_hub_type || "").toLowerCase()
+  if ((data.module === "connection_hub" || data.module === "course") && hubType === "events") {
+    return "Events"
+  }
+  return moduleLabel(data.module)
 }
 
 function providerBadgeClass(p: string) {
@@ -318,40 +336,28 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-1">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <Badge variant="outline" className="shrink-0 font-mono text-[10px] uppercase tracking-wide">
-              {moduleLabel(data.module)}
+              {moduleCellLabel(data)}
             </Badge>
             <span className="text-muted-foreground max-sm:hidden">·</span>
             <span className="min-w-0 font-medium text-foreground">
-              {data.transaction_type?.startsWith("bp_gift")
-                ? data.event_name ||
-                  data.transaction_type
-                    .replace(/^bp_/, "")
-                    .replace(/_/g, " ")
-                    .replace(/\b\w/g, (c) => c.toUpperCase())
-                : data.transaction_type.replace(/_/g, " ")}
+              {data.event_name ||
+                (data.transaction_type?.startsWith("bp_gift")
+                  ? data.transaction_type
+                      .replace(/^bp_/, "")
+                      .replace(/_/g, " ")
+                      .replace(/\b\w/g, (c) => c.toUpperCase())
+                  : data.transaction_type.replace(/_/g, " "))}
             </span>
-            {data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift") ? (
-              <>
-                <span className="text-muted-foreground">·</span>
-                <span className="min-w-0 max-w-full truncate sm:max-w-[min(100%,220px)]" title={data.from_name ?? ""}>
-                  <span className="text-muted-foreground">Purchaser:</span>{" "}
-                  <span className="text-foreground">{data.from_name ?? "—"}</span>
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-muted-foreground max-sm:hidden">·</span>
-                <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 sm:max-w-none">
-                  <span className="truncate sm:max-w-[min(100%,11rem)]" title={data.from_name ?? ""}>
-                    {data.from_name ?? data.from_type}
-                  </span>
-                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground max-sm:rotate-90 sm:rotate-0" aria-hidden />
-                  <span className="truncate font-medium text-foreground sm:max-w-[min(100%,12rem)]" title={data.to_name ?? ""}>
-                    {data.to_name ?? data.to_type}
-                  </span>
-                </span>
-              </>
-            )}
+            <span className="text-muted-foreground max-sm:hidden">·</span>
+            <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1 gap-y-0.5 sm:max-w-none">
+              <span className="truncate sm:max-w-[min(100%,11rem)]" title={data.from_name ?? ""}>
+                {data.from_name ?? data.from_type}
+              </span>
+              <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground max-sm:rotate-90 sm:rotate-0" aria-hidden />
+              <span className="truncate font-medium text-foreground sm:max-w-[min(100%,12rem)]" title={data.to_name ?? ""}>
+                {data.to_name ?? data.to_type}
+              </span>
+            </span>
           </div>
           <div className="flex min-w-0 w-full flex-col gap-2 border-t border-primary/15 pt-2.5 sm:w-auto sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:border-t-0 sm:pt-0">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 tabular-nums">
@@ -485,38 +491,29 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
           </div>
         </div>
 
-        <div className={cn(
-          "grid min-w-0 gap-3 sm:gap-4",
-          data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift") ? "" : "lg:grid-cols-2",
-        )}>
+        <div className="grid min-w-0 gap-3 sm:gap-4 lg:grid-cols-2">
           <div className="min-w-0 rounded-xl border border-border/50 bg-background/80 p-3 shadow-sm sm:p-4">
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <User className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              {data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift")
-                ? "Purchaser"
-                : `From (${data.from_type})`}
+              From ({data.from_type})
             </div>
-            {!(data.module === "believe_points" && !data.transaction_type?.startsWith("bp_gift")) && (
-              <p className="mb-2 text-[10px] text-muted-foreground">
-                {data.transaction_type?.startsWith("bp_gift") ? "Sender" : "Payer"}
-              </p>
-            )}
+            <p className="mb-2 text-[10px] text-muted-foreground">
+              {data.transaction_type?.startsWith("bp_gift") ? "Sender" : "Source"}
+            </p>
             <p className="break-words text-base font-semibold text-foreground">{data.from_name ?? "—"}</p>
             <p className="break-all text-sm text-muted-foreground">{data.from_email ?? "—"}</p>
             {data.from_id != null && <p className="mt-1 font-mono text-[11px] text-muted-foreground">User ID {data.from_id}</p>}
           </div>
-          {(data.module !== "believe_points" || data.transaction_type?.startsWith("bp_gift")) && (
-            <div className="min-w-0 rounded-xl border border-border/50 bg-background/80 p-3 shadow-sm sm:p-4">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                To ({data.to_type})
-              </div>
-              <p className="mb-2 text-[10px] text-muted-foreground">Recipient</p>
-              <p className="break-words text-base font-semibold text-foreground">{data.to_name ?? "—"}</p>
-              <p className="break-all text-sm text-muted-foreground">{data.to_email ?? "—"}</p>
-              {data.to_id != null && <p className="mt-1 font-mono text-[11px] text-muted-foreground">ID {data.to_id}</p>}
+          <div className="min-w-0 rounded-xl border border-border/50 bg-background/80 p-3 shadow-sm sm:p-4">
+            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+              To ({data.to_type})
             </div>
-          )}
+            <p className="mb-2 text-[10px] text-muted-foreground">Destination</p>
+            <p className="break-words text-base font-semibold text-foreground">{data.to_name ?? "—"}</p>
+            <p className="break-all text-sm text-muted-foreground">{data.to_email ?? "—"}</p>
+            {data.to_id != null && <p className="mt-1 font-mono text-[11px] text-muted-foreground">ID {data.to_id}</p>}
+          </div>
         </div>
 
         <div className="min-w-0 rounded-xl border border-border/50 bg-muted/15 p-3 sm:p-4">

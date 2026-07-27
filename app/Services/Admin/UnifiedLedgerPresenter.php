@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\Admin\UnifiedLedgerClassificationService;
 use App\Services\EnrollmentLedgerService;
 use App\Support\ConnectionHubType;
+use App\Support\UnifiedLedgerBpModule;
 use App\Support\UnifiedLedgerType;
 
 /**
@@ -59,6 +60,17 @@ class UnifiedLedgerPresenter
             ? $this->resolveSupplierCostAmountFromOrder($orderForMarkup)
             : null;
 
+        if ($supplierCostAmount === null && $module === 'gift_card') {
+            $face = $ledgerReport['gift_card_face_value'] ?? $ledgerReport['subtotal_amount'] ?? null;
+            if (is_numeric($face) && (float) $face > 0) {
+                $supplierCostAmount = round((float) $face, 2);
+            }
+        }
+
+        $parties = $this->applyGeneralModuleTransferParties($t, $module, $connectionHubType, $parties);
+        $eventName = $this->resolveBpTransferEventName($t, $module, $connectionHubType)
+            ?? $this->resolveEventName($t);
+
         return [
             'txn_id' => $t->id,
             'datetime_iso' => $when->toIso8601String(),
@@ -102,7 +114,7 @@ class UnifiedLedgerPresenter
             'subscriber_email' => $subscriber['email'],
             'merchant_name' => $this->resolveMerchantName($t, $module, $parties),
             'campaign_name' => $this->resolveCampaignName($t, $module, $donationPayload, $related),
-            'event_name' => $this->resolveEventName($t),
+            'event_name' => $eventName,
             'connection_hub_type' => $connectionHubType,
             'connection_hub_type_label' => $connectionHubType !== null && $connectionHubType !== ''
                 ? ConnectionHubType::label($connectionHubType)
@@ -1406,6 +1418,16 @@ class UnifiedLedgerPresenter
             }
         }
 
+        // Gift card brand-aware fallback when meta.event_name is missing.
+        if ($this->isGiftCardPurchaseContext($t)) {
+            $brand = trim((string) ($meta['brand'] ?? $meta['brand_name'] ?? ''));
+            if ($brand !== '') {
+                return 'Purchased '.$brand.' Gift Card';
+            }
+
+            return 'Transfer BP to Gift Card Module';
+        }
+
         if (! empty($meta['course_id']) && is_numeric($meta['course_id'])) {
             $courseName = \App\Models\Course::query()->whereKey((int) $meta['course_id'])->value('name');
             if (is_string($courseName) && trim($courseName) !== '') {
@@ -1490,6 +1512,24 @@ class UnifiedLedgerPresenter
                 'split' => 0,
                 'refund' => 0,
                 'net' => $brpAmount > 0 ? $brpAmount : null,
+                'processor_fee' => 0,
+            ];
+        }
+
+        // Settlement is a status change inside General Module — not a buy/sell.
+        $metaSource = (string) ($meta['source'] ?? '');
+        if ($t->type === 'bp_settlement' || $metaSource === 'bp_settlement') {
+            return [
+                'subtotal' => null,
+                'sales_tax' => null,
+                'shipping' => null,
+                'gross' => 0,
+                'stripe_fee' => 0,
+                'bridge_fee' => 0,
+                'biu_fee' => 0,
+                'split' => 0,
+                'refund' => 0,
+                'net' => null,
                 'processor_fee' => 0,
             ];
         }
@@ -1655,18 +1695,18 @@ class UnifiedLedgerPresenter
         }
         if ($sourceType === 'bp_redemption' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'BP redemption refund #'.$t->related_id
-                : 'BP redemption #'.$t->related_id;
+                ? 'Transfer to Bridge Wallet refund #'.$t->related_id
+                : 'Transfer to Bridge Wallet #'.$t->related_id;
         }
         if ($sourceType === 'bridge_wallet_transfer' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'Bridge wallet transfer refund #'.$t->related_id
-                : 'Bridge wallet transfer #'.$t->related_id;
+                ? 'Bridge Wallet Transfer refund #'.$t->related_id
+                : 'Bridge Wallet Transfer #'.$t->related_id;
         }
         if ($sourceType === 'believe_points_wallet_transfer' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'BP redemption refund #'.$t->related_id
-                : 'BP redemption #'.$t->related_id;
+                ? 'Transfer to Bridge Wallet refund #'.$t->related_id
+                : 'Transfer to Bridge Wallet #'.$t->related_id;
         }
 
         $label = trim((string) ($related['related_label'] ?? ''));
@@ -1681,5 +1721,130 @@ class UnifiedLedgerPresenter
         }
 
         return '—';
+    }
+
+    /**
+     * BP spends: From General Module → destination module (presentation audit trail).
+     *
+     * @param  array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}  $parties
+     * @return array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}
+     */
+    private function applyGeneralModuleTransferParties(
+        Transaction $t,
+        string $module,
+        ?string $connectionHubType,
+        array $parties,
+    ): array {
+        $destination = $this->resolveBpSpendDestination($t, $module, $connectionHubType);
+        if ($destination === null) {
+            // Settlement stays inside General Module.
+            if ($t->type === 'bp_settlement' || (($t->meta['source'] ?? '') === 'bp_settlement')) {
+                return [
+                    'from_type' => 'module',
+                    'from_name' => UnifiedLedgerBpModule::generalLabel(),
+                    'from_email' => null,
+                    'from_id' => null,
+                    'to_type' => 'module',
+                    'to_name' => UnifiedLedgerBpModule::generalLabel(),
+                    'to_email' => null,
+                    'to_id' => null,
+                ];
+            }
+
+            return $parties;
+        }
+
+        return [
+            'from_type' => 'module',
+            'from_name' => UnifiedLedgerBpModule::generalLabel(),
+            'from_email' => null,
+            'from_id' => null,
+            'to_type' => 'module',
+            'to_name' => UnifiedLedgerBpModule::destinationLabel($destination),
+            'to_email' => null,
+            'to_id' => null,
+        ];
+    }
+
+    private function resolveBpTransferEventName(Transaction $t, string $module, ?string $connectionHubType): ?string
+    {
+        $meta = is_array($t->meta) ? $t->meta : [];
+        if (! empty($meta['event_name']) && is_string($meta['event_name'])) {
+            $existing = trim($meta['event_name']);
+            // Prefer stored transfer / settlement wording; upgrade legacy gift labels later via brand.
+            if ($existing !== '' && (
+                str_starts_with($existing, 'Transfer')
+                || $existing === 'BP Settlement'
+                || str_starts_with($existing, 'Gift ')
+                || $existing === 'BP Purchase'
+                || str_starts_with($existing, 'Purchased')
+            )) {
+                return $existing;
+            }
+        }
+
+        if ($t->type === 'bp_settlement' || ($meta['source'] ?? '') === 'bp_settlement') {
+            return 'BP Settlement';
+        }
+
+        $destination = $this->resolveBpSpendDestination($t, $module, $connectionHubType);
+        if ($destination === null) {
+            return null;
+        }
+
+        if ($destination === UnifiedLedgerBpModule::GIFT_CARD) {
+            $brand = trim((string) ($meta['brand'] ?? $meta['brand_name'] ?? ''));
+            if ($brand !== '') {
+                return 'Purchased '.$brand.' Gift Card';
+            }
+        }
+
+        return UnifiedLedgerBpModule::transferEventName($destination);
+    }
+
+    private function resolveBpSpendDestination(Transaction $t, string $module, ?string $connectionHubType): ?string
+    {
+        $meta = is_array($t->meta) ? $t->meta : [];
+
+        if ($this->isBelievePointGiftTransaction($t)) {
+            return null;
+        }
+
+        $source = (string) ($meta['source'] ?? '');
+        $type = (string) $t->type;
+
+        if ($type === 'bp_settlement' || $source === 'bp_settlement') {
+            return null;
+        }
+
+        if (in_array($source, ['believe_points_purchase_bp', 'believe_points_purchase'], true)
+            || ($meta['ledger_role'] ?? '') === 'bp_credit') {
+            return null;
+        }
+
+        if (in_array($source, ['bp_redemption', 'believe_points_wallet_transfer'], true)
+            || in_array($type, ['bp_redemption', 'believe_points_wallet_transfer'], true)) {
+            return UnifiedLedgerBpModule::BRIDGE_WALLET;
+        }
+
+        if ($source === 'bridge_wallet_transfer' || $type === 'bridge_wallet_transfer') {
+            // Money-side Bridge row — not a BP General Module spend.
+            return null;
+        }
+
+        if (! UnifiedLedgerWalletAmountResolver::isBelievePointsPaidSpend($t, $meta)) {
+            return null;
+        }
+
+        $fromModule = UnifiedLedgerBpModule::destinationFromPresenterModule($module, $connectionHubType);
+        if ($fromModule !== null) {
+            return $fromModule;
+        }
+
+        if ($this->isGiftCardPurchaseContext($t)) {
+            return UnifiedLedgerBpModule::GIFT_CARD;
+        }
+
+        return null;
     }
 }

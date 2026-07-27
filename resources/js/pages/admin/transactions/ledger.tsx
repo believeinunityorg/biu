@@ -567,14 +567,14 @@ function moduleTableLabel(m: string) {
     donation: "Donation",
     fundme: "Support a project",
     campaign: "Campaign",
-    believe_points: "Believe Points",
+    believe_points: "General",
     reward: "Reward",
     wallet: "Wallet",
     marketplace: "Marketplace",
-    gift_card: "Gift card",
+    gift_card: "Gift Card",
     servicehub: "Service Hub",
-    connection_hub: "Connection Hub",
-    course: "Connection Hub",
+    connection_hub: "Learning Hub",
+    course: "Learning Hub",
     merchant_hub: "Merchant Hub",
     organization_subscription: "Org sub",
     supporter_subscription: "Supporter sub",
@@ -588,12 +588,30 @@ function moduleTableLabel(m: string) {
 
 function moduleCellLabel(u: UnifiedLedgerRow | undefined): string {
   if (!u) return "—"
-  const base = moduleTableLabel(u.module)
-  const hubType = u.connection_hub_type_label?.trim()
-  if ((u.module === "connection_hub" || u.module === "course") && hubType) {
-    return `${base} · ${hubType}`
+  const tt = (u.transaction_type || "").toLowerCase()
+  const event = (u.event_name || "").toLowerCase()
+
+  if (
+    tt === "bp_redemption" ||
+    tt === "believe_points_wallet_transfer" ||
+    event.includes("transfer to bridge wallet")
+  ) {
+    return "Bridge Wallet"
   }
-  return base
+
+  if (u.module === "believe_points") {
+    return "General"
+  }
+
+  const hubType = (u.connection_hub_type || "").toLowerCase()
+  if ((u.module === "connection_hub" || u.module === "course") && hubType === "events") {
+    return "Events"
+  }
+  if (u.module === "connection_hub" || u.module === "course") {
+    return "Learning Hub"
+  }
+
+  return moduleTableLabel(u.module)
 }
 
 function supplierTypeBadgeClassTable(supplierType: string) {
@@ -651,19 +669,11 @@ function processorFeeRailBadgeClass(kind: "stripe" | "bridge") {
 
 function partiesSummary(u: UnifiedLedgerRow | undefined): string {
   if (!u) return "—"
-  const isBpGift =
-    u.transaction_type?.startsWith("bp_gift") ||
-    (typeof u.event_name === "string" &&
-      (u.event_name.startsWith("Gift ") || u.event_name.toLowerCase().includes("bp gift")))
-  // Gift BP and most modules: Sender → Recipient. Purchases keep "Purchaser:" shorthand.
-  if (u.module === "believe_points" && !isBpGift) {
-    const name = (u.from_name ?? u.from_type)?.trim()
-    return name ? `Purchaser: ${name}` : "—"
-  }
   const from = u.from_name ?? u.from_type
   const to = u.to_name ?? u.to_type
   if (!from && !to) return "—"
   if (!to) return String(from)
+  if (!from) return String(to)
   return `${from} → ${to}`
 }
 

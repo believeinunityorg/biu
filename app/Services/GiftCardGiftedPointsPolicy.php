@@ -5,8 +5,8 @@ namespace App\Services;
 /**
  * Closed-loop vs open-loop gift card classification.
  *
- * Closed-loop: buy with Available BP; Gift BP reporting decreases with the spend.
- * Open-loop (Visa/Mastercard): Believe Points cannot purchase — use Bridge Wallet.
+ * Closed-loop: buy with full Available BP; Gift BP reporting decreases with the spend.
+ * Open-loop (Visa/Mastercard): purchased BP only (Available − Gift); Gift reporting unchanged.
  */
 class GiftCardGiftedPointsPolicy
 {

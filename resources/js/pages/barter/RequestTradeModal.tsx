@@ -52,8 +52,21 @@ export default function RequestTradeModal({
   const [submitting, setSubmitting] = useState(false);
 
   const page = usePage();
-  const auth = page.props?.auth as { user?: { believe_points?: number } };
-  const balance = Number(auth?.user?.believe_points ?? 0);
+  const auth = page.props?.auth as {
+    user?: {
+      believe_points?: number
+      gifted_believe_points?: number
+      purchased_believe_points?: number
+    }
+  };
+  // Barter spends purchased BP only (Gift BP is gift-card-only).
+  const balance = Number(
+    auth?.user?.purchased_believe_points ??
+      Math.max(
+        0,
+        Number(auth?.user?.believe_points ?? 0) - Number(auth?.user?.gifted_believe_points ?? 0)
+      )
+  );
   const requiredPoints = requestedListing.points_value;
   const canPayPointsOnly = balance >= requiredPoints;
   const rawErrors = (page.props?.errors as Record<string, string | string[]> | undefined) ?? {};

@@ -226,6 +226,7 @@ class AuthController extends Controller
                 'reward_points' => $user->reward_points ?? 0,
                 'believe_points' => $user->believe_points ?? 0,
                 'gifted_believe_points' => $user->gifted_believe_points ?? 0,
+                'purchased_believe_points' => $user->purchasedBelievePointsBalance(),
                 'believe_points_total' => $user->totalBelievePointsBalance(),
                 'email_verified_at' => $user->email_verified_at ? $user->email_verified_at->toIso8601String() : null,
                 'role' => $user->role ?? 'user',

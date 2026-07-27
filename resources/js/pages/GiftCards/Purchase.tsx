@@ -52,7 +52,18 @@ export default function PurchasePage({ brand, stripeKey, user }: PurchaseProps) 
     const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'believe_points'>('stripe')
     const page = usePage()
     const auth = (page.props as any).auth
-    const currentBalance = parseFloat(auth?.user?.believe_points) || 0
+    const availableBalance = parseFloat(auth?.user?.believe_points) || 0
+    const giftedBalance = parseFloat(auth?.user?.gifted_believe_points) || 0
+    const purchasedBalance =
+        parseFloat(auth?.user?.purchased_believe_points) ||
+        Math.max(0, availableBalance - giftedBalance)
+    const brandNameLower = (brand.brandName || '').toLowerCase()
+    const isClosedLoop =
+        !/\bvisa\b/.test(brandNameLower) &&
+        !/\bmastercard\b/.test(brandNameLower) &&
+        !/\bmaster card\b/.test(brandNameLower)
+    // Closed-loop gift cards: full Available. Visa/MC: purchased only.
+    const currentBalance = isClosedLoop ? availableBalance : purchasedBalance
     const csrf_token = (page.props as any).csrf_token
 
     // Get CSRF token on component mount

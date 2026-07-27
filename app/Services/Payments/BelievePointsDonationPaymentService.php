@@ -32,8 +32,9 @@ class BelievePointsDonationPaymentService implements PaymentServiceInterface
         $pointsRequired = (float) $donation->amount;
         $user->refresh();
 
+        // Donations use purchased + processing only (Gift BP is gift-card-only).
         $donateable = round(
-            (float) ($user->believe_points ?? 0) + (float) ($user->processing_believe_points ?? 0),
+            $user->purchasedBelievePointsBalance() + (float) ($user->processing_believe_points ?? 0),
             2
         );
 
@@ -42,7 +43,7 @@ class BelievePointsDonationPaymentService implements PaymentServiceInterface
             $paymentTransaction->update(['status' => PaymentTransaction::STATUS_REJECTED]);
 
             return redirect()->back()->withErrors([
-                'payment_method' => "Insufficient Believe Points. You need {$pointsRequired} points (available + processing) but only have {$donateable}.",
+                'payment_method' => "Insufficient purchased Believe Points. You need {$pointsRequired} points (purchased + processing) but only have {$donateable} (Gift BP can only be used for gift cards).",
             ]);
         }
 

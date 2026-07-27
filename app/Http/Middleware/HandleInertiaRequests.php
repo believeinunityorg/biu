@@ -245,8 +245,10 @@ class HandleInertiaRequests extends Middleware
                         'processing_believe_points_release_at' => ((float) ($user->processing_believe_points ?? 0) > 0)
                             ? $user->nextProcessingBelievePointsReleaseAt()?->toIso8601String()
                             : null,
+                        // Gift BP is only spendable in the Gift Card module. Everywhere else uses purchased.
+                        'purchased_believe_points' => $user->purchasedBelievePointsBalance(),
                         'donateable_believe_points' => round(
-                            (float) ($user->believe_points ?? 0) + (float) ($user->processing_believe_points ?? 0),
+                            $user->purchasedBelievePointsBalance() + (float) ($user->processing_believe_points ?? 0),
                             2
                         ),
                         'gifted_believe_points' => $user->gifted_believe_points ?? 0,

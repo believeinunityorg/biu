@@ -90,7 +90,7 @@ function Step2Form({
   const [paymentMethod, setPaymentMethod] = useState<'stripe' | 'believe_points'>('stripe')
   const page = usePage()
   const auth = (page.props as any).auth
-  const currentBalance = parseFloat(auth?.user?.believe_points) || 0
+  const currentBalance = parseFloat(auth?.user?.purchased_believe_points) || Math.max(0, (parseFloat(auth?.user?.believe_points) || 0) - (parseFloat(auth?.user?.gifted_believe_points) || 0))
 
   // State for current amounts
   const [currentTaxAmount, setCurrentTaxAmount] = useState(step2Data.taxAmount)
@@ -700,10 +700,10 @@ function Step2Form({
                     )}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Your balance: {currentBalance.toFixed(2)} points
+                    Your purchased balance: {currentBalance.toFixed(2)} points
                     {hasEnoughPoints && (
                       <span className="text-green-600 dark:text-green-400 ml-2">
-                        (You'll have {(currentBalance - pointsRequired).toFixed(2)} points remaining)
+                        (You'll have {(currentBalance - pointsRequired).toFixed(2)} purchased points remaining)
                       </span>
                     )}
                   </div>
@@ -714,7 +714,7 @@ function Step2Form({
             {paymentMethod === 'believe_points' && !hasEnoughPoints && (
               <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <p className="text-sm text-red-700 dark:text-red-300">
-                  You need {pointsRequired.toFixed(2)} points but only have {currentBalance.toFixed(2)} points.
+                  You need {pointsRequired.toFixed(2)} purchased points but only have {currentBalance.toFixed(2)}. Gift BP can only be used for gift cards.
                 </p>
               </div>
             )}

@@ -34,8 +34,9 @@ use Illuminate\Validation\ValidationException;
  * - Existing supporter: Available → recipient Available + Gift BP reporting (no Holding).
  * - Unregistered email: Available → Holding → Pending until register/claim → Available + Gift reporting.
  *
- * Gift BP (`gifted_believe_points`) is reporting only — how much Available BP was received as gifts.
- * All BIU spend checks Available (`believe_points`) only.
+ * Gift BP (`gifted_believe_points`) is reporting of gift-received Available BP.
+ * Outside Gift Cards, spend uses purchased only (`Available − Gift`). Gift Cards: closed-loop uses
+ * full Available; Visa/MC uses purchased only.
  */
 class BelievePointGiftInviteService
 {

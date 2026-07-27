@@ -647,7 +647,7 @@ export default function BelievePointsIndex({
     }
 
     if (amount > localBalance + 0.0001) {
-      showErrorToast("Insufficient purchased Believe Points. Gifted points cannot be moved to your wallet.")
+      showErrorToast("Insufficient Available Believe Points to move to your wallet.")
       return
     }
 
@@ -1272,7 +1272,7 @@ export default function BelievePointsIndex({
                                     <li>Be funded via Believe wallet balances, virtual accounts, or Bridge (purchases on this page use Stripe card or US bank)</li>
                                   </ul>
                                   <p className="text-muted-foreground mt-2">
-                                    Purchased Believe Points may be moved into your verified Believe Bridge wallet when that feature is enabled. Gifted points cannot be moved to your wallet.
+                                    Available Believe Points may be moved into your verified Believe Bridge wallet when that feature is enabled.
                                   </p>
                                 </div>
 
@@ -1305,7 +1305,7 @@ export default function BelievePointsIndex({
                                 <div>
                                   <h3 className="font-semibold text-base mb-2">6. Separation From Wallet & Payments</h3>
                                   <p className="text-muted-foreground">
-                                    Believe operates a separate financial wallet system for real money transactions. Purchased Points may be moved into your verified Believe Bridge wallet when enabled. Gifted points cannot be moved. Wallet funds cannot be used to acquire Points.
+                                    Believe operates a separate financial wallet system for real money transactions. Available Points may be moved into your verified Believe Bridge wallet when enabled. Wallet funds cannot be used to acquire Points.
                                   </p>
                                 </div>
 

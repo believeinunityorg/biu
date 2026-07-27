@@ -229,7 +229,7 @@ export function PointsBalanceSummary({ user }: { user: PointsUser }) {
           >
             <span className="flex items-center gap-2">
               <Gift className="h-5 w-5 shrink-0" aria-hidden />
-              {fmt(giftedBelieve)} Gifted
+              {fmt(giftedBelieve)} Gift BP received
             </span>
             <ChevronRight className="h-5 w-5" />
           </Link>

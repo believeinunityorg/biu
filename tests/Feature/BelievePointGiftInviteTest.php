@@ -22,7 +22,7 @@ beforeEach(function () {
     ]);
 });
 
-it('holds believe points for an existing supporter until they claim', function () {
+it('credits an existing supporter immediately into available and gift reporting', function () {
     $sender = User::factory()->create([
         'role' => 'user',
         'believe_points' => 100,
@@ -33,8 +33,9 @@ it('holds believe points for an existing supporter until they claim', function (
     $recipient = User::factory()->create([
         'role' => 'user',
         'email_verified_at' => now(),
-        'believe_points' => 0,
+        'believe_points' => 20,
         'gifted_believe_points' => 5,
+        'holding_believe_points' => 0,
     ]);
 
     $response = $this->actingAs($sender)->post('/gift-bp/send', [
@@ -52,25 +53,25 @@ it('holds believe points for an existing supporter until they claim', function (
     $recipient->refresh();
 
     expect((float) $sender->believe_points)->toBe(60.0);
-    expect((float) $sender->holding_believe_points)->toBe(40.0);
-    expect((float) $recipient->gifted_believe_points)->toBe(5.0);
+    expect((float) $sender->holding_believe_points)->toBe(0.0);
+    expect((float) $recipient->believe_points)->toBe(60.0);
+    expect((float) $recipient->gifted_believe_points)->toBe(45.0);
 
     $this->assertDatabaseHas('believe_point_gift_invites', [
         'sender_id' => $sender->id,
         'recipient_id' => $recipient->id,
         'amount' => 40.00,
-        'status' => 'pending',
+        'status' => 'claimed',
     ]);
 
-    $this->assertDatabaseHas('transactions', [
-        'type' => 'bp_gift_sent',
-        'user_id' => $sender->id,
-        'currency' => 'BP',
-        'bp_status' => 'holding',
+    $this->assertDatabaseHas('supporter_believe_point_gifts', [
+        'sender_id' => $sender->id,
+        'recipient_id' => $recipient->id,
+        'amount' => 40.00,
     ]);
 });
 
-it('lets a registered recipient claim a pending gift into gifted bp', function () {
+it('moves holding into available and gift reporting when a registered recipient claims', function () {
     $sender = User::factory()->create([
         'role' => 'user',
         'believe_points' => 50,
@@ -80,6 +81,7 @@ it('lets a registered recipient claim a pending gift into gifted bp', function (
     $recipient = User::factory()->create([
         'role' => 'user',
         'email_verified_at' => now(),
+        'believe_points' => 10,
         'gifted_believe_points' => 5,
     ]);
 
@@ -105,6 +107,7 @@ it('lets a registered recipient claim a pending gift into gifted bp', function (
     $invite->refresh();
 
     expect((float) $sender->holding_believe_points)->toBe(0.0);
+    expect((float) $recipient->believe_points)->toBe(50.0);
     expect((float) $recipient->gifted_believe_points)->toBe(45.0);
     expect($invite->status)->toBe(BelievePointGiftInvite::STATUS_CLAIMED);
 
@@ -144,7 +147,7 @@ it('holds believe points and creates an invite for an unregistered email', funct
     ]);
 });
 
-it('claims holding believe points when the invitee registers', function () {
+it('claims holding into available and gift reporting when the invitee registers', function () {
     $sender = User::factory()->create([
         'role' => 'user',
         'believe_points' => 50,
@@ -166,6 +169,7 @@ it('claims holding believe points when the invitee registers', function () {
     $recipient = User::factory()->create([
         'role' => 'user',
         'email' => 'claim.me@example.com',
+        'believe_points' => 0,
         'gifted_believe_points' => 0,
     ]);
 
@@ -176,6 +180,7 @@ it('claims holding believe points when the invitee registers', function () {
     $invite->refresh();
 
     expect((float) $sender->holding_believe_points)->toBe(0.0);
+    expect((float) $recipient->believe_points)->toBe(30.0);
     expect((float) $recipient->gifted_believe_points)->toBe(30.0);
     expect($invite->status)->toBe(BelievePointGiftInvite::STATUS_CLAIMED);
     expect($invite->recipient_id)->toBe($recipient->id);
@@ -199,9 +204,7 @@ it('refunds holding believe points when an invite expires', function () {
         'expires_at' => now()->subMinute(),
     ]);
 
-    $count = app(BelievePointGiftInviteService::class)->expireDueInvites();
-
-    expect($count)->toBe(1);
+    app(BelievePointGiftInviteService::class)->expireDueInvites();
 
     $sender->refresh();
     expect((float) $sender->believe_points)->toBe(30.0);

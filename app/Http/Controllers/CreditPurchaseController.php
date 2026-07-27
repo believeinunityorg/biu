@@ -230,10 +230,10 @@ class CreditPurchaseController extends Controller
         return DB::transaction(function () use ($user, $amountUsd, $creditsToAdd, $packageKey, $returnRoute) {
             $user->refresh();
 
-            $deducted = $user->deductBelievePointsForGiftCard($amountUsd, true);
-            if ($deducted === null) {
+            $deducted = $user->deductBelievePoints($amountUsd);
+            if (! $deducted) {
                 throw ValidationException::withMessages([
-                    'message' => 'Insufficient Believe Points balance.',
+                    'message' => 'Insufficient purchased Believe Points. Gift BP can only be spent on gift cards.',
                 ]);
             }
 
@@ -255,8 +255,8 @@ class CreditPurchaseController extends Controller
                     'credits_to_add' => $creditsToAdd,
                     'package' => $packageKey,
                     'description' => "Purchase {$creditsToAdd} credits (Believe Points)",
-                    'bip_from_gifted' => $deducted['from_gifted'],
-                    'bip_from_purchased' => $deducted['from_purchased'],
+                    'bip_from_gifted' => 0,
+                    'bip_from_purchased' => $amountUsd,
                     'credits_added' => $creditsToAdd,
                     'ai_tokens_included_added' => $aiTokensIncludedAdded,
                 ],

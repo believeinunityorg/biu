@@ -15,7 +15,7 @@
         </p>
         <p style="font-size: 15px; color: #555;">
             Those points moved to <strong>Holding</strong> for {{ $holdDays }} days (until {{ $expiresAt }}).
-            When they register as a supporter with that email, the gift is credited to their Gifted BP balance.
+            When they register as a supporter with that email, the gift is credited to their Available BP (Gift BP reporting updates).
             If they don’t register in time, the points return to your Available balance.
         </p>
         <p style="font-size: 15px; color: #555;">

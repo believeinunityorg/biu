@@ -102,6 +102,7 @@ interface GiftToCollect {
 
 interface GiftBpPageProps {
   senderBalances: {
+    available_believe_points: number
     purchased_believe_points: number
     gifted_believe_points: number
     holding_believe_points: number
@@ -246,6 +247,7 @@ export default function GiftBpPage() {
     if (v !== "custom") setData("amount", v)
   }
 
+  const available = senderBalances.available_believe_points
   const purchased = senderBalances.purchased_believe_points
   const holding = senderBalances.holding_believe_points
   const canSubmit = mode !== null && data.amount > 0 && purchased >= data.amount && !processing
@@ -422,22 +424,28 @@ export default function GiftBpPage() {
               <p className="text-xs font-medium text-white/80 sm:text-sm">Believe Points</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl md:text-4xl">Gift BP</h1>
               <p className="mt-2 text-sm leading-relaxed text-white/85 sm:mt-3 sm:text-base">
-                Send Believe Points like a real gift. They stay in Holding until the recipient Accepts —
-                then land in their Gifted BP wallet.
+                Send Believe Points like a real gift. Existing supporters receive Available BP right away
+                (Gift BP reporting updates). Invites to new emails stay in Holding until they register.
               </p>
             </div>
-            <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-3 lg:min-w-[22rem]">
+            <div className="grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-3 lg:min-w-[28rem]">
               <div className="rounded-xl bg-white/15 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
                 <p className="text-[10px] uppercase tracking-wide text-white/70 sm:text-[11px]">Available</p>
+                <p className="mt-0.5 text-base font-semibold tabular-nums sm:mt-1 sm:text-xl">{available.toFixed(0)}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-400/20 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
+                <p className="text-[10px] uppercase tracking-wide text-emerald-50/90 sm:text-[11px]">Purchased</p>
                 <p className="mt-0.5 text-base font-semibold tabular-nums sm:mt-1 sm:text-xl">{purchased.toFixed(0)}</p>
+              </div>
+              <div className="rounded-xl bg-white/15 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
+                <p className="text-[10px] uppercase tracking-wide text-white/70 sm:text-[11px]">Gift received</p>
+                <p className="mt-0.5 text-base font-semibold tabular-nums sm:mt-1 sm:text-xl">
+                  {senderBalances.gifted_believe_points.toFixed(0)}
+                </p>
               </div>
               <div className="rounded-xl bg-amber-400/25 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
                 <p className="text-[10px] uppercase tracking-wide text-amber-50/90 sm:text-[11px]">Holding</p>
                 <p className="mt-0.5 text-base font-semibold tabular-nums sm:mt-1 sm:text-xl">{holding.toFixed(0)}</p>
-              </div>
-              <div className="rounded-xl bg-white/15 px-2 py-2.5 backdrop-blur-sm sm:rounded-2xl sm:px-4 sm:py-3">
-                <p className="text-[10px] uppercase tracking-wide text-white/70 sm:text-[11px]">Window</p>
-                <p className="mt-0.5 text-base font-semibold sm:mt-1 sm:text-xl">{holdDays}d</p>
               </div>
             </div>
           </div>
@@ -450,7 +458,7 @@ export default function GiftBpPage() {
               <div>
                 <h2 className="text-lg font-semibold tracking-tight dark:text-white">Gifts to collect</h2>
                 <p className="text-sm text-muted-foreground">
-                  Accept to add BP to your gift wallet.
+                  Accept to add BP to your Available balance (Gift BP reporting updates).
                 </p>
               </div>
               <Badge className="bg-gradient-to-r from-purple-600 to-blue-600 text-white border-0">
@@ -733,10 +741,19 @@ export default function GiftBpPage() {
                   <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/[0.07] p-3.5 text-sm text-amber-950 dark:text-amber-100">
                     <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
                     <p className="leading-relaxed">
-                      <strong className="font-semibold">{data.amount.toFixed(2)} BP</strong> moves to Holding
-                      until {mode === "invite" ? data.email : recipientLabel} accepts
-                      {mode === "invite" ? " (after registering)" : ""}. Cancel anytime before accept;
-                      unclaimed gifts return after {holdDays} days.
+                      {mode === "invite" ? (
+                        <>
+                          <strong className="font-semibold">{data.amount.toFixed(2)} BP</strong> moves to
+                          Holding until {data.email || "they"} register. Cancel anytime before they claim;
+                          unclaimed gifts return after {holdDays} days.
+                        </>
+                      ) : (
+                        <>
+                          <strong className="font-semibold">{data.amount.toFixed(2)} BP</strong> goes
+                          straight to {recipientLabel || "their"} Available BP. Gift BP reporting increases
+                          by the same amount.
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -753,7 +770,7 @@ export default function GiftBpPage() {
                     ) : mode === "invite" ? (
                       "Send invite & hold BP"
                     ) : (
-                      "Send gift & hold BP"
+                      "Send gift"
                     )}
                   </Button>
                 </form>
@@ -773,25 +790,25 @@ export default function GiftBpPage() {
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-600/15 text-[10px] font-bold text-purple-700 dark:text-purple-300">
                     1
                   </span>
-                  <span>Your Available BP moves to Holding when you send.</span>
+                  <span>Existing supporters get Available BP immediately (Gift BP reporting updates).</span>
                 </li>
                 <li className="flex gap-2.5">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-600/15 text-[10px] font-bold text-purple-700 dark:text-purple-300">
                     2
                   </span>
-                  <span>They get notified and Accept / Collect when ready.</span>
+                  <span>New emails: Available moves to Holding until they register and claim.</span>
                 </li>
                 <li className="flex gap-2.5">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-600/15 text-[10px] font-bold text-purple-700 dark:text-purple-300">
                     3
                   </span>
-                  <span>BP lands in their Gifted wallet — spendable, not re-giftable.</span>
+                  <span>Closed-loop gift cards use full Available (Purchased + Gift). Visa/MC need purchased BP only. Other modules use Available − Gift.</span>
                 </li>
               </ol>
             </div>
             <div className="rounded-3xl border border-dashed border-muted-foreground/25 px-5 py-4 text-sm text-muted-foreground">
-              Uses <strong className="text-foreground">purchased Available BP</strong> only. Gifted BP you
-              received cannot be re-sent.
+              Gifts are sent from your <strong className="text-foreground">purchased BP</strong> only
+              (Available − Gift). Gift BP can only be spent in the Gift Card module.
             </div>
           </aside>
         </section>

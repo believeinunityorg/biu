@@ -33,6 +33,7 @@ interface GiftOccasion {
 }
 
 interface SenderBalances {
+  available_believe_points: number
   purchased_believe_points: number
   gifted_believe_points: number
 }
@@ -78,6 +79,7 @@ export default function BirthdayGiftPage() {
     })
   }
 
+  const available = senderBalances.available_believe_points
   const purchased = senderBalances.purchased_believe_points
   const gifted = senderBalances.gifted_believe_points
 
@@ -180,15 +182,15 @@ export default function BirthdayGiftPage() {
                 <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
                   <Gift className="h-4 w-4" />
                   <span>
-                    Purchased balance: <strong>{purchased.toFixed(2)}</strong>
+                    Purchased BP (can gift): <strong>{purchased.toFixed(2)}</strong>
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  BP moves to Holding until they Accept / Collect, then to their Gifted BP wallet (not re-giftable).
+                  Gift BP can only buy gift cards — not be re-gifted. Available: {available.toFixed(2)}.
                 </p>
                 {gifted > 0 && (
                   <span className="text-xs text-muted-foreground">
-                    Your Gifted BP balance cannot be re-sent.
+                    Gift BP received: {gifted.toFixed(2)}
                   </span>
                 )}
               </div>
@@ -204,7 +206,7 @@ export default function BirthdayGiftPage() {
                     Sending…
                   </>
                 ) : (
-                  "Send gift & hold BP"
+                  "Send gift"
                 )}
               </Button>
             </form>

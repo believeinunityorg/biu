@@ -1161,16 +1161,29 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Deduct believe points from the user's balance.
+     * Deduct purchased Believe Points from Available for non–gift-card BIU spends
+     * (marketplace, events, merchants, credits, re-gifting, Bridge, etc.).
      *
-     * @return bool Returns true if deduction was successful, false if insufficient points
+     * Gift BP reporting is included in Available but may only be spent via the Gift Card module.
+     * Purchased BP = Available − Gift reporting.
+     *
+     * @return bool Returns true if deduction was successful, false if insufficient purchased BP
      */
     public function deductBelievePoints(float $points): bool
     {
-        if ($this->believe_points < $points) {
+        $points = round(max(0, (float) $points), 2);
+        if ($points <= 0) {
+            return true;
+        }
+
+        $this->refresh();
+        if ($this->purchasedBelievePointsBalance() + 0.000001 < $points) {
             return false;
         }
+
         $this->decrement('believe_points', $points);
+        // Gift reporting unchanged when spending purchased BP.
+        $this->clampGiftBelievePointsReporting();
 
         ProcessBelievePointsAutoReplenishJob::dispatch($this->id)->afterResponse();
 
@@ -1178,18 +1191,34 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Purchased Believe Points + Gifted Believe Points (display total wallet).
+     * Settled Available Believe Points (spendable). Gift BP is reporting-only and is
+     * always a subset of this balance (never additional BP).
      */
     public function totalBelievePointsBalance(): float
     {
-        $p = round((float) ($this->believe_points ?? 0), 2);
-        $g = round((float) ($this->gifted_believe_points ?? 0), 2);
-
-        return round($p + $g, 2);
+        return round((float) ($this->believe_points ?? 0), 2);
     }
 
     /**
-     * Credit points received as a supporter gift (restricted bucket).
+     * Ensure Gift BP reporting never exceeds Available BP.
+     */
+    public function clampGiftBelievePointsReporting(): void
+    {
+        $available = round((float) ($this->believe_points ?? 0), 2);
+        $gifted = round((float) ($this->gifted_believe_points ?? 0), 2);
+
+        if ($gifted <= $available + 0.000001) {
+            return;
+        }
+
+        $this->forceFill([
+            'gifted_believe_points' => max(0, $available),
+        ])->saveQuietly();
+    }
+
+    /**
+     * Credit a received gift: Available BP increases, and Gift BP reporting increases by the same amount.
+     * Gift BP is not a separate spendable wallet.
      */
     public function addGiftedBelievePoints(float $points): void
     {
@@ -1197,96 +1226,131 @@ class User extends Authenticatable implements MustVerifyEmail
         if ($points <= 0) {
             return;
         }
+        $this->increment('believe_points', $points);
         $this->increment('gifted_believe_points', $points);
     }
 
     /**
-     * Deduct Available (purchased) Believe Points for a gift card redemption.
-     * Gifted BP cannot be used for gift cards.
+     * Purchased portion of Available BP (Available − Gift reporting).
+     * Usable for every BIU spend except the Gift Card module (that uses full Available).
      */
-    public function deductAvailableBelievePointsForGiftCard(float $amount): bool
+    public function purchasedBelievePointsBalance(): float
+    {
+        $available = round((float) ($this->believe_points ?? 0), 2);
+        $gifted = round((float) ($this->gifted_believe_points ?? 0), 2);
+
+        return round(max(0, $available - min($gifted, $available)), 2);
+    }
+
+    /**
+     * Deduct BP for the Gift Card module.
+     *
+     * Closed-loop: full Available (Purchased + Gift); Gift reporting decreases by min(Gift, amount).
+     * Visa/MC open-loop: purchased only (Available − Gift); Gift reporting unchanged.
+     *
+     * @return array{from_gifted: float}|null Null if insufficient eligible BP.
+     */
+    public function deductAvailableBelievePointsForGiftCard(float $amount, bool $isClosedLoop = true): ?array
     {
         $amount = round(max(0, (float) $amount), 2);
         if ($amount <= 0) {
-            return true;
+            return ['from_gifted' => 0.0];
         }
 
         $this->refresh();
-        $purchased = round((float) ($this->believe_points ?? 0), 2);
+        $available = round((float) ($this->believe_points ?? 0), 2);
+        $gifted = round((float) ($this->gifted_believe_points ?? 0), 2);
+        $purchased = round(max(0, $available - min($gifted, $available)), 2);
 
-        if ($purchased < $amount - 0.000001) {
-            return false;
+        if ($isClosedLoop) {
+            if ($available < $amount - 0.000001) {
+                return null;
+            }
+
+            $fromGifted = round(min($gifted, $amount), 2);
+            if ($fromGifted > 0) {
+                $this->decrement('gifted_believe_points', $fromGifted);
+            }
+        } else {
+            // Visa/MC: cannot spend Gift BP — purchased portion only.
+            if ($purchased < $amount - 0.000001) {
+                return null;
+            }
+            $fromGifted = 0.0;
         }
 
         $this->decrement('believe_points', $amount);
+        $this->clampGiftBelievePointsReporting();
         ProcessBelievePointsAutoReplenishJob::dispatch($this->id)->afterResponse();
 
-        return true;
+        return ['from_gifted' => $fromGifted];
     }
 
     /**
      * Refund Available BP deducted for a pending or failed delayed gift card redemption.
+     * Optionally restore Gift BP reporting that was reduced on the original closed-loop purchase.
      */
-    public function refundAvailableBelievePointsForGiftCard(float $amount): void
+    public function refundAvailableBelievePointsForGiftCard(float $amount, float $restoreGiftReporting = 0): void
     {
         $amount = round(max(0, (float) $amount), 2);
-        if ($amount <= 0) {
+        $restoreGiftReporting = round(max(0, (float) $restoreGiftReporting), 2);
+        if ($amount <= 0 && $restoreGiftReporting <= 0) {
             return;
         }
 
-        $this->increment('believe_points', $amount);
+        if ($amount > 0) {
+            $this->increment('believe_points', $amount);
+        }
+        if ($restoreGiftReporting > 0) {
+            $this->increment('gifted_believe_points', $restoreGiftReporting);
+        }
+        $this->clampGiftBelievePointsReporting();
     }
 
     /**
-     * Deduct Believe Points for a gift-card purchase, consuming gifted balance first when the SKU allows it.
+     * Deduct Believe Points for the Gift Card module.
+     * Closed-loop: full Available. Visa/MC ($isClosedLoop=false): purchased only.
      *
-     * @return array{from_gifted: float, from_purchased: float}|null Null if insufficient balance.
+     * @return array{from_gifted: float, from_purchased: float}|null Null if insufficient eligible BP.
      */
-    public function deductBelievePointsForGiftCard(float $amount, bool $productAllowsGifted): ?array
+    public function deductBelievePointsForGiftCard(float $amount, bool $isClosedLoop = true): ?array
     {
         $amount = round(max(0, (float) $amount), 2);
         if ($amount <= 0) {
             return ['from_gifted' => 0.0, 'from_purchased' => 0.0];
         }
 
-        $this->refresh();
-        $gifted = round((float) ($this->gifted_believe_points ?? 0), 2);
-        $purchased = round((float) ($this->believe_points ?? 0), 2);
-
-        $fromGifted = $productAllowsGifted ? min($gifted, $amount) : 0.0;
-        $fromPurchased = round($amount - $fromGifted, 2);
-
-        if ($fromPurchased > $purchased + 0.000001) {
+        $result = $this->deductAvailableBelievePointsForGiftCard($amount, $isClosedLoop);
+        if ($result === null) {
             return null;
         }
 
-        if ($fromGifted > 0) {
-            $this->decrement('gifted_believe_points', $fromGifted);
-        }
-        if ($fromPurchased > 0) {
-            $this->decrement('believe_points', $fromPurchased);
-            ProcessBelievePointsAutoReplenishJob::dispatch($this->id)->afterResponse();
-        }
+        $fromGifted = $result['from_gifted'];
 
         return [
-            'from_gifted' => round($fromGifted, 2),
-            'from_purchased' => round($fromPurchased, 2),
+            'from_gifted' => $fromGifted,
+            'from_purchased' => round(max(0, $amount - $fromGifted), 2),
         ];
     }
 
     /**
-     * Refund a gift-card Believe Points payment back into the same buckets.
+     * Refund a gift-card Believe Points payment back to Available BP.
+     * Restores Gift BP reporting for the gifted portion when provided.
      */
     public function refundBelievePointsGiftCardBuckets(float $fromGifted, float $fromPurchased): void
     {
         $fromGifted = round(max(0, (float) $fromGifted), 2);
         $fromPurchased = round(max(0, (float) $fromPurchased), 2);
+        $total = round($fromGifted + $fromPurchased, 2);
+        if ($total <= 0) {
+            return;
+        }
+
+        $this->increment('believe_points', $total);
         if ($fromGifted > 0) {
             $this->increment('gifted_believe_points', $fromGifted);
         }
-        if ($fromPurchased > 0) {
-            $this->increment('believe_points', $fromPurchased);
-        }
+        $this->clampGiftBelievePointsReporting();
     }
 
     /**

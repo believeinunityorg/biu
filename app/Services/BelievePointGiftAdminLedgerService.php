@@ -87,7 +87,7 @@ final class BelievePointGiftAdminLedgerService
             amount: $amount,
             bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
             eventName: 'Gift Claimed',
-            description: "{$sender->name} gifted {$amount} BP — credited to {$recipientLabel}'s Gifted BP wallet.",
+            description: "{$sender->name} gifted {$amount} BP — Available +{$amount}; Gift BP reporting +{$amount}.",
             currentOwner: $recipient?->name ?? $recipientLabel,
             availableDelta: $amount,
             holdingDelta: -$amount,
@@ -107,6 +107,76 @@ final class BelievePointGiftAdminLedgerService
     {
         $invite->loadMissing('sender', 'recipient');
         self::writeGiftSent($invite);
+    }
+
+    /**
+     * Immediate gift to an existing supporter (no Holding): Available → Available + Gift reporting.
+     */
+    public static function recordImmediateGift(SupporterBelievePointGift $gift): void
+    {
+        $gift->loadMissing('sender', 'recipient');
+        if (! $gift->sender || round((float) $gift->amount, 2) <= 0) {
+            return;
+        }
+
+        $sender = $gift->sender;
+        $recipient = $gift->recipient;
+        $amount = round((float) $gift->amount, 2);
+        $recipientLabel = $recipient?->name ?: ($recipient?->email ?: 'Recipient');
+        $when = $gift->sent_at ?? $gift->created_at ?? now();
+
+        self::upsertEvent(
+            transactionId: 'bp_gift_sent:immediate:'.$gift->id,
+            user: $sender,
+            relatedId: $gift->id,
+            relatedType: SupporterBelievePointGift::class,
+            type: 'bp_gift_sent',
+            status: Transaction::STATUS_COMPLETED,
+            amount: -$amount,
+            bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
+            eventName: 'Gift Sent',
+            description: "Gift of {$amount} BP to {$recipientLabel}: Available −{$amount}. Delivered immediately.",
+            currentOwner: $recipient?->name ?? $recipientLabel,
+            availableDelta: -$amount,
+            holdingDelta: 0,
+            recipientBpDelta: 0,
+            processedAt: $when,
+            meta: self::partyMeta($sender, $recipient, $recipientLabel, [
+                'gift_status' => BelievePointGiftInvite::STATUS_CLAIMED,
+                'supporter_believe_point_gift_id' => $gift->id,
+                'occasion' => $gift->occasion,
+                'immediate' => true,
+            ]),
+        );
+
+        if (! $recipient) {
+            return;
+        }
+
+        self::upsertEvent(
+            transactionId: 'bp_gift_claimed:immediate:'.$gift->id,
+            user: $recipient,
+            relatedId: $gift->id,
+            relatedType: SupporterBelievePointGift::class,
+            type: 'bp_gift_claimed',
+            status: Transaction::STATUS_COMPLETED,
+            amount: $amount,
+            bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
+            eventName: 'Gift Claimed',
+            description: "Gift received: Available +{$amount}; Gift BP reporting +{$amount}.",
+            currentOwner: $recipient->name,
+            availableDelta: $amount,
+            holdingDelta: 0,
+            recipientBpDelta: $amount,
+            processedAt: $when,
+            meta: self::partyMeta($sender, $recipient, $recipientLabel, [
+                'gift_status' => BelievePointGiftInvite::STATUS_CLAIMED,
+                'supporter_believe_point_gift_id' => $gift->id,
+                'gifted_bp_delta' => $amount,
+                'occasion' => $gift->occasion,
+                'immediate' => true,
+            ]),
+        );
     }
 
     public static function recordClaim(BelievePointGiftInvite $invite): void
@@ -201,7 +271,7 @@ final class BelievePointGiftAdminLedgerService
             amount: $amount,
             bpStatus: UnifiedLedgerBpStatus::AVAILABLE,
             eventName: 'Gift Claimed',
-            description: "Gift claimed: sender Holding −{$amount}; {$recipientLabel} Gifted BP (available to spend) +{$amount}. Ownership transferred.",
+            description: "Gift claimed: sender Holding −{$amount}; {$recipientLabel} Available +{$amount} (Gift BP reporting +{$amount}).",
             currentOwner: $recipient->name,
             availableDelta: $amount,
             holdingDelta: -$amount,

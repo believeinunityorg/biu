@@ -3,11 +3,27 @@
 namespace App\Services;
 
 /**
- * Gifted Believe Points may only be used on closed-loop retail cards.
- * Open-loop network cards (Visa, Mastercard) must be paid with purchased Believe Points only.
+ * Closed-loop vs open-loop gift card classification.
+ *
+ * Closed-loop: buy with Available BP; Gift BP reporting decreases with the spend.
+ * Open-loop (Visa/Mastercard): Believe Points cannot purchase — use Bridge Wallet.
  */
 class GiftCardGiftedPointsPolicy
 {
+    public static function isClosedLoop(?string $productDisplayName): bool
+    {
+        return self::isAllowedForGiftedRedemption($productDisplayName);
+    }
+
+    public static function isOpenLoop(?string $productDisplayName): bool
+    {
+        return ! self::isClosedLoop($productDisplayName);
+    }
+
+    /**
+     * True for closed-loop retail cards (Gift BP reporting may decrease on purchase).
+     * False for Visa/Mastercard open-loop network cards.
+     */
     public static function isAllowedForGiftedRedemption(?string $productDisplayName): bool
     {
         if ($productDisplayName === null || trim($productDisplayName) === '') {

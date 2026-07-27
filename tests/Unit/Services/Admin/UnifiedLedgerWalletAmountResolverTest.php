@@ -103,4 +103,79 @@ class UnifiedLedgerWalletAmountResolverTest extends TestCase
 
         $this->assertSame(-8.0, UnifiedLedgerWalletAmountResolver::resolve($t));
     }
+
+    public function test_gift_card_believe_points_purchase_is_negative_wallet_amount(): void
+    {
+        $t = new Transaction([
+            'type' => 'purchase',
+            'ledger_type' => UnifiedLedgerType::MONEY,
+            'currency' => 'USD',
+            'amount' => 5.10,
+            'payment_method' => 'believe_points',
+            'related_type' => \App\Models\GiftCard::class,
+            'meta' => [
+                'gift_card_id' => 1,
+                'believe_points_used' => 5.10,
+                'platform_fee' => 0.10,
+            ],
+        ]);
+
+        $this->assertSame(-5.10, UnifiedLedgerWalletAmountResolver::resolve($t));
+    }
+
+    public function test_marketplace_believe_points_purchase_is_negative_wallet_amount(): void
+    {
+        $t = new Transaction([
+            'type' => 'purchase',
+            'ledger_type' => UnifiedLedgerType::MONEY,
+            'currency' => 'USD',
+            'amount' => 42.00,
+            'payment_method' => 'believe_points',
+            'meta' => ['believe_points_used' => 42.00],
+        ]);
+
+        $this->assertSame(-42.0, UnifiedLedgerWalletAmountResolver::resolve($t));
+    }
+
+    public function test_enrollment_believe_points_purchase_is_negative_wallet_amount(): void
+    {
+        $t = new Transaction([
+            'type' => 'enrollment',
+            'ledger_type' => UnifiedLedgerType::MONEY,
+            'currency' => 'USD',
+            'amount' => 25.00,
+            'payment_method' => 'believe_points',
+            'meta' => ['believe_points_used' => 25.00],
+        ]);
+
+        $this->assertSame(-25.0, UnifiedLedgerWalletAmountResolver::resolve($t));
+    }
+
+    public function test_believe_points_deposit_stays_positive_wallet_amount_null_for_money(): void
+    {
+        $t = new Transaction([
+            'type' => 'deposit',
+            'ledger_type' => UnifiedLedgerType::MONEY,
+            'currency' => 'USD',
+            'amount' => 10.00,
+            'payment_method' => 'believe_points',
+            'meta' => ['source' => 'organization_donation'],
+        ]);
+
+        $this->assertNull(UnifiedLedgerWalletAmountResolver::resolve($t));
+    }
+
+    public function test_believe_points_refund_is_not_treated_as_spend(): void
+    {
+        $t = new Transaction([
+            'type' => 'refund',
+            'ledger_type' => UnifiedLedgerType::MONEY,
+            'currency' => 'USD',
+            'amount' => 5.10,
+            'payment_method' => 'believe_points',
+            'meta' => ['believe_points_refunded' => 5.10],
+        ]);
+
+        $this->assertNull(UnifiedLedgerWalletAmountResolver::resolve($t));
+    }
 }

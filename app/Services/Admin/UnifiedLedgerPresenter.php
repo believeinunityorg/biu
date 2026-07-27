@@ -825,6 +825,12 @@ class UnifiedLedgerPresenter
             return 'debit';
         }
 
+        // Spends paid with Believe Points leave the supporter wallet (gift cards, marketplace, courses, …).
+        $walletAmount = UnifiedLedgerWalletAmountResolver::resolve($t);
+        if ($walletAmount !== null && $walletAmount < 0) {
+            return 'debit';
+        }
+
         return 'credit';
     }
 

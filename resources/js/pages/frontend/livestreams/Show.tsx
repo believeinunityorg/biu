@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -67,6 +66,7 @@ import EmailCreditsMeetingActions from "@/components/meeting/EmailCreditsMeeting
 import UnityMeetInviteChannelPicker, {
   type UnityMeetInviteChannel,
 } from "@/components/meeting/UnityMeetInviteChannelPicker"
+import UnityMeetInviteRecipientField from "@/components/meeting/UnityMeetInviteRecipientField"
 import UnityMeetParticipantPanel, {
   type UnityMeetParticipant,
 } from "@/components/meeting/UnityMeetParticipantPanel"
@@ -274,8 +274,8 @@ export default function SupporterShowLivestream({
 
   const canInviteParticipants = !["ended", "cancelled"].includes(livestream.status)
   const invitedCount = livestream.participantEmails?.length ?? 0
-  /** Scheduled meetings or existing email invites — show Participants tab and invite UI. */
-  const showScheduledEmailInvites = Boolean(livestream.scheduledAt) || invitedCount > 0
+  /** Instant and scheduled meetings both allow creator invites (email / BIU / FCM). */
+  const showInviteComposer = canInviteParticipants
   const { credits: emailCreditsLive, canSend: canSendEmailInvites, syncFromServer, applyDelta } =
     useEmailCreditsState(emailCredits)
 
@@ -286,10 +286,10 @@ export default function SupporterShowLivestream({
   }, [inertiaProps.success, emailCredits, syncFromServer])
 
   useEffect(() => {
-    if (!showScheduledEmailInvites && sidebarTab === "participants") {
+    if (!showInviteComposer && sidebarTab === "participants") {
       setSidebarTab("meeting-info")
     }
-  }, [showScheduledEmailInvites, sidebarTab])
+  }, [showInviteComposer, sidebarTab])
 
   const effectiveHostUrl =
     recordingDestination === "dropbox" && livestream.hostPushUrlDropbox
@@ -591,7 +591,7 @@ export default function SupporterShowLivestream({
               minute: "2-digit",
             })}
           </p>
-          {showScheduledEmailInvites && invitedCount > 0 ? (
+          {showInviteComposer && invitedCount > 0 ? (
             <p className="text-[11px] text-muted-foreground">
               See the{" "}
               <button type="button" className="font-medium text-primary hover:underline" onClick={() => setSidebarTab("participants")}>
@@ -910,24 +910,17 @@ export default function SupporterShowLivestream({
   const participantsContent = (
     <div className="w-full min-w-0 space-y-4">
       <p className="text-xs text-muted-foreground">
-        {showScheduledEmailInvites
-          ? "Invite guests by email, BIU notification (app + push), or both."
-          : "Share the join link from the Share tab. To send invitations, schedule the meeting with guest emails first."}
+        Invite guests by searching supporters, typing any email, or BIU notification (app + push).
       </p>
 
-      {canInviteParticipants && showScheduledEmailInvites ? (
+      {showInviteComposer ? (
         <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="participant-invite-email" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Send invitation
-            </Label>
-            {emailCreditsLive && inviteUsesEmailCredits ? (
-              <EmailCreditsMeetingActions
-                emailsLeft={emailCreditsLive.emails_left}
-                onBuy={() => setBuyCreditsOpen(true)}
-              />
-            ) : null}
-          </div>
+          {emailCreditsLive && inviteUsesEmailCredits ? (
+            <EmailCreditsMeetingActions
+              emailsLeft={emailCreditsLive.emails_left}
+              onBuy={() => setBuyCreditsOpen(true)}
+            />
+          ) : null}
           <UnityMeetInviteChannelPicker value={inviteNotifyVia} onChange={setInviteNotifyVia} />
           {inviteUsesEmailCredits && !canSendEmailInvites ? (
             <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -943,44 +936,16 @@ export default function SupporterShowLivestream({
             </p>
           ) : null}
           {canSendInvite ? (
-            <>
-          <div className="flex flex-col gap-2">
-            <Input
-              id="participant-invite-email"
-              type="email"
-              placeholder="guest@example.com"
+            <UnityMeetInviteRecipientField
+              inputId="participant-invite-email"
               value={inviteEmailInput}
-              onChange={(e) => setInviteEmailInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  addAndSendInvitation()
-                }
-              }}
-              className="h-9 w-full min-w-0 text-sm"
+              onChange={setInviteEmailInput}
+              onSubmit={addAndSendInvitation}
               disabled={invitingParticipant}
+              submitting={invitingParticipant}
+              error={participantInviteErrorText}
+              stackActions
             />
-            <Button
-              type="button"
-              size="sm"
-              className="h-9 w-full shrink-0 gap-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
-              onClick={addAndSendInvitation}
-              disabled={invitingParticipant || inviteEmailInput.trim() === ""}
-            >
-              {invitingParticipant ? (
-                <span className="text-xs">Sending…</span>
-              ) : (
-                <>
-                  <Send className="h-3.5 w-3.5" />
-                  Send
-                </>
-              )}
-            </Button>
-          </div>
-          {participantInviteErrorText ? (
-            <p className="text-xs text-destructive">{participantInviteErrorText}</p>
-          ) : null}
-            </>
           ) : null}
         </div>
       ) : null}
@@ -1063,20 +1028,12 @@ export default function SupporterShowLivestream({
             Removing a guest takes them off the invite list. They can still join with the meeting link if they have it.
           </p>
         </div>
-      ) : showScheduledEmailInvites ? (
+      ) : (
         <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center space-y-2">
           <Users className="h-8 w-8 mx-auto text-muted-foreground/60" />
           <p className="text-sm font-medium text-foreground">No invited participants</p>
           <p className="text-xs text-muted-foreground">
-            Use the form above to send an email invitation, or share the invite link from the Share tab.
-          </p>
-        </div>
-      ) : (
-        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center space-y-2">
-          <Users className="h-8 w-8 mx-auto text-muted-foreground/60" />
-          <p className="text-sm font-medium text-foreground">No email invitations</p>
-          <p className="text-xs text-muted-foreground">
-            Schedule a meeting with guest emails to send invitations, or share the join link from the Share tab.
+            Search a supporter or type an email above, or share the invite link from the Share tab.
           </p>
         </div>
       )}
@@ -1168,11 +1125,11 @@ export default function SupporterShowLivestream({
                       <SheetTitle className="text-lg">Meeting</SheetTitle>
                     </SheetHeader>
                     <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as SidebarTab)} className="w-full mt-4">
-                      <TabsList className={`grid w-full h-8 p-0.5 gap-0.5 ${showScheduledEmailInvites ? "grid-cols-3" : "grid-cols-2"}`}>
+                      <TabsList className={`grid w-full h-8 p-0.5 gap-0.5 ${showInviteComposer ? "grid-cols-3" : "grid-cols-2"}`}>
                         <TabsTrigger value="meeting-info" className="h-7 px-1 py-0" aria-label="Meeting info" title="Meeting info">
                           <Info className="h-3.5 w-3.5 shrink-0" />
                         </TabsTrigger>
-                        {showScheduledEmailInvites ? (
+                        {showInviteComposer ? (
                           <TabsTrigger value="participants" className="h-7 px-1 py-0" aria-label="Participants" title="Participants">
                             <Users className="h-3.5 w-3.5 shrink-0" />
                           </TabsTrigger>
@@ -1184,7 +1141,7 @@ export default function SupporterShowLivestream({
                       <TabsContent value="meeting-info" className="mt-4">
                         {meetingInfoContent}
                       </TabsContent>
-                      {showScheduledEmailInvites ? (
+                      {showInviteComposer ? (
                         <TabsContent value="participants" className="mt-4">
                           {participantsContent}
                         </TabsContent>
@@ -1208,7 +1165,7 @@ export default function SupporterShowLivestream({
                         participants={participantRoster}
                         authUserId={authUserId}
                         onGiveGift={openGiftDialog}
-                        onInvite={showScheduledEmailInvites ? openParticipantsInvite : undefined}
+                        onInvite={showInviteComposer ? openParticipantsInvite : undefined}
                         onCopyViewerLink={() => copyToClipboard(liveViewerUrl, "viewer")}
                         onClose={() => setParticipantsMobileOpen(false)}
                       />
@@ -1385,11 +1342,11 @@ export default function SupporterShowLivestream({
               <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as SidebarTab)} className="w-full flex flex-col min-h-0">
                 <Card className="flex min-h-0 flex-1 flex-col rounded-none border-0 border-b border-border bg-transparent p-0 shadow-none">
                   <CardHeader className="p-0 py-2 px-3">
-                    <TabsList className={`grid w-full h-8 p-0.5 gap-0.5 ${showScheduledEmailInvites ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <TabsList className={`grid w-full h-8 p-0.5 gap-0.5 ${showInviteComposer ? "grid-cols-3" : "grid-cols-2"}`}>
                       <TabsTrigger value="meeting-info" className="h-7 px-1 py-0" aria-label="Meeting info" title="Meeting info">
                         <Info className="h-3.5 w-3.5 shrink-0" />
                       </TabsTrigger>
-                      {showScheduledEmailInvites ? (
+                      {showInviteComposer ? (
                         <TabsTrigger value="participants" className="h-7 px-1 py-0" aria-label="Participants" title="Participants">
                           <Users className="h-3.5 w-3.5 shrink-0" />
                         </TabsTrigger>
@@ -1403,7 +1360,7 @@ export default function SupporterShowLivestream({
                     <TabsContent value="meeting-info" className="mt-3 mb-0">
                       {meetingInfoContent}
                     </TabsContent>
-                    {showScheduledEmailInvites ? (
+                    {showInviteComposer ? (
                       <TabsContent value="participants" className="mt-3 mb-0">
                         {participantsContent}
                       </TabsContent>
@@ -1482,7 +1439,7 @@ export default function SupporterShowLivestream({
                 participants={participantRoster}
                 authUserId={authUserId}
                 onGiveGift={openGiftDialog}
-                onInvite={showScheduledEmailInvites ? openParticipantsInvite : undefined}
+                onInvite={showInviteComposer ? openParticipantsInvite : undefined}
                 onCopyViewerLink={() => copyToClipboard(liveViewerUrl, "viewer")}
                 onClose={() => setParticipantsPanelOpen(false)}
               />

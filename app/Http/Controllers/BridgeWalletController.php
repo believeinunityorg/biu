@@ -723,9 +723,14 @@ class BridgeWalletController extends Controller
                     'integratable_type' => $integration->integratable_type,
                 ]);
                 
+                $sourceCurrency = $this->bridgeService->resolvePreferredVirtualAccountSourceCurrency(
+                    null,
+                    $customerId,
+                );
+
                 $virtualAccountResult = $this->bridgeService->createVirtualAccount(
                     $customerId, // CRITICAL: Use customer-specific ID
-                    ['currency' => 'usd'],
+                    ['currency' => $sourceCurrency],
                     [
                         'payment_rail' => 'ethereum',
                         'currency' => 'usdc',
@@ -924,24 +929,30 @@ class BridgeWalletController extends Controller
                     ->update(['is_primary' => false]);
             }
 
-            // Automatically create virtual account for the wallet
+            // Automatically create virtual account for the wallet (USD ACH or EUR SEPA IBAN)
             $virtualAccountData = null;
             try {
+                $sourceCurrency = $this->bridgeService->resolvePreferredVirtualAccountSourceCurrency(
+                    null,
+                    $integration->bridge_customer_id,
+                );
+
                 if ($chain === 'solana' || $chain === 'ethereum' || $chain === 'usd' || $chain === 'USD') {
-                    // Create virtual account for chain wallet or USD account
                     if ($chain === 'usd' || $chain === 'USD') {
                         $vaChain = 'solana';
                         $virtualAccountResult = $this->bridgeService->createVirtualAccountForWallet(
                             $integration->bridge_customer_id,
                             $walletData['id'] ?? null,
-                            'USD',
+                            $sourceCurrency,
                             $vaChain,
                         );
                     } else {
                         $virtualAccountResult = $this->bridgeService->createVirtualAccountForChainWallet(
                             $integration->bridge_customer_id,
                             $walletData['id'] ?? null,
-                            $chain
+                            $chain,
+                            null,
+                            $sourceCurrency,
                         );
                     }
 
@@ -956,10 +967,12 @@ class BridgeWalletController extends Controller
                         Log::info('Virtual account created automatically', [
                             'wallet_id' => $wallet->id,
                             'virtual_account_id' => $virtualAccountData['id'] ?? null,
+                            'source_currency' => $sourceCurrency,
                         ]);
                     } else {
                         Log::warning('Failed to create virtual account automatically', [
                             'wallet_id' => $wallet->id,
+                            'source_currency' => $sourceCurrency,
                             'error' => $virtualAccountResult['error'] ?? 'Unknown error',
                         ]);
                     }
@@ -4834,6 +4847,10 @@ class BridgeWalletController extends Controller
 
             $customerId = $integration->bridge_customer_id;
             $isSandbox = $this->bridgeService->isSandbox();
+            $sourceCurrency = $this->bridgeService->resolvePreferredVirtualAccountSourceCurrency(
+                null,
+                $customerId,
+            );
 
             $wallet = BridgeWallet::where('bridge_integration_id', $integration->id)
                     ->where('is_primary', true)
@@ -4862,19 +4879,43 @@ class BridgeWalletController extends Controller
 
             $bridgeWalletId = $this->bridgeService->resolveBridgeWalletIdForIntegration($integration, $wallet);
 
-            // Reuse any virtual account already on Bridge (fixes production deposit bank missing locally)
+            // Reuse any matching virtual account already on Bridge (USD ACH or EUR IBAN)
             $existingVirtualAccount = $this->bridgeService->resolveVirtualAccountFromBridge(
                 $customerId,
                 $bridgeWalletId,
+                $sourceCurrency,
             );
 
             if ($existingVirtualAccount) {
-                $this->bridgeService->attachVirtualAccountToWallet($wallet, $existingVirtualAccount);
+                $existingInstructions = is_array($existingVirtualAccount['source_deposit_instructions'] ?? null)
+                    ? $existingVirtualAccount['source_deposit_instructions']
+                    : [];
+                $existingSource = is_array($existingVirtualAccount['source'] ?? null)
+                    ? $existingVirtualAccount['source']
+                    : [];
+                $existingCurrency = strtolower((string) (
+                    $existingInstructions['currency']
+                    ?? $existingSource['currency']
+                    ?? ''
+                ));
 
-                        return response()->json([
-                            'success' => true,
-                    'message' => 'Deposit bank account is ready',
-                    'data' => $existingVirtualAccount,
+                // Reuse only when currency matches (don't attach a USD ACH VA for a SEPA/EUR customer).
+                if ($existingCurrency === '' || $existingCurrency === $sourceCurrency) {
+                    $this->bridgeService->attachVirtualAccountToWallet($wallet, $existingVirtualAccount);
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => $sourceCurrency === 'eur'
+                            ? 'SEPA deposit account (EUR IBAN) is ready'
+                            : 'Deposit bank account is ready',
+                        'data' => $existingVirtualAccount,
+                    ]);
+                }
+
+                Log::info('Existing Bridge virtual account currency mismatch — creating preferred rail', [
+                    'customer_id' => $customerId,
+                    'existing_currency' => $existingCurrency,
+                    'preferred_currency' => $sourceCurrency,
                 ]);
             }
 
@@ -4898,20 +4939,20 @@ class BridgeWalletController extends Controller
                 }
 
                 $walletChain = strtolower((string) ($wallet->chain ?? $integration->wallet_chain ?? 'solana'));
-                if (in_array($walletChain, ['usd', 'fiat'], true)) {
+                if (in_array($walletChain, ['usd', 'fiat', 'eur'], true)) {
                     $walletChain = $this->bridgeService->resolveWalletChain($customerId, $bridgeWalletId);
                 }
 
                     $result = $this->bridgeService->createVirtualAccountForWallet(
                     $customerId,
                     $bridgeWalletId,
-                    'USD',
+                    $sourceCurrency,
                     $walletChain,
                 );
             } else {
                     $result = $this->bridgeService->createVirtualAccount(
                     $customerId,
-                        ['currency' => 'usd'],
+                        ['currency' => $sourceCurrency],
                         [
                         'payment_rail' => 'ethereum',
                             'currency' => 'usdc',
@@ -5556,11 +5597,16 @@ class BridgeWalletController extends Controller
             }
 
             $bridgeWalletId = $this->bridgeService->resolveBridgeWalletIdForIntegration($integration, $primaryWallet);
+            $sourceCurrency = $this->bridgeService->resolvePreferredVirtualAccountSourceCurrency(
+                null,
+                $integration->bridge_customer_id,
+            );
 
-            // Always sync from Bridge first — production often has VA on Bridge but not stored locally
+            // Always sync from Bridge first — prefer EUR IBAN when SEPA is the available rail
             $syncedVirtualAccount = $this->bridgeService->resolveVirtualAccountFromBridge(
                 $integration->bridge_customer_id,
                 $bridgeWalletId,
+                $sourceCurrency,
             );
 
             if ($syncedVirtualAccount) {
@@ -5673,7 +5719,7 @@ class BridgeWalletController extends Controller
                 }
             }
 
-            // Extract deposit instructions
+            // Extract deposit instructions (normalize EUR IBAN → UI fields)
             $depositInstructions = $virtualAccountDetails['source_deposit_instructions'] ?? null;
             
             if (!$depositInstructions) {
@@ -5688,11 +5734,16 @@ class BridgeWalletController extends Controller
                 ], 404);
             }
 
+            $depositInstructions = $this->bridgeService->normalizeDepositInstructionsForUi(
+                is_array($depositInstructions) ? $depositInstructions : [],
+            );
+
             Log::info('Deposit instructions retrieved successfully', [
                 'wallet_id' => $primaryWallet->id,
                 'virtual_account_id' => $primaryWallet->virtual_account_id,
                 'customer_id' => $integration->bridge_customer_id,
                 'entity_id' => $entity->id,
+                'currency' => $depositInstructions['currency'] ?? null,
                 'has_payment_rails' => isset($depositInstructions['payment_rails']),
             ]);
 

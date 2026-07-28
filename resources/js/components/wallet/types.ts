@@ -17,6 +17,9 @@ export interface DepositInstructions {
     bank_account_number?: string
     bank_beneficiary_name?: string
     bank_beneficiary_address?: string
+    /** EUR Virtual IBAN (SEPA) */
+    iban?: string
+    bic?: string
     payment_rail?: string
     payment_rails?: string[]
     currency?: string

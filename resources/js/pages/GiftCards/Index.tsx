@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Zap,
   Tag,
+  X,
 } from "lucide-react"
 import AppSidebarLayout from "@/layouts/app/app-sidebar-layout"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
@@ -129,6 +130,8 @@ export default function GiftCardsIndex({
   const isLoadingRef = useRef(false)
   const searchQueryRef = useRef(searchQuery)
   const selectedCountryRef = useRef(selectedCountry)
+  const filterRequestIdRef = useRef(0)
+  const activeFilterRef = useRef({ search: searchQuery.trim(), country: selectedCountry })
 
   const isOrgOrAdmin =
     Boolean(user) && user!.role !== "user" && user!.role !== null
@@ -165,18 +168,19 @@ export default function GiftCardsIndex({
     }
   }, [])
 
-  const fetchBrandsPage = useCallback(
+  const fetchBrands = useCallback(
     async (
       pageNum: number,
-      options: { search?: string; country?: string; append?: boolean } = {},
+      filter: { search: string; country: string },
+      options: { append?: boolean; requestId?: number } = {},
     ) => {
-      const country = options.country ?? selectedCountryRef.current
-      const search = (options.search ?? searchQueryRef.current).trim()
       const append = Boolean(options.append)
+      const requestId = options.requestId ?? filterRequestIdRef.current
+      const search = filter.search.trim()
 
       const params = new URLSearchParams()
       params.set("page", String(pageNum))
-      params.set("country", country)
+      params.set("country", filter.country)
       if (search !== "") {
         params.set("search", search)
       }
@@ -187,6 +191,7 @@ export default function GiftCardsIndex({
           "X-Requested-With": "XMLHttpRequest",
         },
         credentials: "same-origin",
+        cache: "no-store",
       })
 
       if (!response.ok) {
@@ -198,6 +203,10 @@ export default function GiftCardsIndex({
         current_page?: number
         has_more?: boolean
         total?: number | null
+      }
+
+      if (requestId !== filterRequestIdRef.current) {
+        return null
       }
 
       const incoming = Array.isArray(json.brands) ? json.brands : []
@@ -229,23 +238,38 @@ export default function GiftCardsIndex({
   )
 
   const runFilter = (overrides: { search?: string; country?: string } = {}) => {
-    if (isLoadingRef.current) return
-    setIsLoading(true)
-    isLoadingRef.current = true
+    const search = (overrides.search ?? searchQueryRef.current).trim()
+    const country = overrides.country ?? selectedCountryRef.current
+    const requestId = ++filterRequestIdRef.current
+
+    activeFilterRef.current = { search, country }
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+      searchTimeoutRef.current = null
+    }
+
     loadingMoreRef.current = false
     setLoadingMore(false)
+    setPage(1)
+    pageRef.current = 1
+    setHasMore(false)
+    hasMoreRef.current = false
+    setBrands([])
+    setTotalBrands(0)
+    setIsLoading(true)
+    isLoadingRef.current = true
 
-    void fetchBrandsPage(1, {
-      search: overrides.search ?? searchQueryRef.current,
-      country: overrides.country ?? selectedCountryRef.current,
-      append: false,
-    })
+    void fetchBrands(1, { search, country }, { requestId })
       .catch(() => {
+        if (requestId !== filterRequestIdRef.current) return
         setBrands([])
+        setTotalBrands(0)
         setHasMore(false)
         hasMoreRef.current = false
       })
       .finally(() => {
+        if (requestId !== filterRequestIdRef.current) return
         setIsLoading(false)
         isLoadingRef.current = false
       })
@@ -253,35 +277,48 @@ export default function GiftCardsIndex({
 
   const handleSearch = (value: string) => {
     setSearchQuery(value)
+    searchQueryRef.current = value
+
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+
     searchTimeoutRef.current = setTimeout(() => {
+      searchTimeoutRef.current = null
       runFilter({ search: value })
-    }, 400)
+    }, 350)
+  }
+
+  const clearSearch = () => {
+    setSearchQuery("")
+    searchQueryRef.current = ""
+    runFilter({ search: "" })
   }
 
   const handleCountryFilter = (country: string) => {
     setSelectedCountry(country)
-    window.requestAnimationFrame(() => {
-      runFilter({ country })
-    })
+    selectedCountryRef.current = country
+    runFilter({ country })
   }
 
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current || !hasMoreRef.current || isLoadingRef.current) return
 
+    const requestId = filterRequestIdRef.current
+    const filter = activeFilterRef.current
     const nextPage = pageRef.current + 1
+
     loadingMoreRef.current = true
     setLoadingMore(true)
 
-    void fetchBrandsPage(nextPage, { append: true })
+    void fetchBrands(nextPage, filter, { append: true, requestId })
       .catch(() => {
         // Keep existing list; allow retry on next scroll.
       })
       .finally(() => {
+        if (requestId !== filterRequestIdRef.current) return
         loadingMoreRef.current = false
         setLoadingMore(false)
       })
-  }, [fetchBrandsPage])
+  }, [fetchBrands])
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current
@@ -311,6 +348,12 @@ export default function GiftCardsIndex({
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
     }
   }, [])
+
+  const activeSearch = searchQuery.trim()
+  const resultSummary =
+    isLoading && brands.length === 0
+      ? "Searching…"
+      : `${brands.length.toLocaleString()}${totalBrands > 0 ? ` of ${totalBrands.toLocaleString()}` : ""} shown`
 
   return (
     <Layout>
@@ -422,49 +465,85 @@ export default function GiftCardsIndex({
           </Link>
         ) : null}
 
-        {/* Filters */}
-        <section className="relative z-20 rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4 dark:border-gray-800 dark:bg-gray-900/80">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search all brands…"
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                className="h-11 rounded-xl border-border/80 bg-background pl-10 dark:border-gray-700 dark:bg-gray-900"
-                aria-label="Search gift cards"
-              />
+        {/* Filters — sticky on scroll for easier browsing */}
+        <section className="sticky top-0 z-30 -mx-3 px-3 py-2 sm:-mx-0 sm:px-0 sm:py-0">
+          <div className="rounded-2xl border border-border/70 bg-card/95 p-3 shadow-sm backdrop-blur-md sm:p-4 dark:border-gray-800 dark:bg-gray-900/95">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className={cn(
+                    "pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 transition-colors",
+                    isLoading ? "text-purple-600" : "text-muted-foreground",
+                  )}
+                  aria-hidden
+                />
+                <Input
+                  type="search"
+                  placeholder="Search brands — Amazon, Starbucks, Target…"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current)
+                        searchTimeoutRef.current = null
+                      }
+                      runFilter({ search: searchQueryRef.current })
+                    }
+                  }}
+                  className={cn(
+                    "h-11 rounded-xl border-border/80 bg-background pr-10 pl-10 shadow-inner sm:h-12 sm:rounded-2xl sm:pr-12 sm:text-[15px] dark:border-gray-700 dark:bg-gray-900",
+                    isLoading && "border-purple-500/40 ring-1 ring-purple-500/20",
+                  )}
+                  aria-label="Search gift cards"
+                  aria-busy={isLoading}
+                  autoComplete="off"
+                  enterKeyHint="search"
+                />
+                <div className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1">
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-purple-600" aria-hidden />
+                  ) : null}
+                  {searchQuery ? (
+                    <button
+                      type="button"
+                      onClick={clearSearch}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <Select value={selectedCountry} onValueChange={handleCountryFilter}>
+                <SelectTrigger className="h-11 w-full rounded-xl dark:border-gray-700 dark:bg-gray-900 sm:h-12 sm:w-[220px] sm:rounded-2xl">
+                  <Globe className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent
+                  position="popper"
+                  sideOffset={6}
+                  className="z-[200] max-h-72 dark:border-gray-700 dark:bg-gray-900"
+                >
+                  {Object.entries(availableCountries).map(([code, name]) => (
+                    <SelectItem key={code} value={code} className="dark:focus:bg-gray-800 dark:hover:bg-gray-800">
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <Select value={selectedCountry} onValueChange={handleCountryFilter}>
-              <SelectTrigger className="h-11 w-full rounded-xl dark:border-gray-700 dark:bg-gray-900 sm:w-[220px]">
-                <Globe className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="Select country" />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                sideOffset={6}
-                className="z-[200] max-h-72 dark:border-gray-700 dark:bg-gray-900"
-              >
-                {Object.entries(availableCountries).map(([code, name]) => (
-                  <SelectItem key={code} value={code} className="dark:focus:bg-gray-800 dark:hover:bg-gray-800">
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="hidden items-center gap-2 text-sm text-muted-foreground xl:flex">
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Updating…
-                </>
-              ) : (
-                <span className="tabular-nums">
-                  {brands.length.toLocaleString()}
-                  {totalBrands > 0 ? ` of ${totalBrands.toLocaleString()}` : ""} shown
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border/50 pt-2.5 text-sm text-muted-foreground dark:border-gray-800">
+              <span className="tabular-nums">{resultSummary}</span>
+              {activeSearch ? (
+                <span className="max-w-[min(100%,20rem)] truncate text-xs sm:text-sm">
+                  Matching &ldquo;<span className="font-medium text-foreground">{activeSearch}</span>&rdquo;
                 </span>
+              ) : (
+                <span className="text-xs sm:text-sm">All brands in {countryLabel}</span>
               )}
             </div>
           </div>
@@ -492,8 +571,11 @@ export default function GiftCardsIndex({
                 variant="outline"
                 className="mt-5 rounded-xl"
                 onClick={() => {
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
                   setSearchQuery("")
+                  searchQueryRef.current = ""
                   setSelectedCountry("USA")
+                  selectedCountryRef.current = "USA"
                   runFilter({ search: "", country: "USA" })
                 }}
               >

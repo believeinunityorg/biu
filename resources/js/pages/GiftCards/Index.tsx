@@ -130,8 +130,8 @@ export default function GiftCardsIndex({
   const isLoadingRef = useRef(false)
   const searchQueryRef = useRef(searchQuery)
   const selectedCountryRef = useRef(selectedCountry)
-  const fetchGenerationRef = useRef(0)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const filterRequestIdRef = useRef(0)
+  const activeFilterRef = useRef({ search: searchQuery.trim(), country: selectedCountry })
 
   const isOrgOrAdmin =
     Boolean(user) && user!.role !== "user" && user!.role !== null
@@ -168,26 +168,22 @@ export default function GiftCardsIndex({
     }
   }, [])
 
-  const fetchBrandsPage = useCallback(
+  const fetchBrands = useCallback(
     async (
       pageNum: number,
-      options: { search?: string; country?: string; append?: boolean; generation?: number } = {},
+      filter: { search: string; country: string },
+      options: { append?: boolean; requestId?: number } = {},
     ) => {
-      const country = options.country ?? selectedCountryRef.current
-      const search = (options.search ?? searchQueryRef.current).trim()
       const append = Boolean(options.append)
-      const generation = options.generation ?? fetchGenerationRef.current
+      const requestId = options.requestId ?? filterRequestIdRef.current
+      const search = filter.search.trim()
 
       const params = new URLSearchParams()
       params.set("page", String(pageNum))
-      params.set("country", country)
+      params.set("country", filter.country)
       if (search !== "") {
         params.set("search", search)
       }
-
-      abortControllerRef.current?.abort()
-      const controller = new AbortController()
-      abortControllerRef.current = controller
 
       const response = await fetch(`${route("gift-cards.brands")}?${params.toString()}`, {
         headers: {
@@ -195,7 +191,7 @@ export default function GiftCardsIndex({
           "X-Requested-With": "XMLHttpRequest",
         },
         credentials: "same-origin",
-        signal: controller.signal,
+        cache: "no-store",
       })
 
       if (!response.ok) {
@@ -209,8 +205,8 @@ export default function GiftCardsIndex({
         total?: number | null
       }
 
-      if (generation !== fetchGenerationRef.current) {
-        return []
+      if (requestId !== filterRequestIdRef.current) {
+        return null
       }
 
       const incoming = Array.isArray(json.brands) ? json.brands : []
@@ -242,31 +238,38 @@ export default function GiftCardsIndex({
   )
 
   const runFilter = (overrides: { search?: string; country?: string } = {}) => {
-    const generation = ++fetchGenerationRef.current
-    setIsLoading(true)
-    isLoadingRef.current = true
+    const search = (overrides.search ?? searchQueryRef.current).trim()
+    const country = overrides.country ?? selectedCountryRef.current
+    const requestId = ++filterRequestIdRef.current
+
+    activeFilterRef.current = { search, country }
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+      searchTimeoutRef.current = null
+    }
+
     loadingMoreRef.current = false
     setLoadingMore(false)
     setPage(1)
     pageRef.current = 1
     setHasMore(false)
     hasMoreRef.current = false
+    setBrands([])
+    setTotalBrands(0)
+    setIsLoading(true)
+    isLoadingRef.current = true
 
-    void fetchBrandsPage(1, {
-      search: overrides.search ?? searchQueryRef.current,
-      country: overrides.country ?? selectedCountryRef.current,
-      append: false,
-      generation,
-    })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return
-        if (generation !== fetchGenerationRef.current) return
+    void fetchBrands(1, { search, country }, { requestId })
+      .catch(() => {
+        if (requestId !== filterRequestIdRef.current) return
         setBrands([])
+        setTotalBrands(0)
         setHasMore(false)
         hasMoreRef.current = false
       })
       .finally(() => {
-        if (generation !== fetchGenerationRef.current) return
+        if (requestId !== filterRequestIdRef.current) return
         setIsLoading(false)
         isLoadingRef.current = false
       })
@@ -275,20 +278,16 @@ export default function GiftCardsIndex({
   const handleSearch = (value: string) => {
     setSearchQuery(value)
     searchQueryRef.current = value
+
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
 
-    if (value.trim() === "") {
-      runFilter({ search: "" })
-      return
-    }
-
     searchTimeoutRef.current = setTimeout(() => {
+      searchTimeoutRef.current = null
       runFilter({ search: value })
-    }, 300)
+    }, 350)
   }
 
   const clearSearch = () => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
     setSearchQuery("")
     searchQueryRef.current = ""
     runFilter({ search: "" })
@@ -296,30 +295,30 @@ export default function GiftCardsIndex({
 
   const handleCountryFilter = (country: string) => {
     setSelectedCountry(country)
-    window.requestAnimationFrame(() => {
-      runFilter({ country })
-    })
+    selectedCountryRef.current = country
+    runFilter({ country })
   }
 
   const loadMore = useCallback(() => {
     if (loadingMoreRef.current || !hasMoreRef.current || isLoadingRef.current) return
 
+    const requestId = filterRequestIdRef.current
+    const filter = activeFilterRef.current
     const nextPage = pageRef.current + 1
-    const generation = fetchGenerationRef.current
+
     loadingMoreRef.current = true
     setLoadingMore(true)
 
-    void fetchBrandsPage(nextPage, { append: true, generation })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return
+    void fetchBrands(nextPage, filter, { append: true, requestId })
+      .catch(() => {
         // Keep existing list; allow retry on next scroll.
       })
       .finally(() => {
-        if (generation !== fetchGenerationRef.current) return
+        if (requestId !== filterRequestIdRef.current) return
         loadingMoreRef.current = false
         setLoadingMore(false)
       })
-  }, [fetchBrandsPage])
+  }, [fetchBrands])
 
   useEffect(() => {
     const el = loadMoreSentinelRef.current
@@ -347,7 +346,6 @@ export default function GiftCardsIndex({
   useEffect(() => {
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-      abortControllerRef.current?.abort()
     }
   }, [])
 
@@ -486,7 +484,10 @@ export default function GiftCardsIndex({
                   onChange={(e) => handleSearch(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current)
+                        searchTimeoutRef.current = null
+                      }
                       runFilter({ search: searchQueryRef.current })
                     }
                   }}

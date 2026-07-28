@@ -848,11 +848,17 @@ class GiftCardService
         $needForHasMore = $needForPage + 1;
 
         $cacheKey = 'phaze_brands_search_v3_'.$country.'_'.md5($needle);
-        $state = Cache::get($cacheKey, [
-            'matches' => [],
-            'scanned_through_page' => 0,
-            'exhausted' => false,
-        ]);
+        $state = $appPage === 1
+            ? [
+                'matches' => [],
+                'scanned_through_page' => 0,
+                'exhausted' => false,
+            ]
+            : Cache::get($cacheKey, [
+                'matches' => [],
+                'scanned_through_page' => 0,
+                'exhausted' => false,
+            ]);
 
         $matches = is_array($state['matches'] ?? null) ? $state['matches'] : [];
         $scannedThrough = (int) ($state['scanned_through_page'] ?? 0);

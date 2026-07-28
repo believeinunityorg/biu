@@ -1270,6 +1270,10 @@ class BridgeWalletController extends Controller
                 'requires_verification' => $needsVerification,
                 'bridge_account_verified' => ! $needsVerification,
                 'verification_type' => $isOrgUser ? 'kyb' : 'kyc',
+                // Bridge endorsements: base = US ACH/wire; SEPA may be granted when base is region-blocked.
+                'endorsements' => is_array($customer)
+                    ? $this->bridgeService->getEndorsementsSummary($customer)
+                    : null,
                 'organization_data' => $organizationData, // Always include organization data for pre-filling
                 'kyb_step' => $isOrgUser ? $kybStep : null, // Current step for KYB multi-step flow
                 'kyb_use_hosted_flow' => $isOrgUser ? $kybUseHostedFlow : null,
@@ -3898,23 +3902,29 @@ class BridgeWalletController extends Controller
         }
 
         $baseInfo = $this->bridgeService->getBaseEndorsementInfo($customer);
+        $endorsements = $this->bridgeService->getEndorsementsSummary($customer);
         $customerActive = strtolower((string) ($customer['status'] ?? '')) === 'active';
+        // Custodial wallet OK when customer is Active or any fiat endorsement (base/SEPA/…) is approved.
+        // US "base" may be region-rejected (e.g. Bangladesh) while SEPA + wallets remain available.
+        $walletEndorsementOk = ($endorsements['custodial_wallet_ok'] ?? false)
+            || ($baseInfo['approved'] ?? false)
+            || $customerActive;
 
-        // Wallet access requires base KYC — cards endorsement is only for card issuance.
+        // Wallet access: any approved transacting endorsement or Active customer — cards is card-issuance only.
         if ($isOrgUser) {
             $kybApproved = $integration->kyb_status === 'approved'
                 || strtolower((string) ($customer['kyb_status'] ?? '')) === 'approved';
             $kycApproved = $integration->kyc_status === 'approved'
                 || strtolower((string) ($customer['kyc_status'] ?? '')) === 'approved';
 
-            if ($baseInfo['approved'] ?? false) {
+            if ($walletEndorsementOk) {
                 return $kybApproved || $kycApproved || $customerActive;
             }
 
             return ($kybApproved && $kycApproved) || $customerActive;
         }
 
-        if ($baseInfo['approved'] ?? false) {
+        if ($walletEndorsementOk) {
             return true;
         }
 

@@ -37,12 +37,9 @@ export default function ProfileCompletionBanner({
       ? `Your Unity Impact Alliance profile is ${percent}% Complete`
       : `Your Organization Profile is ${percent}% Complete`
 
-  const actionLabel = (item: ProfileCompletionItem) => {
-    if (item.type === "upload") return "Upload"
-    if (item.type === "board_members") return "Add"
-    if (item.type === "form") return "Complete"
-    return "Complete"
-  }
+  const actionLabel = (_item: ProfileCompletionItem) => "Complete"
+
+  const mainCtaLabel = completed > 0 ? "Continue" : "Complete"
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-amber-200/80 dark:border-amber-800/60 bg-gradient-to-br from-amber-50 via-white to-orange-50/50 dark:from-amber-950/40 dark:via-neutral-950/50 dark:to-amber-950/30 shadow-lg shadow-amber-500/5 dark:shadow-amber-500/10 ring-1 ring-black/5 dark:ring-white/5">
@@ -80,7 +77,7 @@ export default function ProfileCompletionBanner({
                   size="lg"
                   className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-600 dark:hover:bg-amber-700 shadow-md hover:shadow-lg transition-all duration-200 gap-2 font-semibold rounded-xl"
                 >
-                  Complete onboarding
+                  {mainCtaLabel}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -101,14 +98,14 @@ export default function ProfileCompletionBanner({
                       >
                         <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-500 dark:text-amber-400" aria-hidden />
                         <span>
-                          <strong>{actionLabel(item)}</strong> {item.label}
+                          <strong>{actionLabel(item)}</strong> — {item.label}
                         </span>
                       </Link>
                     ) : (
                       <div className="flex items-center gap-3 rounded-lg border border-amber-200/70 dark:border-amber-800/50 bg-white/60 dark:bg-neutral-900/40 px-3 py-2.5 text-sm font-medium text-amber-800 dark:text-amber-200">
                         <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-500 dark:text-amber-400" aria-hidden />
                         <span>
-                          <strong>{actionLabel(item)}</strong> {item.label}
+                          <strong>{actionLabel(item)}</strong> — {item.label}
                         </span>
                       </div>
                     )}

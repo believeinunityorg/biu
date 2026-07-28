@@ -51,6 +51,7 @@ import InviteOrganizationPopup from "@/components/frontend/InviteOrganizationPop
 import { PageHead } from "@/components/frontend/PageHead"
 import { motion, AnimatePresence } from "framer-motion"
 import useAxios from "@/hooks/useAxios"
+import OrganizationSetupStatusBar from "@/components/organization/OrganizationSetupStatusBar"
 
 function supporterIsOrganizationAccount(supporter: {
   is_organization_follower?: boolean
@@ -939,7 +940,16 @@ export default function OrganizationPage({
                       </Button>
                     )}
                   </div>
-            </div>
+              </div>
+
+              {/* Organization setup status — own profile only */}
+              {organization.is_own_organization &&
+                organization.is_registered &&
+                !organization.is_care_alliance_public && (
+                  <div className="mb-2 mt-1">
+                    <OrganizationSetupStatusBar visible />
+                  </div>
+                )}
 
               {/* Profile Stats */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 md:gap-6 py-3 px-3 sm:px-0 text-sm text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-white/10">

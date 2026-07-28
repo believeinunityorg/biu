@@ -168,7 +168,7 @@
         <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 25px 0;">
 
         <p style="color: #95a5a6; font-size: 11px; text-align: center; margin-top: 20px;">
-            Questions? Contact us at <a href="mailto:wendhi@stuttiegroup.com" style="color: #4f46e5; text-decoration: none;">wendhi@stuttiegroup.com</a>
+            Questions? Contact us at <a href="mailto:support@believeinunity.org" style="color: #4f46e5; text-decoration: none;">support@believeinunity.org</a>
         </p>
     </div>
 </body>

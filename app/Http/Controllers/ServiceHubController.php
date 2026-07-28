@@ -3621,7 +3621,7 @@ class ServiceHubController extends Controller
     {
         try {
             // Send email to admin
-            $adminEmail = config('mail.admin_email', 'wendhi@stuttiegroup.com');
+            $adminEmail = config('mail.admin_email', 'support@believeinunity.org');
 
             Mail::to($adminEmail)->send(new \App\Mail\RefundFailedNotification(
                 $order,

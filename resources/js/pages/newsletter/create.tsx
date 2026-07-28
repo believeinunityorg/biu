@@ -574,7 +574,7 @@ export default function NewsletterCreate({
 
     const sampleData: PreviewData = {
         organization_name: previewData?.organization_name || "Your Organization",
-        organization_email: previewData?.organization_email || "wendhi@stuttiegroup.com",
+        organization_email: previewData?.organization_email || "support@believeinunity.org",
         organization_phone: previewData?.organization_phone || "+1 (555) 000-0000",
         organization_address: previewData?.organization_address || "Your Organization Address",
         recipient_name: previewData?.recipient_name || "Recipient Name",

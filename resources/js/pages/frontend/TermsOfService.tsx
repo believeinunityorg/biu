@@ -161,7 +161,7 @@ const TermsOfService = () => {
                                     If you have any questions about these Terms, please contact us at:
                                 </p>
                                 <p className="text-lg font-semibold text-gray-900 dark:text-white mt-2">
-                                    wendhi@stuttiegroup.com
+                                    support@believeinunity.org
                                 </p>
                             </div>
                         </section>

@@ -208,7 +208,7 @@ export default function AdminContactPageEdit({ section, content }: EditProps) {
                                                         <Input
                                                             value={item.content.contact || ''}
                                                             onChange={(e) => updateItem(index, 'contact', e.target.value)}
-                                                            placeholder="wendhi@stuttiegroup.com"
+                                                            placeholder="support@believeinunity.org"
                                                             required
                                                         />
                                                     </div>
@@ -228,7 +228,7 @@ export default function AdminContactPageEdit({ section, content }: EditProps) {
                                                     <Input
                                                         value={item.content.action || ''}
                                                         onChange={(e) => updateItem(index, 'action', e.target.value)}
-                                                        placeholder="mailto:wendhi@stuttiegroup.com"
+                                                        placeholder="mailto:support@believeinunity.org"
                                                     />
                                                 </div>
                                             </div>

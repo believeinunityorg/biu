@@ -80,8 +80,8 @@ export function AddMoney({
                     <p className="text-xs text-amber-900 dark:text-amber-100 leading-relaxed">
                         {usAchNotice
                             || (sepaAvailable
-                                ? 'US bank transfers are not available in your region. SEPA or crypto may still work.'
-                                : 'US bank transfers are not available in your region. Prefer crypto deposit.')}
+                                ? 'US bank transfers (ACH/wire) are not available in your region per Bridge. SEPA and crypto still work.'
+                                : 'US bank transfers (ACH/wire) are not available in your region per Bridge. Prefer crypto deposit.')}
                     </p>
                 </div>
             )}

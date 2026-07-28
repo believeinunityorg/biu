@@ -20,6 +20,7 @@ import {
   Wallet,
   ClipboardList,
   HandCoins,
+  MessageSquare,
 } from "lucide-react"
 import type { PropsWithChildren } from "react"
 
@@ -145,6 +146,17 @@ export default function SettingsLayout({
                         >
                           <Webhook className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">Bridge Wallet</span>
+                        </Link>
+                        <Link
+                          href="/settings/twilio"
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
+                            activeTab === "twilio"
+                              ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          }`}
+                        >
+                          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">Twilio WhatsApp / SMS</span>
                         </Link>
                         <Link
                           href="/settings/application"
@@ -377,6 +389,17 @@ export default function SettingsLayout({
                         >
                           <Webhook className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">Bridge Wallet</span>
+                        </Link>
+                        <Link
+                          href="/settings/twilio"
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
+                            activeTab === "twilio"
+                              ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          }`}
+                        >
+                          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">Twilio WhatsApp / SMS</span>
                         </Link>
                         <Link
                           href="/settings/application"

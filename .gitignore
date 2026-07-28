@@ -25,6 +25,13 @@ AGENTS.md
 PROJECT-OVERVIEW.md
 **/AGENTS.md
 **/PROJECT-OVERVIEW.md
+
+# Local Apache / cPanel docroot rewrite + PHP handler (never commit)
+# Do not commit root `.htaccess` — it is machine/server specific.
+/.htaccess
+# Prefer not staging any .htaccess; Laravel `public/.htaccess` stays tracked only if already in git — agents must never add or update .htaccess in commits.
+**/.htaccess
+!public/.htaccess
 Homestead.json
 Homestead.yaml
 npm-debug.log

@@ -34,9 +34,9 @@ final class UnifiedLedgerBpModule
         return match ($destination) {
             self::GIFT_CARD => 'Gift Card Module',
             self::MARKETPLACE => 'Marketplace Module',
-            self::LEARNING_HUB => 'Learning Hub',
-            self::EVENTS => 'Event Module',
-            self::BRIDGE_WALLET => 'Bridge Wallet',
+            self::LEARNING_HUB => 'Connection Hub',
+            self::EVENTS => 'Events',
+            self::BRIDGE_WALLET => 'BIU Wallet',
             self::SERVICE_HUB => 'Service Hub Module',
             self::RAFFLE => 'Raffle Module',
             self::GENERAL => self::generalLabel(),
@@ -50,9 +50,9 @@ final class UnifiedLedgerBpModule
         return match ($destination) {
             self::GIFT_CARD => 'Gift Card',
             self::MARKETPLACE => 'Marketplace',
-            self::LEARNING_HUB => 'Learning Hub',
+            self::LEARNING_HUB => 'Connection Hub',
             self::EVENTS => 'Events',
-            self::BRIDGE_WALLET => 'Bridge Wallet',
+            self::BRIDGE_WALLET => 'BIU Wallet',
             self::SERVICE_HUB => 'Service Hub',
             self::RAFFLE => 'Raffle',
             self::GENERAL => 'General',
@@ -63,9 +63,9 @@ final class UnifiedLedgerBpModule
     public static function transferEventName(string $destination): string
     {
         return match ($destination) {
-            self::BRIDGE_WALLET => 'Transfer to Bridge Wallet',
-            self::LEARNING_HUB => 'Transfer BP to Learning Hub',
-            self::EVENTS => 'Transfer BP to Event Module',
+            self::BRIDGE_WALLET => 'Transfer to BIU Wallet',
+            self::LEARNING_HUB => 'Transfer BP to Connection Hub',
+            self::EVENTS => 'Transfer BP to Events',
             default => 'Transfer BP to '.self::destinationLabel($destination),
         };
     }

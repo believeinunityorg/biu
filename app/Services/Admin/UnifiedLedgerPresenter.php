@@ -71,16 +71,13 @@ class UnifiedLedgerPresenter
 
         $parties = $this->applyGeneralModuleTransferParties($t, $module, $connectionHubType, $parties);
         $parties = $this->ensurePartiesComplete($t, $parties, $module);
-        $eventName = $this->resolveBpTransferEventName($t, $module, $connectionHubType)
-            ?? $this->resolveEventName($t);
         $taxonomy = UnifiedLedgerMajorType::classify(
             $module,
             $transactionType,
             $this->effectiveWalletProductType($t),
         );
-        if ($eventName === null || trim($eventName) === '') {
-            $eventName = $taxonomy['sub_type_label'];
-        }
+        // Event always matches Sub Type for consistent reporting (detail lives in related/campaign columns).
+        $eventName = $taxonomy['sub_type_label'];
 
         return [
             'txn_id' => $t->id,
@@ -323,10 +320,10 @@ class UnifiedLedgerPresenter
 
         // BRP earn/redeem rows are Reward — never Marketplace (fallback) or Believe Points (BP currency).
         if ($this->isBrpLedgerModule($t)) {
-            return 'reward';
+            return UnifiedLedgerModule::REWARD;
         }
 
-        return match ($sourceType) {
+        $module = match ($sourceType) {
             'donation' => 'donation',
             'fundme_donation' => 'fundme',
             'care_alliance_donation' => 'campaign',
@@ -372,6 +369,8 @@ class UnifiedLedgerPresenter
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
         };
+
+        return UnifiedLedgerModule::normalize($module);
     }
 
     private function moduleForCommission(Transaction $t): string
@@ -1048,7 +1047,7 @@ class UnifiedLedgerPresenter
                 : ($isBridgeMoneyTransfer
                     ? [
                         'to_type' => 'wallet',
-                        'to_name' => 'Believe Bridge wallet',
+                        'to_name' => 'BIU Wallet',
                         'to_email' => $walletUser->email,
                         'to_id' => (int) $walletUser->id,
                     ]
@@ -1181,7 +1180,31 @@ class UnifiedLedgerPresenter
                 : 'BIU Platform';
         }
 
+        $parties['from_name'] = $this->standardizePartyDisplayName($parties['from_name'] ?? null);
+        $parties['to_name'] = $this->standardizePartyDisplayName($parties['to_name'] ?? null);
+
         return $parties;
+    }
+
+    private function standardizePartyDisplayName(?string $name): ?string
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        $trimmed = trim($name);
+        if ($trimmed === '') {
+            return $trimmed;
+        }
+
+        return match (strtolower($trimmed)) {
+            'bridge wallet', 'believe bridge wallet' => 'BIU Wallet',
+            'org sub', 'organization sub' => 'Organization Subscription',
+            'supporter sub' => 'Supporter Subscription',
+            'merchant sub' => 'Merchant Subscription',
+            'learning hub' => 'Connection Hub',
+            default => $trimmed,
+        };
     }
 
     /**
@@ -1800,18 +1823,18 @@ class UnifiedLedgerPresenter
         }
         if ($sourceType === 'bp_redemption' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'Transfer to Bridge Wallet refund #'.$t->related_id
-                : 'Transfer to Bridge Wallet #'.$t->related_id;
+                ? 'Transfer to BIU Wallet refund #'.$t->related_id
+                : 'Transfer to BIU Wallet #'.$t->related_id;
         }
         if ($sourceType === 'bridge_wallet_transfer' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'Bridge Wallet Transfer refund #'.$t->related_id
-                : 'Bridge Wallet Transfer #'.$t->related_id;
+                ? 'BIU Wallet Transfer refund #'.$t->related_id
+                : 'BIU Wallet Transfer #'.$t->related_id;
         }
         if ($sourceType === 'believe_points_wallet_transfer' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'Transfer to Bridge Wallet refund #'.$t->related_id
-                : 'Transfer to Bridge Wallet #'.$t->related_id;
+                ? 'Transfer to BIU Wallet refund #'.$t->related_id
+                : 'Transfer to BIU Wallet #'.$t->related_id;
         }
 
         $label = trim((string) ($related['related_label'] ?? ''));

@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\GiftCardRedemptionDelayedNotification;
 use App\Notifications\GiftCardRedemptionReadyNotification;
 use App\Notifications\GiftCardRedemptionSubmittedNotification;
+use App\Support\ShortChannelNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -228,23 +229,27 @@ class GiftCardRedemptionNotifier
         GiftCard $giftCard,
         string $type,
     ): void {
+        $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::GiftCard);
+        $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::GiftCard);
+        $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
         $pushData = $this->firebaseService->stringifyFcmData([
             'type' => $type,
-            'title' => $title,
-            'body' => $body,
-            'url' => $url,
-            'click_action' => $url,
+            'title' => $pushTitle,
+            'body' => $pushBody,
+            'url' => $pushLinks['url'],
+            'click_action' => $pushLinks['click_action'],
             'gift_card_id' => (string) $giftCard->id,
             'source_type' => 'gift_card',
             'source_id' => (string) $giftCard->id,
-            'module_name' => PushNotificationModule::WalletRewards->value,
+            'module_name' => PushNotificationModule::GiftCard->value,
             'module_record_id' => $giftCard->id,
             'created_by' => $giftCard->user_id,
-            'deep_link' => parse_url($url, PHP_URL_PATH) ?: $url,
+            'deep_link' => $pushLinks['deep_link'],
         ]);
 
         try {
-            $this->firebaseService->sendToUser($userId, $title, $body, $pushData);
+            $this->firebaseService->sendToUser($userId, $pushTitle, $pushBody, $pushData);
         } catch (\Throwable $e) {
             Log::warning('Gift card push notification failed', [
                 'gift_card_id' => $giftCard->id,

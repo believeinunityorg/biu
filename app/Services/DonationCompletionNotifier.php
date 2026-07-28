@@ -9,6 +9,7 @@ use App\Models\Donation;
 use App\Models\User;
 use App\Notifications\DonationConfirmedForDonorNotification;
 use App\Notifications\DonationReceivedForOrganizationNotification;
+use App\Support\ShortChannelNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -60,11 +61,7 @@ class DonationCompletionNotifier
         }
 
         $recipientLabel = $this->recipientLabel($donation);
-        $amountLabel = $this->formatAmount($donation);
         $successUrl = route('donations.success', ['donation_id' => $donation->id]);
-
-        $title = 'Donation confirmed';
-        $body = "Thank you for your donation! Your {$amountLabel} gift to {$recipientLabel} was received.";
 
         try {
             $donor->notify(new DonationConfirmedForDonorNotification($donation, $recipientLabel, $successUrl));
@@ -76,12 +73,16 @@ class DonationCompletionNotifier
             ]);
         }
 
+        $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::Donations);
+        $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::Donations);
+        $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
         $pushData = $this->firebaseService->stringifyFcmData([
             'type' => 'donation_confirmed',
-            'title' => $title,
-            'body' => $body,
-            'url' => $successUrl,
-            'click_action' => $successUrl,
+            'title' => $pushTitle,
+            'body' => $pushBody,
+            'url' => $pushLinks['url'],
+            'click_action' => $pushLinks['click_action'],
             'donation_id' => (string) $donation->id,
             'organization_id' => (string) $donation->organization_id,
             'source_type' => 'donation',
@@ -89,11 +90,11 @@ class DonationCompletionNotifier
             'module_name' => PushNotificationModule::Donations->value,
             'module_record_id' => $donation->id,
             'created_by' => $donor->id,
-            'deep_link' => parse_url($successUrl, PHP_URL_PATH) ?: $successUrl,
+            'deep_link' => $pushLinks['deep_link'],
         ]);
 
         try {
-            $this->firebaseService->sendToUser($donor->id, $title, $body, $pushData);
+            $this->firebaseService->sendToUser($donor->id, $pushTitle, $pushBody, $pushData);
         } catch (\Throwable $e) {
             Log::warning('Donation donor push notification failed', [
                 'donation_id' => $donation->id,
@@ -125,12 +126,7 @@ class DonationCompletionNotifier
         }
 
         $donorName = trim((string) ($donation->user?->name ?? 'A supporter')) ?: 'A supporter';
-        $amountLabel = $this->formatAmount($donation);
         $donationsUrl = route('donations.index');
-        $isRecurring = $donation->frequency && $donation->frequency !== 'one-time';
-
-        $title = 'New donation received';
-        $body = "{$donorName} donated {$amountLabel}".($isRecurring ? ' (recurring)' : '').'.';
 
         try {
             $orgUser->notify(new DonationReceivedForOrganizationNotification($donation, $donorName, $donationsUrl));
@@ -143,12 +139,16 @@ class DonationCompletionNotifier
             ]);
         }
 
+        $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::Donations);
+        $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::Donations);
+        $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
         $pushData = $this->firebaseService->stringifyFcmData([
             'type' => 'donation_received',
-            'title' => $title,
-            'body' => $body,
-            'url' => $donationsUrl,
-            'click_action' => $donationsUrl,
+            'title' => $pushTitle,
+            'body' => $pushBody,
+            'url' => $pushLinks['url'],
+            'click_action' => $pushLinks['click_action'],
             'donation_id' => (string) $donation->id,
             'organization_id' => (string) $donation->organization_id,
             'donor_user_id' => $donation->user_id ? (string) $donation->user_id : '',
@@ -157,11 +157,11 @@ class DonationCompletionNotifier
             'module_name' => PushNotificationModule::Donations->value,
             'module_record_id' => $donation->id,
             'created_by' => $donation->user_id,
-            'deep_link' => parse_url($donationsUrl, PHP_URL_PATH) ?: $donationsUrl,
+            'deep_link' => $pushLinks['deep_link'],
         ]);
 
         try {
-            $this->firebaseService->sendToUser($orgUser->id, $title, $body, $pushData);
+            $this->firebaseService->sendToUser($orgUser->id, $pushTitle, $pushBody, $pushData);
         } catch (\Throwable $e) {
             Log::warning('Donation organization push notification failed', [
                 'donation_id' => $donation->id,
@@ -193,10 +193,5 @@ class DonationCompletionNotifier
         }
 
         return trim((string) ($donation->organization?->name ?? '')) ?: 'Organization';
-    }
-
-    private function formatAmount(Donation $donation): string
-    {
-        return '$'.number_format((float) $donation->amount, 2);
     }
 }

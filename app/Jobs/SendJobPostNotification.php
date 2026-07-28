@@ -2,9 +2,11 @@
 
 namespace App\Jobs;
 
+use App\Enums\PushNotificationModule;
 use App\Jobs\Concerns\UsesPushNotificationQueue;
 use App\Models\JobPost;
 use App\Services\FirebaseService;
+use App\Support\ShortChannelNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -82,25 +84,26 @@ class SendJobPostNotification implements ShouldQueue
     private function sendNotificationToFollower($follower, $title, $body, $jobUrl, $firebaseService): void
     {
         try {
-
+            $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::Volunteer);
+            $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::Volunteer);
+            $pushLinks = ShortChannelNotification::pushDeepLinkData();
 
             $data = [
                 'content_item_id' => (string) $this->jobPost->id,
                 'type' => 'job_post',
                 'job_id' => (string) $this->jobPost->id,
-                'url' => $jobUrl,
-                'click_action' => $jobUrl,
+                'url' => $pushLinks['url'],
+                'click_action' => $pushLinks['click_action'],
                 'source_type' => 'job_post',
                 'source_id' => (string) $this->jobPost->id,
                 'organization_id' => (string) $this->jobPost->organization_id,
-                'module_name' => 'volunteer',
+                'module_name' => PushNotificationModule::Volunteer->value,
                 'module_record_id' => $this->jobPost->id,
                 'created_by' => $this->jobPost->user_id ?? $this->jobPost->organization?->user_id,
-                'deep_link' => parse_url($jobUrl, PHP_URL_PATH) ?: $jobUrl,
+                'deep_link' => $pushLinks['deep_link'],
             ];
 
-            // Send Firebase notification (logs to push_notification_logs for admin overview)
-            $result = $firebaseService->sendToUser($follower->id, $title, $body, $data);
+            $result = $firebaseService->sendToUser($follower->id, $pushTitle, $pushBody, $data);
 
             // Store in database notifications
             // $this->storeDatabaseNotification($follower, $title, $body, $data);

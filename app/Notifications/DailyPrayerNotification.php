@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\ContentItem;
 use App\Models\Organization;
 use App\Services\FirebaseService;
+use App\Support\ShortChannelNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -107,8 +108,6 @@ class DailyPrayerNotification extends Notification implements ShouldQueue, Shoul
         try {
             $firebaseService = new FirebaseService();
 
-            $contentUrl = route('notifications.content.show', ['content_item' => $this->contentItem->id]);
-
             $campaign = $this->resolveCampaign();
 
             $organizationId = $campaign?->organization_id ?? $this->contentItem->organization_id;
@@ -117,18 +116,22 @@ class DailyPrayerNotification extends Notification implements ShouldQueue, Shoul
                 $organizationId = Campaign::query()->whereKey($this->campaignId)->value('organization_id');
             }
 
+            $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::Campaigns);
+            $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::Campaigns);
+            $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
             $data = [
                 'content_item_id' => (string) $this->contentItem->id,
                 'type' => $this->contentItem->type,
                 'channel' => $this->channel,
-                'click_action' => $contentUrl,
-                'url' => $contentUrl,
+                'click_action' => $pushLinks['click_action'],
+                'url' => $pushLinks['url'],
                 'source_type' => 'campaign',
                 'source_id' => (string) ($campaign?->id ?? $this->contentItem->id),
                 'module_name' => PushNotificationModule::Campaigns->value,
                 'module_record_id' => $campaign?->id ?? $this->contentItem->id,
                 'created_by' => $campaign?->user_id ?? $this->contentItem->user_id,
-                'deep_link' => parse_url($contentUrl, PHP_URL_PATH) ?: $contentUrl,
+                'deep_link' => $pushLinks['deep_link'],
             ];
 
             if ($campaign) {
@@ -178,8 +181,8 @@ class DailyPrayerNotification extends Notification implements ShouldQueue, Shoul
 
             $result = $firebaseService->sendToUser(
                 $notifiable->id,
-                $this->contentItem->title,
-                strip_tags($this->contentItem->body),
+                $pushTitle,
+                $pushBody,
                 $data
             );
 
@@ -273,14 +276,8 @@ class DailyPrayerNotification extends Notification implements ShouldQueue, Shoul
             'content_item_id' => $this->contentItem->id,
         ]);
 
-        $message = "🙏 *{$this->contentItem->title}*\n\n";
-        $message .= strip_tags($this->contentItem->body);
-
-        if (isset($this->contentItem->meta['scripture_ref'])) {
-            $message .= "\n\n📖 " . $this->contentItem->meta['scripture_ref'];
-        }
-
-        $message .= "\n\n---\nReply STOP to unsubscribe";
+        // Twilio WhatsApp only — short teaser + Notifications deep link (no full content body).
+        $message = ShortChannelNotification::whatsAppBody(PushNotificationModule::Campaigns);
 
         return (new TwilioSmsMessage())
             ->content($message);

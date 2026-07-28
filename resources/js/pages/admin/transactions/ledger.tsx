@@ -325,10 +325,12 @@ function ledgerEventLabel(u: UnifiedLedgerRow | undefined): string {
   if (!u) {
     return "—"
   }
-  // Prefer specific stored/presenter event names (brand gift cards, course titles, transfers).
-  const eventName = u.event_name?.trim()
-  if (eventName) {
-    return eventName
+  // Event matches Sub Type for consistent reporting.
+  if (u.sub_type_label?.trim()) {
+    return u.sub_type_label.trim()
+  }
+  if (u.event_name?.trim()) {
+    return u.event_name.trim()
   }
   const giftEvents = [
     "bp_gift_sent",
@@ -339,9 +341,6 @@ function ledgerEventLabel(u: UnifiedLedgerRow | undefined): string {
   ]
   if (giftEvents.includes(u.transaction_type)) {
     return transactionTypeDisplayLabel(u.transaction_type)
-  }
-  if (u.sub_type_label?.trim()) {
-    return u.sub_type_label.trim()
   }
   return u.transaction_type.replace(/_/g, " ")
 }
@@ -561,7 +560,7 @@ function ledgerRowTypeDisplay(row: LedgerRow): { label: string; className: strin
 function moduleTableLabel(m: string) {
   const map: Record<string, string> = {
     donation: "Donation",
-    fundme: "Support a project",
+    fundme: "Support a Project",
     general: "General",
     campaign: "Campaign",
     believe_points: "General",
@@ -573,9 +572,9 @@ function moduleTableLabel(m: string) {
     connection_hub: "Connection Hub",
     course: "Connection Hub",
     merchant_hub: "Merchant Hub",
-    organization_subscription: "Org sub",
-    supporter_subscription: "Supporter sub",
-    merchant_subscription: "Merchant sub",
+    organization_subscription: "Organization Subscription",
+    supporter_subscription: "Supporter Subscription",
+    merchant_subscription: "Merchant Subscription",
     payout: "Payout",
     refund: "Refund",
     adjustment: "Adjustment",
@@ -585,29 +584,15 @@ function moduleTableLabel(m: string) {
 
 function moduleCellLabel(u: UnifiedLedgerRow | undefined): string {
   if (!u) return "—"
-  const tt = (u.transaction_type || "").toLowerCase()
-  const event = (u.event_name || "").toLowerCase()
-
-  if (
-    tt === "bp_redemption" ||
-    tt === "believe_points_wallet_transfer" ||
-    event.includes("transfer to bridge wallet")
-  ) {
-    return "BIU Wallet"
+  if (u.module_label?.trim()) {
+    return u.module_label.trim()
   }
-
   if (u.module === "believe_points" || u.module === "general") {
     return "General"
-  }
-
-  const hubType = (u.connection_hub_type || "").toLowerCase()
-  if ((u.module === "connection_hub" || u.module === "course") && hubType === "events") {
-    return "Events"
   }
   if (u.module === "connection_hub" || u.module === "course") {
     return "Connection Hub"
   }
-
   return moduleTableLabel(u.module)
 }
 

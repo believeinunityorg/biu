@@ -2,10 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Enums\PushNotificationModule;
 use App\Jobs\Concerns\UsesPushNotificationQueue;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\FirebaseService;
+use App\Support\ShortChannelNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -64,11 +66,9 @@ class SendEventNotification implements ShouldQueue
             $eventType = $this->event->eventType->name ?? 'Event';
             $location = $this->event->city ?: $this->event->location;
 
-            $title = "New {$eventType} Event";
-            $body = "{$creatorName} created a new event: {$eventName}".
-                   ($location ? " in {$location}" : '');
-
-            $eventUrl = route('viewEvent', $this->event->id);
+            $title = ShortChannelNotification::pushTitle(PushNotificationModule::Events);
+            $body = ShortChannelNotification::pushBody(PushNotificationModule::Events);
+            $pushLinks = ShortChannelNotification::pushDeepLinkData();
 
             $firebaseService = app(FirebaseService::class);
 
@@ -88,11 +88,11 @@ class SendEventNotification implements ShouldQueue
                     'event_type_id' => $this->event->event_type_id ? (string) $this->event->event_type_id : null,
                     'organization_id' => $this->event->organization_id,
                     'user_id' => $this->event->user_id ? (string) $this->event->user_id : null,
-                    'url' => $eventUrl,
-                    'click_action' => $eventUrl,
-                    'module_name' => 'events',
+                    'url' => $pushLinks['url'],
+                    'click_action' => $pushLinks['click_action'],
+                    'module_name' => PushNotificationModule::Events->value,
                     'module_record_id' => $this->event->id,
-                    'deep_link' => parse_url($eventUrl, PHP_URL_PATH) ?: $eventUrl,
+                    'deep_link' => $pushLinks['deep_link'],
                     'audience_type' => $this->event->visibility === 'public' ? 'all_users' : 'followers',
                     'created_by' => $this->event->user_id ?? $organization?->user_id,
                 ]);
@@ -102,6 +102,9 @@ class SendEventNotification implements ShouldQueue
                 'event_id' => $this->event->id,
                 'creator_type' => $creatorType,
                 'creator_name' => $creatorName,
+                'event_name' => $eventName,
+                'event_type' => $eventType,
+                'location' => $location,
                 'recipients_count' => count($followerIds),
             ]);
 

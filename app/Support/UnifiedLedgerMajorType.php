@@ -212,7 +212,7 @@ final class UnifiedLedgerMajorType
         return match ($transactionType) {
             'believe_points_purchase' => [self::PURCHASE, 'bp_purchase', 'BP Purchase'],
             'bp_settlement' => [self::TRANSFER, 'bp_settlement', 'BP Settlement'],
-            'bp_redemption' => [self::TRANSFER, 'bp_redemption', 'Transfer Out'],
+            'bp_redemption', 'believe_points_wallet_transfer' => [self::TRANSFER, 'bp_redemption', 'Transfer to BIU Wallet'],
             'bridge_wallet_transfer' => [self::TRANSFER, 'bridge_wallet_transfer', 'BIU Wallet Transfer'],
             'bp_gift_sent' => [self::TRANSFER, 'bp_gift_sent', 'BP Gift Sent'],
             'bp_gift_claimed' => [self::TRANSFER, 'bp_gift_claimed', 'BP Gift Claimed'],
@@ -308,7 +308,8 @@ final class UnifiedLedgerMajorType
             'bp_gift_expired' => 'BP Gift Expired',
             'bp_gift_refunded' => 'BP Gift Refunded',
             'bp_settlement' => 'BP Settlement',
-            'bp_redemption' => 'Transfer Out',
+            'bp_redemption' => 'Transfer to BIU Wallet',
+            'believe_points_wallet_transfer' => 'Transfer to BIU Wallet',
             'bridge_wallet_transfer' => 'BIU Wallet Transfer',
             'deposit' => 'Deposit',
             'withdrawal' => 'Withdrawal',

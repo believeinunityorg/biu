@@ -152,25 +152,13 @@ class GiftBelievePointsController extends Controller
     {
         $sender = Auth::user();
         if (! $sender instanceof User) {
-            return response()->json(['results' => [], 'invite_email' => null], 401);
+            return response()->json(['results' => [], 'invite_email' => null, 'notice' => null], 401);
         }
 
         $q = trim((string) $request->query('q', ''));
-        $results = $this->giftService->searchRecipients($sender, $q);
+        $resolved = $this->giftService->resolveRecipientSearch($sender, $q);
 
-        $inviteEmail = null;
-        if ($results === [] && filter_var($q, FILTER_VALIDATE_EMAIL)) {
-            $email = Str::lower($q);
-            $exists = User::query()->whereRaw('LOWER(email) = ?', [$email])->exists();
-            if (! $exists && Str::lower((string) $sender->email) !== $email) {
-                $inviteEmail = $email;
-            }
-        }
-
-        return response()->json([
-            'results' => $results,
-            'invite_email' => $inviteEmail,
-        ]);
+        return response()->json($resolved);
     }
 
     public function send(Request $request)

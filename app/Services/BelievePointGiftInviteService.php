@@ -96,15 +96,78 @@ class BelievePointGiftInviteService
             ->orderBy('name')
             ->limit($limit)
             ->get(['id', 'name', 'email', 'slug', 'image'])
-            ->map(fn (User $u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'slug' => $u->slug,
-                'image' => $u->image ? '/storage/'.$u->image : null,
-                'display_name' => $u->name.($u->email ? ' ('.$u->email.')' : ''),
-            ])
+            ->map(fn (User $u) => $this->mapSearchResult($u))
             ->all();
+    }
+
+    /**
+     * Resolve Gift BP recipient search, including exact-email invite / match behavior.
+     *
+     * @return array{results: list<array<string, mixed>>, invite_email: string|null, notice: string|null}
+     */
+    public function resolveRecipientSearch(User $sender, string $query): array
+    {
+        $query = trim($query);
+        if (mb_strlen($query) < 2) {
+            return ['results' => [], 'invite_email' => null, 'notice' => null];
+        }
+
+        $results = $this->searchRecipients($sender, $query);
+        $inviteEmail = null;
+        $notice = null;
+
+        if (filter_var($query, FILTER_VALIDATE_EMAIL)) {
+            $email = Str::lower($query);
+
+            if (Str::lower(trim((string) $sender->email)) === $email) {
+                return [
+                    'results' => [],
+                    'invite_email' => null,
+                    'notice' => 'You cannot send a gift to yourself.',
+                ];
+            }
+
+            /** @var User|null $exact */
+            $exact = User::query()
+                ->whereRaw('LOWER(email) = ?', [$email])
+                ->first();
+
+            if ($exact) {
+                if ($exact->role === 'user' && filled($exact->email_verified_at)) {
+                    // Exact eligible supporter — always surface them even if LIKE search missed.
+                    $results = [$this->mapSearchResult($exact)];
+                } elseif ($exact->role === 'user') {
+                    $results = [];
+                    $notice = 'This email belongs to a supporter who has not verified their email yet.';
+                } else {
+                    $results = [];
+                    $notice = 'This email belongs to an account that cannot receive Believe Points gifts.';
+                }
+            } elseif ($results === []) {
+                $inviteEmail = $email;
+            }
+        }
+
+        return [
+            'results' => $results,
+            'invite_email' => $inviteEmail,
+            'notice' => $notice,
+        ];
+    }
+
+    /**
+     * @return array{id: int, name: string, email: string|null, slug: string|null, image: string|null, display_name: string}
+     */
+    protected function mapSearchResult(User $u): array
+    {
+        return [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+            'slug' => $u->slug,
+            'image' => $u->image ? '/storage/'.$u->image : null,
+            'display_name' => $u->name.($u->email ? ' ('.$u->email.')' : ''),
+        ];
     }
 
     /**

@@ -1,7 +1,7 @@
 "use client"
 
 import { Head, router, useForm, usePage, Link } from "@inertiajs/react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import ProfileLayout from "@/components/frontend/layout/user-profile-layout"
 import AppSidebarLayout from "@/layouts/app/app-sidebar-layout"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
@@ -147,6 +147,8 @@ export default function GiftBpPage() {
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState<SearchResult[]>([])
   const [inviteEmail, setInviteEmail] = useState<string | null>(null)
+  const [searchNotice, setSearchNotice] = useState<string | null>(null)
+  const searchSeqRef = useRef(0)
   const [selected, setSelected] = useState<SearchResult | null>(preselectedRecipient)
   const [mode, setMode] = useState<"user" | "invite" | null>(preselectedRecipient ? "user" : null)
   const [preset, setPreset] = useState<number | "custom">(10)
@@ -189,9 +191,12 @@ export default function GiftBpPage() {
 
   const runSearch = useCallback(async (q: string) => {
     const trimmed = q.trim()
+    const seq = ++searchSeqRef.current
     if (trimmed.length < 2) {
       setResults([])
       setInviteEmail(null)
+      setSearchNotice(null)
+      setSearching(false)
       return
     }
     setSearching(true)
@@ -200,13 +205,20 @@ export default function GiftBpPage() {
         headers: { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
         credentials: "same-origin",
       })
-      const json = (await res.json()) as { results: SearchResult[]; invite_email: string | null }
+      const json = (await res.json()) as {
+        results: SearchResult[]
+        invite_email: string | null
+        notice?: string | null
+      }
+      if (seq !== searchSeqRef.current) return
       setResults(json.results ?? [])
       setInviteEmail(json.invite_email ?? null)
+      setSearchNotice(json.notice ?? null)
     } catch {
+      if (seq !== searchSeqRef.current) return
       toast.error("Search failed. Try again.")
     } finally {
-      setSearching(false)
+      if (seq === searchSeqRef.current) setSearching(false)
     }
   }, [])
 
@@ -219,6 +231,7 @@ export default function GiftBpPage() {
     setSelected(user)
     setMode("user")
     setInviteEmail(null)
+    setSearchNotice(null)
     setData("mode", "user")
     setData("recipient_id", user.id)
     setData("email", "")
@@ -228,6 +241,7 @@ export default function GiftBpPage() {
     setSelected(null)
     setMode("invite")
     setInviteEmail(email)
+    setSearchNotice(null)
     setData("mode", "invite")
     setData("recipient_id", null)
     setData("email", email)
@@ -237,6 +251,7 @@ export default function GiftBpPage() {
     setSelected(null)
     setMode(null)
     setInviteEmail(null)
+    setSearchNotice(null)
     setData("mode", "user")
     setData("recipient_id", null)
     setData("email", "")
@@ -611,7 +626,8 @@ export default function GiftBpPage() {
 
                     {query.trim().length >= 2 && !searching && results.length === 0 && !inviteEmail && (
                       <p className="text-sm text-muted-foreground">
-                        No supporters found. Enter a full email address to send an invite gift.
+                        {searchNotice ||
+                          "No supporters found. Enter a full email address to send an invite gift."}
                       </p>
                     )}
                   </div>

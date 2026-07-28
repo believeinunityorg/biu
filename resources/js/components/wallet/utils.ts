@@ -257,6 +257,7 @@ export const isBridgePersonaVerificationCompleteMessage = (data: unknown): boole
 
 /**
  * Convert Bridge/Persona verify URL to embeddable widget URL (Bridge docs: /verify → /widget + iframe-origin).
+ * Strip redirect params so "Next" / completion stays in the modal (postMessage) instead of opening a new window.
  */
 export const convertBridgeVerifyLinkToWidgetUrl = (linkUrl: string): string => {
     try {
@@ -264,6 +265,9 @@ export const convertBridgeVerifyLinkToWidgetUrl = (linkUrl: string): string => {
         if (url.pathname.includes('/verify')) {
             url.pathname = url.pathname.replace('/verify', '/widget')
         }
+        // Hosted redirect breaks out of the iframe on final steps.
+        url.searchParams.delete('redirect-uri')
+        url.searchParams.delete('redirect_uri')
         url.searchParams.set('iframe-origin', window.location.origin)
         return url.toString()
     } catch {

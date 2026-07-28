@@ -1384,10 +1384,14 @@ class BridgeWalletController extends Controller
             }
 
             $iframeOrigin = $request->getSchemeAndHttpHost();
-            $redirectUri = $request->input(
-                'redirect_url',
-                url($linkType === 'kyb' ? '/wallet/kyb-callback' : '/wallet/kyc-callback'),
-            );
+            // Explicit empty redirect_url = iframe/modal embed (postMessage only; no breakout window).
+            // Omitted redirect_url keeps the legacy callback default for other clients.
+            if ($request->exists('redirect_url')) {
+                $redirectRaw = trim((string) $request->input('redirect_url'));
+                $redirectUri = $redirectRaw !== '' ? $redirectRaw : null;
+            } else {
+                $redirectUri = url($linkType === 'kyb' ? '/wallet/kyb-callback' : '/wallet/kyc-callback');
+            }
 
             // Individual + business (KYB): cards endorsement KYC link
             $kycLinkId = $linkType === 'kyb'

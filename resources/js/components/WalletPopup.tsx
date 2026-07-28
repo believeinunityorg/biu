@@ -2654,9 +2654,9 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
         setVerificationModalWidgetUrl(null)
 
         try {
-            const callbackPath = linkType === 'kyb' ? '/wallet/kyb-callback' : '/wallet/kyc-callback'
             const endpoint = linkType === 'kyb' ? '/wallet/bridge/kyb-link' : '/wallet/bridge/kyc-link'
 
+            // Empty redirect_url tells the API this is an iframe embed — no hosted redirect on "Next".
             const response = await fetch(endpoint, {
                 method: 'POST',
                             headers: {
@@ -2668,7 +2668,7 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
                             credentials: 'include',
                             cache: 'no-store',
                 body: JSON.stringify({
-                    redirect_url: `${window.location.origin}${callbackPath}`,
+                    redirect_url: '',
                     endorsement,
                 }),
             })

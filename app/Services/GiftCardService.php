@@ -847,7 +847,7 @@ class GiftCardService
         $needForPage = $offset + $chunkSize;
         $needForHasMore = $needForPage + 1;
 
-        $cacheKey = 'phaze_brands_search_v2_'.$country.'_'.md5($needle);
+        $cacheKey = 'phaze_brands_search_v3_'.$country.'_'.md5($needle);
         $state = Cache::get($cacheKey, [
             'matches' => [],
             'scanned_through_page' => 0,
@@ -872,8 +872,7 @@ class GiftCardService
             }
 
             foreach ($pageBrands as $brand) {
-                $name = strtolower((string) ($brand['productName'] ?? ''));
-                if ($name !== '' && str_contains($name, $needle)) {
+                if ($this->brandMatchesSearchNeedle($brand, $needle)) {
                     $matches[] = $brand;
                 }
             }
@@ -928,6 +927,38 @@ class GiftCardService
             'per_page' => $chunkSize,
             'has_more' => $hasMore && count($chunk) > 0,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $brand
+     */
+    private function brandMatchesSearchNeedle(array $brand, string $needle): bool
+    {
+        if ($needle === '') {
+            return true;
+        }
+
+        $searchFields = [
+            'productName',
+            'name',
+            'brandName',
+            'title',
+            'brand',
+            'displayName',
+            'productTitle',
+            'merchantName',
+            'storeName',
+            'vendorName',
+        ];
+
+        foreach ($searchFields as $field) {
+            $value = strtolower(trim((string) ($brand[$field] ?? '')));
+            if ($value !== '' && str_contains($value, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

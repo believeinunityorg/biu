@@ -802,7 +802,7 @@ export default function GiftBpPage() {
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-600/15 text-[10px] font-bold text-purple-700 dark:text-purple-300">
                     3
                   </span>
-                  <span>Closed-loop gift cards use full Available (Purchased + Gift). Visa/MC need purchased BP only. Other modules use Available − Gift.</span>
+                  <span>Closed-loop gift cards use Available BP (Gift reporting decreases). Visa/Mastercard open-loop cards are a Prime Supporter benefit via Bridge Wallet Cards.</span>
                 </li>
               </ol>
             </div>

@@ -5,8 +5,9 @@ namespace App\Services;
 /**
  * Closed-loop vs open-loop gift card classification.
  *
- * Closed-loop: buy with full Available BP; Gift BP reporting decreases with the spend.
- * Open-loop (Visa/Mastercard): purchased BP only (Available − Gift); Gift reporting unchanged.
+ * Closed-loop (Walmart, Amazon, …): buy with Available BP via Phaze.
+ * Open-loop (Visa / Mastercard): not sold with Believe Points — supporters use
+ * Bridge Wallet → Services → Cards (existing virtual card flow).
  */
 class GiftCardGiftedPointsPolicy
 {
@@ -21,7 +22,15 @@ class GiftCardGiftedPointsPolicy
     }
 
     /**
-     * True for closed-loop retail cards (Gift BP reporting may decrease on purchase).
+     * Open-loop network cards must be obtained via Bridge Wallet, not Phaze + BP.
+     */
+    public static function requiresBridgeWallet(?string $productDisplayName): bool
+    {
+        return self::isOpenLoop($productDisplayName);
+    }
+
+    /**
+     * True for closed-loop retail cards (BP purchase allowed; Gift BP reporting may decrease).
      * False for Visa/Mastercard open-loop network cards.
      */
     public static function isAllowedForGiftedRedemption(?string $productDisplayName): bool
@@ -45,5 +54,10 @@ class GiftCardGiftedPointsPolicy
         }
 
         return true;
+    }
+
+    public static function openLoopBridgeMessage(): string
+    {
+        return 'Visa and Mastercard are open-loop cards. They are not purchased with Believe Points. Open Bridge Wallet → Services → Cards to issue a virtual card funded by your Bridge balance.';
     }
 }

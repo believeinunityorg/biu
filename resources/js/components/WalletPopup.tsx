@@ -29,6 +29,7 @@ import {
     patchRecentWalletActivityCache,
     setRecentWalletActivityCache,
 } from '@/lib/wallet-activity-cache'
+import type { ActionView } from '@/components/wallet/types'
 import {
     SuccessMessage,
     BalanceDisplay,
@@ -71,6 +72,8 @@ interface WalletPopupProps {
     isOpen: boolean
     onClose: () => void
     organizationName?: string
+    /** Deep-link into a wallet sub-view when the popup opens (e.g. virtual_card). */
+    initialView?: ActionView
 }
 
 // Use the getCsrfToken from wallet utils
@@ -87,7 +90,7 @@ interface SharedData {
     }
 }
 
-export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupProps) {
+export function WalletPopup({ isOpen, onClose, organizationName, initialView = 'main' }: WalletPopupProps) {
     const { auth } = usePage<SharedData>().props
     const [walletBalance, setWalletBalance] = useState<number | null>(null)
     const [walletAddress, setWalletAddress] = useState<string | null>(null)
@@ -98,7 +101,7 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
     const [copied, setCopied] = useState(false)
     const [activeTab, setActiveTab] = useState<'account' | 'activity'>('account')
-    const [actionView, setActionView] = useState<'main' | 'send' | 'receive' | 'swap' | 'addMoney' | 'external_accounts' | 'transfer_from_external' | 'withdraw_to_external' | 'virtual_card' | 'services_menu' | 'activity' | 'transaction_details'>('main')
+    const [actionView, setActionView] = useState<ActionView>(initialView || 'main')
     const [externalAccounts, setExternalAccounts] = useState<Array<{
         id: string;
         account_number: string;
@@ -1000,6 +1003,14 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
             window.removeEventListener('message', handleMessage)
         }
     }, [])
+
+    // Apply deep-link view whenever the popup opens (Bridge Cards, Add Money, etc.).
+    useEffect(() => {
+        if (!isOpen) {
+            return
+        }
+        setActionView(initialView || 'main')
+    }, [isOpen, initialView])
 
     // Fetch wallet activity once per popup open (Reverb patches update in place)
     useEffect(() => {

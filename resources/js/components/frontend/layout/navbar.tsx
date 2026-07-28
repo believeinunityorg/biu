@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/frontend/ui/button"
 import {
   DropdownMenu,
@@ -67,6 +67,11 @@ import { useMobileNav } from "@/contexts/mobile-nav-context"
 import { NotificationBell } from "@/components/notification-bell"
 import SiteTitle from "@/components/site-title"
 import { WalletPopup } from "@/components/WalletPopup"
+import type { ActionView } from "@/components/wallet/types"
+import {
+  OPEN_WALLET_POPUP_EVENT,
+  type OpenWalletPopupDetail,
+} from "@/lib/open-wallet-popup"
 import { UserWalletSubscriptionModal } from "@/components/UserWalletSubscriptionModal"
 import { PointsBalanceSummary } from "@/components/frontend/layout/points-balance-summary"
 import {
@@ -214,6 +219,7 @@ export default function Navbar() {
   const [showBalance, setShowBalance] = useState(false)
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
   const [showWalletPopup, setShowWalletPopup] = useState(false)
+  const [walletInitialView, setWalletInitialView] = useState<ActionView>("main")
   const [hasSubscription, setHasSubscription] = useState<boolean | null>(null)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
 
@@ -452,7 +458,7 @@ export default function Navbar() {
   }
 
   // Handle wallet button click - check subscription first
-  const handleWalletClick = () => {
+  const handleWalletClick = useCallback((view: ActionView = "main") => {
     if (auth?.user?.wallet_header_visible === false) {
       toast.error(
         hasCareAllianceRole
@@ -476,12 +482,26 @@ export default function Navbar() {
     }
 
     // Has subscription or is organization user, show wallet popup
+    setWalletInitialView(view)
     setShowWalletPopup(true)
-  }
+  }, [auth?.user?.wallet_header_visible, auth?.user?.role, hasCareAllianceRole, hasSubscription])
+
+  useEffect(() => {
+    const onOpenRequest = (event: Event) => {
+      const detail = (event as CustomEvent<OpenWalletPopupDetail>).detail
+      handleWalletClick(detail?.view ?? "main")
+    }
+
+    window.addEventListener(OPEN_WALLET_POPUP_EVENT, onOpenRequest as EventListener)
+    return () => {
+      window.removeEventListener(OPEN_WALLET_POPUP_EVENT, onOpenRequest as EventListener)
+    }
+  }, [handleWalletClick])
 
   // Refresh balance when wallet popup closes
   const handleWalletPopupClose = () => {
     setShowWalletPopup(false)
+    setWalletInitialView("main")
     // Refresh balance after a short delay to allow backend operations to complete
     setTimeout(() => {
       fetchBalance()
@@ -535,7 +555,7 @@ export default function Navbar() {
                 {/* Wallet Balance Button — hidden for admin; hidden when wallet_header_visible is false (no valid EIN context) */}
                 {showWalletInHeader && (
                   <div
-                    onClick={handleWalletClick}
+                    onClick={() => handleWalletClick()}
                     className="flex h-9 max-w-[11rem] cursor-pointer items-center gap-1.5 rounded-full bg-gray-100 px-2 transition-colors hover:bg-gray-200 sm:max-w-none sm:gap-2 sm:px-3 dark:bg-gray-800 dark:hover:bg-gray-700"
                   >
                     <Wallet className="h-4 w-4 text-green-600" />
@@ -726,7 +746,7 @@ export default function Navbar() {
                                   size="icon"
                                   className="h-9 w-9 shrink-0 text-green-600"
                                   aria-label="Wallet"
-                                  onClick={handleWalletClick}
+                                  onClick={() => handleWalletClick()}
                                 >
                                   <Wallet className="h-5 w-5" />
                                 </Button>
@@ -1017,7 +1037,7 @@ export default function Navbar() {
                                               <Button
                                                   variant="ghost"
                                                   className="w-full justify-start rounded-md bg-gray-50 dark:bg-gray-800"
-                                                  onClick={handleWalletClick}
+                                                  onClick={() => handleWalletClick()}
                                               >
                                                   <div className="flex w-full items-center justify-between">
                                                       <div className="flex items-center gap-2">
@@ -1153,7 +1173,13 @@ export default function Navbar() {
       </nav>
 
       {/* Render outside nav — backdrop-blur on nav traps fixed children to header height on mobile */}
-      {showWalletPopup && <WalletPopup isOpen={showWalletPopup} onClose={handleWalletPopupClose} />}
+      {showWalletPopup && (
+        <WalletPopup
+          isOpen={showWalletPopup}
+          onClose={handleWalletPopupClose}
+          initialView={walletInitialView}
+        />
+      )}
       {showSubscriptionModal && (
         <UserWalletSubscriptionModal isOpen={showSubscriptionModal} onClose={() => setShowSubscriptionModal(false)} />
       )}

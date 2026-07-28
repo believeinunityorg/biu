@@ -52,9 +52,13 @@ class GiftCardRedemptionService
         $requestedAt = now();
         $scheduledAt = $requestedAt->copy()->addHours($delayHours);
 
-        $finalBrandName = $selectedBrand['productName'] ?? $validated['brand_name'];
+            $finalBrandName = $selectedBrand['productName'] ?? $validated['brand_name'];
         if (empty($finalBrandName)) {
             $finalBrandName = 'Gift Card #'.($validated['productId'] ?? 'Unknown');
+        }
+
+        if (GiftCardGiftedPointsPolicy::requiresBridgeWallet($finalBrandName)) {
+            throw new \RuntimeException(GiftCardGiftedPointsPolicy::openLoopBridgeMessage());
         }
 
         $giftCard = DB::transaction(function () use (
@@ -76,10 +80,7 @@ class GiftCardRedemptionService
             $isClosedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($finalBrandName);
             $deducted = $lockedUser->deductAvailableBelievePointsForGiftCard($pointsRequired, $isClosedLoop);
             if ($deducted === null) {
-                $message = $isClosedLoop
-                    ? 'Insufficient Available Believe Points.'
-                    : 'Visa/Mastercard cannot be purchased with Gift BP. Use purchased Believe Points (Available − Gift).';
-                throw new \RuntimeException($message);
+                throw new \RuntimeException('Insufficient Available Believe Points.');
             }
             $fromGifted = $deducted['from_gifted'];
             $reduceGiftReporting = $fromGifted > 0;

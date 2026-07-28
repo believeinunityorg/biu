@@ -535,29 +535,36 @@ class GiftCardController extends Controller
                 ], 403);
             }
 
+            $brandNameForPolicy = (string) ($selectedBrand['productName'] ?? $validated['brand_name'] ?? '');
+            if (GiftCardGiftedPointsPolicy::requiresBridgeWallet($brandNameForPolicy)) {
+                DB::rollBack();
+                $message = GiftCardGiftedPointsPolicy::openLoopBridgeMessage();
+
+                if ($isInertiaRequest) {
+                    return back()->withErrors([
+                        'payment_method' => $message,
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'requires_bridge_wallet' => true,
+                ], 422);
+            }
+
             $platformFee = BiuPlatformFeeService::getGiftCardPlatformFeeUsd();
             $pointsRequired = BiuPlatformFeeService::giftCardTotalChargedUsd((float) $purchaseAmount);
             $user->refresh();
 
-            $brandNameForPolicy = (string) ($selectedBrand['productName'] ?? $validated['brand_name'] ?? '');
-            $isClosedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($brandNameForPolicy);
-            $eligibleBalance = $isClosedLoop
-                ? $user->currentBelievePoints()
-                : $user->purchasedBelievePointsBalance();
+            $eligibleBalance = $user->currentBelievePoints();
 
             if ($eligibleBalance < $pointsRequired) {
                 DB::rollBack();
                 $haveAvailable = $user->currentBelievePoints();
-                $havePurchased = $user->purchasedBelievePointsBalance();
-                $haveGifted = round((float) ($user->gifted_believe_points ?? 0), 2);
-
-                if ($isClosedLoop) {
-                    $message = $platformFee > 0
-                        ? "Insufficient Believe Points. You need {$pointsRequired} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$haveAvailable}."
-                        : "Insufficient Believe Points. You need {$pointsRequired} Available BP but only have {$haveAvailable}.";
-                } else {
-                    $message = "Visa/Mastercard cannot be purchased with Gift BP. You need {$pointsRequired} purchased BP (Available − Gift) but only have {$havePurchased} (Available {$haveAvailable}, Gift BP {$haveGifted}).";
-                }
+                $message = $platformFee > 0
+                    ? "Insufficient Believe Points. You need {$pointsRequired} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$haveAvailable}."
+                    : "Insufficient Believe Points. You need {$pointsRequired} Available BP but only have {$haveAvailable}.";
 
                 if ($isInertiaRequest) {
                     return back()->withErrors([
@@ -1300,6 +1307,10 @@ class GiftCardController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                 ] : null,
+                'is_prime_supporter' => $user
+                    && ($user->role ?? null) === 'user'
+                    && \App\Support\SupporterSubscriptionService::currentTierSlug($user)
+                        === \App\Support\SupporterSubscriptionService::SLUG_PRIME,
                 'organizations' => $organizations,
                 'giftCardPurchaseOrganizations' => $giftCardPurchaseOrganizations,
                 'platformFeeUsd' => BiuPlatformFeeService::getGiftCardPlatformFeeUsd(),
@@ -1917,10 +1928,11 @@ class GiftCardController extends Controller
     private function withGiftCardBpEligibility(array $brand): array
     {
         $name = $brand['productName'] ?? '';
-        // false = Visa/MC — Gift BP cannot pay; purchased BP only
-        $brand['allowsGiftBp'] = GiftCardGiftedPointsPolicy::isClosedLoop(
-            is_string($name) ? $name : null
-        );
+        $nameStr = is_string($name) ? $name : null;
+        $closedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($nameStr);
+        // Closed-loop: BP purchase. Open-loop Visa/MC: Bridge Wallet Cards only.
+        $brand['allowsGiftBp'] = $closedLoop;
+        $brand['requiresBridgeWallet'] = ! $closedLoop;
 
         return $brand;
     }

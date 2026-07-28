@@ -356,28 +356,20 @@ class BridgeWalletController extends Controller
                 ], 404);
             }
 
-            // Check KYC/KYB status
-            $isApproved = false;
-            if ($isOrgUser) {
-                // For businesses, check KYB status
-                $isApproved = $integration->kyb_status === 'approved';
-                if (!$isApproved) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'KYB must be approved before creating wallet.',
-                        'kyb_status' => $integration->kyb_status,
-                    ], 403);
-                }
-            } else {
-                // For individuals, check KYC status
-                $isApproved = $integration->kyc_status === 'approved';
-                if (!$isApproved) {
+            // Refresh from Bridge so local kyc/kyb match endorsements (SEPA/Active can
+            // approve wallet creation even when US base is region-blocked).
+            $customer = $this->syncIntegrationFromBridgeApi($integration, $isOrgUser);
+            $integration->refresh();
+
+            if (! $this->integrationVerificationApproved($integration, $isOrgUser, $customer)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'KYC must be approved before creating wallet.',
+                    'message' => $isOrgUser
+                        ? 'KYB must be approved before creating wallet.'
+                        : 'KYC must be approved before creating wallet.',
                     'kyc_status' => $integration->kyc_status,
+                    'kyb_status' => $integration->kyb_status,
                 ], 403);
-                }
             }
 
             // Check if we're in sandbox mode
@@ -3780,27 +3772,39 @@ class BridgeWalletController extends Controller
                 $integration->kyc_status = $bridgeKycStatus;
             }
         } else {
+            // Individuals: wallet KYC is approved when base OR another fiat endorsement (e.g. SEPA)
+            // is approved, or the Bridge customer is Active. Do NOT copy a region-blocked base
+            // status (incomplete/rejected) over an otherwise wallet-ready customer.
+            // @see https://apidocs.bridge.xyz/platform/customers/customers/endorsements
+            $endorsements = $this->bridgeService->getEndorsementsSummary($customer);
             $baseInfo = $this->bridgeService->getBaseEndorsementInfo($customer);
-
-            if ($baseInfo['exists'] ?? false) {
-                $baseStatus = strtolower((string) ($baseInfo['status'] ?? ''));
-                if ($baseStatus === 'approved') {
-                    $integration->kyc_status = 'approved';
-                } elseif ($baseStatus !== '') {
-                    $integration->kyc_status = $baseStatus;
-            }
-        } else {
             $bridgeKycStatus = strtolower((string) ($customer['kyc_status'] ?? ''));
-            if ($bridgeKycStatus === 'approved' || ($customerStatus === 'active' && $hasApprovedEndorsements)) {
+            $walletReady = ($endorsements['custodial_wallet_ok'] ?? false)
+                || ($baseInfo['approved'] ?? false)
+                || ($endorsements['sepa_approved'] ?? false)
+                || in_array($bridgeKycStatus, ['approved', 'verified'], true)
+                || ($customerStatus === 'active' && $hasApprovedEndorsements);
+
+            if ($walletReady) {
                 $integration->kyc_status = 'approved';
-            } elseif ($bridgeKycStatus !== '') {
-                $integration->kyc_status = $bridgeKycStatus;
-                } elseif (
-                    in_array($customerStatus, ['not_started', 'incomplete'], true)
-                    && $integration->kyc_status === 'approved'
-                ) {
-                    $integration->kyc_status = $customerStatus;
+            } elseif ($baseInfo['approved'] ?? false) {
+                $integration->kyc_status = 'approved';
+            } elseif (in_array($bridgeKycStatus, ['approved', 'verified', 'under_review', 'incomplete', 'not_started', 'rejected', 'paused', 'offboarded'], true)) {
+                // Prefer Bridge top-level kyc_status over a region-blocked base endorsement status.
+                $integration->kyc_status = $bridgeKycStatus === 'verified' ? 'approved' : $bridgeKycStatus;
+            } elseif (($baseInfo['exists'] ?? false) && ($baseInfo['status'] ?? '') !== '') {
+                $baseStatus = strtolower((string) ($baseInfo['status'] ?? ''));
+                // Region-blocked base stays incomplete — never treat as terminal rejection for wallet UX.
+                if (($endorsements['region_blocks_us_ach'] ?? false) && $customerStatus === 'active') {
+                    $integration->kyc_status = 'approved';
+                } else {
+                    $integration->kyc_status = $baseStatus === 'approved' ? 'approved' : $baseStatus;
                 }
+            } elseif (
+                in_array($customerStatus, ['not_started', 'incomplete'], true)
+                && $integration->kyc_status === 'approved'
+            ) {
+                $integration->kyc_status = $customerStatus;
             }
         }
     }

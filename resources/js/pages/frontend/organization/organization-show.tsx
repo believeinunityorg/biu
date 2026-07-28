@@ -946,7 +946,7 @@ export default function OrganizationPage({
               {organization.is_own_organization &&
                 organization.is_registered &&
                 !organization.is_care_alliance_public && (
-                  <div className="mb-4 mt-2 px-1 sm:px-0">
+                  <div className="mb-2 mt-1">
                     <OrganizationSetupStatusBar visible />
                   </div>
                 )}

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Link } from "@inertiajs/react"
-import { AnimatePresence, motion } from "framer-motion"
 import {
   ArrowRight,
   Bot,
@@ -53,6 +52,7 @@ function statusStyles(color: StatusColor) {
   if (color === "green") {
     return {
       dot: "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]",
+      dotBg: "bg-emerald-400",
       text: "text-emerald-400",
       bar: "bg-emerald-500",
       chipBorder: "border-emerald-500/30 hover:border-emerald-400/50",
@@ -62,6 +62,7 @@ function statusStyles(color: StatusColor) {
   if (color === "yellow") {
     return {
       dot: "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]",
+      dotBg: "bg-amber-400",
       text: "text-amber-400",
       bar: "bg-amber-500",
       chipBorder: "border-amber-500/30 hover:border-amber-400/50",
@@ -70,6 +71,7 @@ function statusStyles(color: StatusColor) {
   }
   return {
     dot: "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)]",
+    dotBg: "bg-red-400",
     text: "text-red-400",
     bar: "bg-red-500",
     chipBorder: "border-red-500/30 hover:border-red-400/50",
@@ -84,11 +86,12 @@ function overallProgressColor(percent: number): string {
 }
 
 function CircularProgress({ percent, size = 44 }: { percent: number; size?: number }) {
-  const stroke = 3.5
+  const stroke = size <= 32 ? 2.5 : 3.5
   const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (percent / 100) * circumference
   const accent = overallProgressColor(percent)
+  const labelClass = size <= 32 ? "text-[8px]" : "text-[11px]"
 
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
@@ -113,13 +116,74 @@ function CircularProgress({ percent, size = 44 }: { percent: number; size?: numb
           strokeDashoffset={offset}
           strokeLinecap="round"
           className="transition-all duration-700 ease-out"
-          style={{ filter: `drop-shadow(0 0 4px ${accent}80)` }}
+          style={{ filter: size <= 32 ? undefined : `drop-shadow(0 0 4px ${accent}80)` }}
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums text-white">
+      <span className={cn("absolute inset-0 flex items-center justify-center font-bold tabular-nums text-white", labelClass)}>
         {percent}%
       </span>
     </div>
+  )
+}
+
+function moduleRingStroke(color: StatusColor): string {
+  if (color === "green") return "#34d399"
+  if (color === "yellow") return "#fbbf24"
+  return "#f87171"
+}
+
+/** Mobile module ring — icon inside circular progress (mockup style). */
+function ModuleRingProgress({ module }: { module: ReadinessModule }) {
+  const Icon = MODULE_ICONS[module.id] ?? Building2
+  const styles = statusStyles(module.status_color)
+  const strokeColor = moduleRingStroke(module.status_color)
+  const size = 48
+  const stroke = 3
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  const offset = circumference - (module.percent / 100) * circumference
+
+  return (
+    <Link
+      href={route("setup-checklist.index", { module: module.id })}
+      className="flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 active:opacity-80"
+    >
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90" aria-hidden>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={stroke}
+            className="text-white/10"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={stroke}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-all duration-700 ease-out"
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Icon className={cn("h-5 w-5", styles.text)} aria-hidden />
+        </div>
+      </div>
+      <span className="w-full truncate text-center text-[10px] font-medium leading-tight text-white">
+        {moduleLabel(module)}
+      </span>
+      <span className="flex items-center gap-1 text-[10px] text-gray-400">
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", styles.dotBg)} aria-hidden />
+        <span className="tabular-nums">{module.percent}%</span>
+      </span>
+    </Link>
   )
 }
 
@@ -206,7 +270,6 @@ function continueSetupHref(checklist: ChecklistPayload): string {
 
 export default function OrganizationSetupStatusBar({ visible }: { visible: boolean }) {
   const { checklist, loaded } = useLiveOrganizationReadiness(visible)
-  const [mobileExpanded, setMobileExpanded] = useState(false)
 
   if (!visible || !loaded || !checklist || checklist.percent >= 100) {
     return null
@@ -264,142 +327,33 @@ export default function OrganizationSetupStatusBar({ visible }: { visible: boole
         </div>
       </div>
 
-      {/* Mobile — high-visibility card with always-on CTA */}
-      <div className="md:hidden space-y-2">
-        <div
-          className={cn(
-            "relative overflow-hidden rounded-2xl border-2 shadow-xl",
-            "border-purple-500/50 bg-gradient-to-br from-[#1a1040] via-[#121a2e] to-[#0f1623]",
-            "shadow-[0_8px_32px_rgba(147,51,234,0.35)]"
-          )}
-        >
-          {/* Glow accents */}
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-purple-400 via-violet-500 to-blue-500" />
-          <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-purple-500/30 blur-2xl" />
-          <div className="pointer-events-none absolute -bottom-4 left-1/3 h-12 w-24 rounded-full bg-violet-600/20 blur-xl" />
-
-          <div className="relative px-4 pt-4 pb-3">
-            {/* Header row */}
-            <button
-              type="button"
-              onClick={() => setMobileExpanded((open) => !open)}
-              className="flex w-full items-start justify-between gap-3 text-left"
-              aria-expanded={mobileExpanded}
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-3">
-                <CircularProgress percent={checklist.percent} size={52} />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4 shrink-0 text-purple-300" aria-hidden />
-                    <p className="text-base font-bold text-white">Complete your setup</p>
-                  </div>
-                  <p className="mt-0.5 text-sm font-semibold text-purple-200">
-                    {checklist.percent}% done
-                    <span className="mx-1.5 font-normal text-white/30">·</span>
-                    <span className="font-normal text-gray-300">
-                      {checklist.remaining} step{checklist.remaining === 1 ? "" : "s"} left
-                    </span>
-                  </p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    {mobileExpanded ? "Tap to collapse modules" : "Tap modules below for details"}
-                  </p>
-                </div>
-              </div>
-              <ChevronRight
-                className={cn(
-                  "mt-1 h-6 w-6 shrink-0 text-purple-300 transition-transform duration-200",
-                  mobileExpanded && "rotate-90"
-                )}
-              />
-            </button>
-
-            {/* Module preview — always visible */}
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {checklist.modules.map((module) => {
-                const styles = statusStyles(module.status_color)
-                const Icon = MODULE_ICONS[module.id] ?? Building2
-                return (
-                  <Link
-                    key={module.id}
-                    href={route("setup-checklist.index", { module: module.id })}
-                    className={cn(
-                      "flex shrink-0 flex-col items-center gap-1 rounded-xl border px-3 py-2 min-w-[4.5rem] transition-transform active:scale-95",
-                      styles.chipBorder,
-                      styles.chipBg
-                    )}
-                  >
-                    <span className={cn("h-2.5 w-2.5 rounded-full", styles.dot)} aria-hidden />
-                    <Icon className="h-4 w-4 text-gray-300" aria-hidden />
-                    <span className="max-w-[4.5rem] truncate text-[10px] font-medium text-gray-200">
-                      {moduleLabel(module)}
-                    </span>
-                    <span className={cn("text-xs font-bold tabular-nums", styles.text)}>{module.percent}%</span>
-                  </Link>
-                )
-              })}
+      {/* Mobile — header + module ring row (design mockup) */}
+      <div className="md:hidden">
+        <div className="overflow-hidden rounded-xl border border-purple-500/35 bg-[#13101f] shadow-[0_4px_20px_rgba(147,51,234,0.2)]">
+          <Link
+            href={setupHref}
+            className="flex items-center gap-2.5 border-b border-white/10 px-3 py-2.5 active:bg-white/5"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-600/25 ring-1 ring-purple-500/40">
+              <Sparkles className="h-4 w-4 text-purple-400" aria-hidden />
             </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold leading-tight text-white">Complete your setup</p>
+              <p className="text-xs text-gray-400">
+                <span className="font-semibold text-purple-400">{checklist.percent}%</span> done
+                <span className="mx-1 text-white/25">·</span>
+                {checklist.remaining} step{checklist.remaining === 1 ? "" : "s"} left
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-purple-400" aria-hidden />
+          </Link>
 
-            {/* Always-visible primary CTA */}
-            <Button
-              asChild
-              className="mt-3 h-11 w-full bg-gradient-to-r from-purple-600 to-violet-600 text-sm font-bold shadow-lg shadow-purple-500/30 hover:from-purple-500 hover:to-violet-500"
-            >
-              <Link href={setupHref}>
-                Continue Setup
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+          <div className="grid grid-cols-4 gap-0.5 px-2 py-2.5">
+            {checklist.modules.map((module) => (
+              <ModuleRingProgress key={module.id} module={module} />
+            ))}
           </div>
         </div>
-
-        {/* Expanded module detail */}
-        <AnimatePresence initial={false}>
-          {mobileExpanded ? (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className="overflow-hidden"
-            >
-              <div className="space-y-2 rounded-2xl border border-purple-500/25 bg-[#0f1623]/98 p-3 shadow-inner">
-                <p className="px-1 text-xs font-semibold uppercase tracking-wide text-purple-300/80">
-                  All setup modules
-                </p>
-                {checklist.modules.map((module) => {
-                  const styles = statusStyles(module.status_color)
-                  const Icon = MODULE_ICONS[module.id] ?? Building2
-                  return (
-                    <Link
-                      key={module.id}
-                      href={route("setup-checklist.index", { module: module.id })}
-                      className={cn(
-                        "flex flex-col gap-2 rounded-xl border px-3 py-3 transition-colors active:scale-[0.99]",
-                        styles.chipBorder,
-                        styles.chipBg
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-2.5 text-sm font-semibold text-white">
-                          <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", styles.dot)} aria-hidden />
-                          <Icon className="h-4 w-4 text-gray-300" aria-hidden />
-                          {moduleLabel(module)}
-                        </span>
-                        <span className={cn("text-base font-bold tabular-nums", styles.text)}>{module.percent}%</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className={cn("h-full rounded-full transition-all duration-500", styles.bar)}
-                          style={{ width: `${Math.max(module.percent, module.percent > 0 ? 6 : 0)}%` }}
-                        />
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
       </div>
     </div>
   )

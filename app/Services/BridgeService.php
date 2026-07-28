@@ -1010,9 +1010,17 @@ class BridgeService
     /**
      * Summarize which Bridge fiat / wallet endorsements are usable for this customer.
      *
-     * Per Bridge docs: US ACH is not available in some regions (e.g. Bangladesh) while
-     * SEPA + custodial wallets may still be granted. Share only customer-facing rejection
-     * reasons — never developer_reason.
+     * Per Bridge supported-countries-list (e.g. Bangladesh / BGD):
+     * - US ACH/FedWire: No  → base endorsement unavailable (issue endorsement_not_available_in_customers_region)
+     * - SEPA (EUR): Yes     → sepa can be Granted independently of base
+     * - Crypto + custodial wallets: Yes
+     *
+     * So US Feature "Rejected" is a regional rail limit, not a KYC identity failure.
+     * Wallet access must follow SEPA / Active / custodial eligibility — never require base alone.
+     *
+     * @see https://apidocs.bridge.xyz/platform/customers/compliance/supported-countries-list
+     * @see https://apidocs.bridge.xyz/platform/customers/customers/endorsements
+     * @see https://apidocs.bridge.xyz/platform/customers/customers/missing-requirements-and-issues
      *
      * @return array{
      *   base_approved: bool,
@@ -1034,6 +1042,15 @@ class BridgeService
         $regionBlocksUs = in_array('endorsement_not_available_in_customers_region', $baseIssues, true)
             || in_array('rejected_due_to_unsupported_geo', $baseIssues, true);
 
+        // Heuristic aligned with supported-countries-list: SEPA granted + base not approved
+        // means USD rails are unavailable in-region (e.g. BGD), not that KYC failed.
+        if (! $regionBlocksUs
+            && ! ($base['approved'] ?? false)
+            && ($sepa['approved'] ?? false)
+        ) {
+            $regionBlocksUs = true;
+        }
+
         $customerActive = strtolower((string) ($customerData['status'] ?? '')) === 'active';
         $anyFiatApproved = ($base['approved'] ?? false)
             || ($sepa['approved'] ?? false)
@@ -1042,11 +1059,13 @@ class BridgeService
             || ($this->getEndorsementInfo($customerData, 'faster_payments')['approved'] ?? false);
 
         $baseCustomerReason = null;
-        if ($regionBlocksUs || (($base['status'] ?? null) === 'revoked') || (($base['status'] ?? null) === 'rejected')) {
-            // Customer-shareable copy per Bridge rejection_reasons (not developer_reason).
-            $baseCustomerReason = $regionBlocksUs
-                ? 'Your region is not supported for US bank transfers. SEPA or crypto may still be available.'
-                : 'Your information could not be verified for US bank transfers.';
+        if ($regionBlocksUs) {
+            // Customer-shareable: region rail limit (not Bridge developer_reason).
+            $baseCustomerReason = ($sepa['approved'] ?? false)
+                ? 'US bank transfers (ACH/wire) are not available in your region. Your account can still use SEPA and crypto.'
+                : 'US bank transfers (ACH/wire) are not available in your region. Crypto deposits may still be available.';
+        } elseif (in_array(($base['status'] ?? null), ['revoked', 'rejected'], true)) {
+            $baseCustomerReason = 'Your information could not be verified for US bank transfers.';
         }
 
         return [

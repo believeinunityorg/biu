@@ -76,8 +76,12 @@ class UnifiedLedgerPresenter
             $transactionType,
             $this->effectiveWalletProductType($t),
         );
-        // Event always matches Sub Type for consistent reporting (detail lives in related/campaign columns).
+        // Event matches Sub Type, except BP Settlement (status change Processing → Available).
         $eventName = $taxonomy['sub_type_label'];
+        if ($transactionType === 'bp_settlement' || $t->type === 'bp_settlement'
+            || (($meta['source'] ?? '') === 'bp_settlement')) {
+            $eventName = 'BP Available';
+        }
 
         return [
             'txn_id' => $t->id,
@@ -1865,15 +1869,15 @@ class UnifiedLedgerPresenter
     ): array {
         $destination = $this->resolveBpSpendDestination($t, $module, $connectionHubType);
         if ($destination === null) {
-            // Settlement stays inside General Module.
+            // Settlement is a BP status change, not a module transfer.
             if ($t->type === 'bp_settlement' || (($t->meta['source'] ?? '') === 'bp_settlement')) {
                 return [
-                    'from_type' => 'module',
-                    'from_name' => UnifiedLedgerBpModule::generalLabel(),
+                    'from_type' => 'bp_status',
+                    'from_name' => 'Processing',
                     'from_email' => null,
                     'from_id' => null,
-                    'to_type' => 'module',
-                    'to_name' => UnifiedLedgerBpModule::generalLabel(),
+                    'to_type' => 'bp_status',
+                    'to_name' => 'Available',
                     'to_email' => null,
                     'to_id' => null,
                 ];
@@ -1912,7 +1916,7 @@ class UnifiedLedgerPresenter
         }
 
         if ($t->type === 'bp_settlement' || ($meta['source'] ?? '') === 'bp_settlement') {
-            return 'BP Settlement';
+            return 'BP Available';
         }
 
         $destination = $this->resolveBpSpendDestination($t, $module, $connectionHubType);

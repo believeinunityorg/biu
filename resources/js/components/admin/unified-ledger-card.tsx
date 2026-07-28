@@ -342,8 +342,8 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
             </Badge>
             <span className="text-muted-foreground max-sm:hidden">·</span>
             <span className="min-w-0 font-medium text-foreground">
-              {data.sub_type_label ||
-                data.event_name ||
+              {data.event_name ||
+                data.sub_type_label ||
                 (data.transaction_type?.startsWith("bp_gift")
                   ? data.transaction_type
                       .replace(/^bp_/, "")

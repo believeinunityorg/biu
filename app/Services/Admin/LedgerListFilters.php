@@ -145,10 +145,16 @@ final class LedgerListFilters
                 })->whereNot(function (Builder $purchase) {
                     $purchase->where('type', 'believe_points_purchase')
                         ->orWhere('meta->source', 'believe_points_purchase')
-                        ->orWhere('meta->source', 'believe_points_purchase_bp');
+                        ->orWhere('meta->source', 'believe_points_purchase_bp')
+                        ->orWhere('type', 'bp_settlement')
+                        ->orWhere('meta->source', 'bp_settlement');
                 })->orWhere(function (Builder $w) {
                     self::scopeWallet($w);
                 });
+            }),
+            UnifiedLedgerMajorType::SETTLEMENT => $query->where(function (Builder $q) {
+                $q->where('type', 'bp_settlement')
+                    ->orWhere('meta->source', 'bp_settlement');
             }),
             UnifiedLedgerMajorType::REWARD => self::scopeReward($query),
             UnifiedLedgerMajorType::ENROLLMENT => self::scopeConnectionHub($query),

@@ -223,23 +223,16 @@ function moduleLabel(m: string) {
 }
 
 function moduleCellLabel(data: UnifiedLedgerRow): string {
-  const tt = (data.transaction_type || "").toLowerCase()
-  const event = (data.event_name || "").toLowerCase()
-  if (
-    tt === "bp_redemption" ||
-    tt === "believe_points_wallet_transfer" ||
-    event.includes("transfer to bridge wallet")
-  ) {
-    return "BIU Wallet"
+  if (data.module_label?.trim()) {
+    return data.module_label.trim()
   }
   if (data.module === "believe_points" || data.module === "general") {
-    return data.module_label ?? "General"
+    return "General"
   }
-  const hubType = (data.connection_hub_type || "").toLowerCase()
-  if ((data.module === "connection_hub" || data.module === "course") && hubType === "events") {
-    return "Events"
+  if (data.module === "connection_hub" || data.module === "course") {
+    return "Connection Hub"
   }
-  return data.module_label ?? moduleLabel(data.module)
+  return moduleLabel(data.module)
 }
 
 function providerBadgeClass(p: string) {
@@ -349,7 +342,8 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
             </Badge>
             <span className="text-muted-foreground max-sm:hidden">·</span>
             <span className="min-w-0 font-medium text-foreground">
-              {data.event_name ||
+              {data.sub_type_label ||
+                data.event_name ||
                 (data.transaction_type?.startsWith("bp_gift")
                   ? data.transaction_type
                       .replace(/^bp_/, "")

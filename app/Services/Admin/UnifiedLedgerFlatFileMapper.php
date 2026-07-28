@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\Transaction;
 use App\Support\UnifiedLedgerBpStatus;
+use App\Support\UnifiedLedgerModule;
 use App\Support\UnifiedLedgerType;
 
 /**
@@ -165,7 +166,7 @@ class UnifiedLedgerFlatFileMapper
             'current_owner' => (string) ($ledgerFields['current_owner'] ?? ''),
             'brp_activity_type' => (string) ($ledgerFields['brp_activity_label'] ?? 'N/A'),
             'module' => $this->moduleCellLabel($module, $unified),
-            'event' => (string) ($unified['event_name'] ?? $meta['event_name'] ?? ''),
+            'event' => (string) ($unified['sub_type_label'] ?? $unified['event_name'] ?? $meta['event_name'] ?? ''),
             'transaction_type' => $this->humanizeTransactionType((string) ($unified['transaction_type'] ?? '')),
             'from_type' => (string) ($unified['from_type'] ?? ''),
             'from_id' => $this->nullableInt($unified['from_id'] ?? null),
@@ -203,7 +204,7 @@ class UnifiedLedgerFlatFileMapper
             'organization_ein' => (string) ($unified['organization_ein'] ?? ''),
             'merchant_name' => (string) ($unified['merchant_name'] ?? ''),
             'campaign_name' => (string) ($unified['campaign_name'] ?? ''),
-            'event_name' => (string) ($unified['event_name'] ?? ''),
+            'event_name' => (string) ($unified['sub_type_label'] ?? $unified['event_name'] ?? ''),
             'processor_fee_amount' => $this->money($unified['processor_fee_amount'] ?? 0),
             'split_amount' => $this->money($unified['split_amount'] ?? 0),
             'refund_amount' => $this->money($unified['refund_amount'] ?? 0),
@@ -413,58 +414,20 @@ class UnifiedLedgerFlatFileMapper
         return $from.' → '.$to;
     }
 
-    /** Same labels as moduleTableLabel() / moduleCellLabel() in ledger.tsx. */
+    /** Same labels as UnifiedLedgerModule / ledger.tsx module column. */
     private function moduleCellLabel(string $module, array $unified): string
     {
-        $tt = strtolower((string) ($unified['transaction_type'] ?? ''));
-        $event = strtolower((string) ($unified['event_name'] ?? ''));
-
-        if (
-            $tt === 'bp_redemption'
-            || $tt === 'believe_points_wallet_transfer'
-            || str_contains($event, 'transfer to bridge wallet')
-        ) {
-            return 'Bridge Wallet';
+        $label = trim((string) ($unified['module_label'] ?? ''));
+        if ($label !== '') {
+            return $label;
         }
 
-        if ($module === 'believe_points') {
-            return 'General';
-        }
-
-        $hubType = strtolower((string) ($unified['connection_hub_type'] ?? ''));
-        if (in_array($module, ['connection_hub', 'course'], true) && $hubType === 'events') {
-            return 'Events';
-        }
-        if (in_array($module, ['connection_hub', 'course'], true)) {
-            return 'Learning Hub';
-        }
-
-        return $this->moduleTableLabel($module);
+        return UnifiedLedgerModule::label($module);
     }
 
     private function moduleTableLabel(string $module): string
     {
-        return match ($module) {
-            'donation' => 'Donation',
-            'fundme' => 'Support a project',
-            'campaign' => 'Campaign',
-            'believe_points' => 'General',
-            'reward' => 'Reward',
-            'wallet' => 'Wallet',
-            'marketplace' => 'Marketplace',
-            'gift_card' => 'Gift Card',
-            'servicehub' => 'Service Hub',
-            'course' => 'Learning Hub',
-            'connection_hub' => 'Learning Hub',
-            'merchant_hub' => 'Merchant Hub',
-            'organization_subscription' => 'Org sub',
-            'supporter_subscription' => 'Supporter sub',
-            'merchant_subscription' => 'Merchant sub',
-            'payout' => 'Payout',
-            'refund' => 'Refund',
-            'adjustment' => 'Adjustment',
-            default => str_replace('_', ' ', $module),
-        };
+        return UnifiedLedgerModule::label($module);
     }
 
     private function humanizeTransactionType(string $type): string

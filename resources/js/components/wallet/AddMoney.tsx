@@ -53,18 +53,26 @@ export function AddMoney({
         depositInstructions?.payment_rail === 'wire'
     const hasSepa =
         (depositInstructions?.payment_rails && depositInstructions.payment_rails.includes('sepa')) ||
-        depositInstructions?.payment_rail === 'sepa'
+        depositInstructions?.payment_rail === 'sepa' ||
+        Boolean(depositInstructions?.iban) ||
+        String(depositInstructions?.currency ?? '').toLowerCase() === 'eur'
+    const isEurSepa = hasSepa && !hasAch && !hasWire
     const hasMultiple =
         (hasAch && hasWire) ||
         (depositInstructions?.payment_rails && depositInstructions.payment_rails.length > 1)
-    const bankTabLabel = regionBlocksUsAch
-        ? (sepaAvailable || hasSepa ? 'Bank (SEPA)' : 'Bank')
+    const bankTabLabel = regionBlocksUsAch || isEurSepa || sepaAvailable
+        ? (sepaAvailable || hasSepa || isEurSepa ? 'Bank (SEPA)' : 'Bank')
         : 'Bank (ACH / Wire)'
-    const bankEmptyCopy = regionBlocksUsAch
+    const bankEmptyCopy = regionBlocksUsAch || sepaAvailable
         ? (sepaAvailable
-            ? 'US ACH/wire is not available in your region. Create a SEPA deposit account if offered, or use crypto.'
+            ? 'Create a EUR Virtual Account (IBAN) for SEPA deposits. Bridge converts EUR to USDC automatically.'
             : 'US ACH/wire is not available in your region. Use crypto deposit instead.')
         : 'Create a Bridge deposit bank account to receive ACH and wire transfers.'
+    const depositTitle = isEurSepa
+        ? 'SEPA Deposit Details (EUR IBAN)'
+        : selectedPaymentMethod === 'ach'
+            ? 'ACH Deposit Details'
+            : 'Wire Transfer Details'
 
     return (
         <motion.div
@@ -213,7 +221,7 @@ export function AddMoney({
                                 <Building2 className="h-4 w-4 text-white" />
                             </div>
                             <h3 className="text-base font-bold text-foreground">
-                                {selectedPaymentMethod === 'ach' ? 'ACH Deposit Details' : 'Wire Transfer Details'}
+                                {depositTitle}
                             </h3>
                         </div>
 
@@ -232,7 +240,51 @@ export function AddMoney({
                                 </div>
                             )}
 
-                            {depositInstructions.bank_routing_number && (
+                            {depositInstructions.iban && (
+                                <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">IBAN</p>
+                                    <div className="flex items-center gap-2">
+                                        <code className="flex-1 px-3 py-2 bg-background/50 dark:bg-background/30 border border-border rounded-lg font-mono text-sm font-semibold text-foreground break-all">
+                                            {depositInstructions.iban}
+                                        </code>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(depositInstructions.iban || '')
+                                                showSuccessToast('IBAN copied!')
+                                            }}
+                                            className="p-2 hover:bg-background/50 rounded-lg border border-border transition-colors"
+                                            title="Copy IBAN"
+                                        >
+                                            <Copy className="h-4 w-4 text-muted-foreground" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {depositInstructions.bic && (
+                                <div className="space-y-1">
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">BIC / SWIFT</p>
+                                    <div className="flex items-center gap-2">
+                                        <code className="flex-1 px-3 py-2 bg-background/50 dark:bg-background/30 border border-border rounded-lg font-mono text-sm font-semibold text-foreground">
+                                            {depositInstructions.bic}
+                                        </code>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(depositInstructions.bic || '')
+                                                showSuccessToast('BIC copied!')
+                                            }}
+                                            className="p-2 hover:bg-background/50 rounded-lg border border-border transition-colors"
+                                            title="Copy BIC"
+                                        >
+                                            <Copy className="h-4 w-4 text-muted-foreground" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!depositInstructions.iban && depositInstructions.bank_routing_number && (
                                 <div className="space-y-1">
                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Routing Number</p>
                                     <div className="flex items-center gap-2">
@@ -240,6 +292,7 @@ export function AddMoney({
                                             {depositInstructions.bank_routing_number}
                                         </code>
                                         <button
+                                            type="button"
                                             onClick={() => {
                                                 navigator.clipboard.writeText(depositInstructions.bank_routing_number || '')
                                                 showSuccessToast('Routing number copied!')
@@ -253,7 +306,7 @@ export function AddMoney({
                                 </div>
                             )}
 
-                            {depositInstructions.bank_account_number && (
+                            {!depositInstructions.iban && depositInstructions.bank_account_number && (
                                 <div className="space-y-1">
                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Account Number</p>
                                     <div className="flex items-center gap-2">
@@ -261,6 +314,7 @@ export function AddMoney({
                                             {depositInstructions.bank_account_number}
                                         </code>
                                         <button
+                                            type="button"
                                             onClick={() => {
                                                 navigator.clipboard.writeText(depositInstructions.bank_account_number || '')
                                                 showSuccessToast('Account number copied!')
@@ -276,7 +330,9 @@ export function AddMoney({
 
                             {depositInstructions.bank_beneficiary_name && (
                                 <div className="space-y-1">
-                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Beneficiary Name</p>
+                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                                        {isEurSepa ? 'Account Holder' : 'Beneficiary Name'}
+                                    </p>
                                     <p className="text-sm font-semibold text-foreground break-words">{depositInstructions.bank_beneficiary_name}</p>
                                 </div>
                             )}

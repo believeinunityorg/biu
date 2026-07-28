@@ -32,8 +32,8 @@ class ContactPageContentSeeder extends Seeder
             [
                 'title' => 'Email Support',
                 'description' => "Send us an email and we'll respond within 24 hours",
-                'contact' => 'wendhi@stuttiegroup.com',
-                'action' => 'mailto:wendhi@stuttiegroup.com',
+                'contact' => 'support@believeinunity.org',
+                'action' => 'mailto:support@believeinunity.org',
                 'color' => 'from-blue-500 to-blue-600',
                 'bgColor' => 'bg-blue-50 dark:bg-blue-900/20',
                 'iconColor' => 'text-blue-600 dark:text-blue-400',

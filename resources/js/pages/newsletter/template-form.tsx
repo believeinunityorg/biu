@@ -250,7 +250,7 @@ export default function NewsletterTemplateForm({
     // Use real data from backend, fallback to demo data if not available
     const sampleData: PreviewData = previewData || {
         organization_name: 'Your Organization',
-        organization_email: 'wendhi@stuttiegroup.com',
+        organization_email: 'support@believeinunity.org',
         organization_phone: '+1 (555) 000-0000',
         organization_address: 'Your Organization Address',
         recipient_name: 'Recipient Name',

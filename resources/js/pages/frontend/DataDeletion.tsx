@@ -3,7 +3,7 @@ import FrontendLayout from '@/layouts/frontend/frontend-layout';
 import { PageHead } from '@/components/frontend/PageHead';
 import { Link } from '@inertiajs/react';
 
-const SUPPORT_EMAIL = 'wendhi@stuttiegroup.com';
+const SUPPORT_EMAIL = 'support@believeinunity.org';
 
 export default function DataDeletion() {
     return (

@@ -15,6 +15,10 @@ interface AddMoneyProps {
     isCreatingDepositAccount?: boolean
     onCreateDepositAccount?: () => void
     isSandbox?: boolean
+    /** Bridge base (US ACH) blocked for region — prefer SEPA / crypto messaging */
+    regionBlocksUsAch?: boolean
+    sepaAvailable?: boolean
+    usAchNotice?: string | null
 }
 
 export function AddMoney({
@@ -25,8 +29,13 @@ export function AddMoney({
     isCreatingDepositAccount,
     onCreateDepositAccount,
     isSandbox = false,
+    regionBlocksUsAch = false,
+    sepaAvailable = false,
+    usAchNotice = null,
 }: AddMoneyProps) {
-    const [depositMethod, setDepositMethod] = useState<'bank' | 'crypto'>('bank')
+    const [depositMethod, setDepositMethod] = useState<'bank' | 'crypto'>(
+        regionBlocksUsAch && !sepaAvailable ? 'crypto' : 'bank',
+    )
 
     if (isLoading) {
         return (
@@ -42,9 +51,20 @@ export function AddMoney({
     const hasWire =
         (depositInstructions?.payment_rails && depositInstructions.payment_rails.includes('wire')) ||
         depositInstructions?.payment_rail === 'wire'
+    const hasSepa =
+        (depositInstructions?.payment_rails && depositInstructions.payment_rails.includes('sepa')) ||
+        depositInstructions?.payment_rail === 'sepa'
     const hasMultiple =
         (hasAch && hasWire) ||
         (depositInstructions?.payment_rails && depositInstructions.payment_rails.length > 1)
+    const bankTabLabel = regionBlocksUsAch
+        ? (sepaAvailable || hasSepa ? 'Bank (SEPA)' : 'Bank')
+        : 'Bank (ACH / Wire)'
+    const bankEmptyCopy = regionBlocksUsAch
+        ? (sepaAvailable
+            ? 'US ACH/wire is not available in your region. Create a SEPA deposit account if offered, or use crypto.'
+            : 'US ACH/wire is not available in your region. Use crypto deposit instead.')
+        : 'Create a Bridge deposit bank account to receive ACH and wire transfers.'
 
     return (
         <motion.div
@@ -54,6 +74,18 @@ export function AddMoney({
             transition={{ duration: 0.3 }}
             className="p-4 space-y-4"
         >
+            {(regionBlocksUsAch || usAchNotice) && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 flex gap-2 text-left">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-900 dark:text-amber-100 leading-relaxed">
+                        {usAchNotice
+                            || (sepaAvailable
+                                ? 'US bank transfers are not available in your region. SEPA or crypto may still work.'
+                                : 'US bank transfers are not available in your region. Prefer crypto deposit.')}
+                    </p>
+                </div>
+            )}
+
             <div className="relative flex gap-1.5 p-1 bg-muted rounded-lg">
                 <button
                     type="button"
@@ -64,7 +96,7 @@ export function AddMoney({
                             : 'text-muted-foreground hover:text-foreground'
                     }`}
                 >
-                    Bank (ACH / Wire)
+                    {bankTabLabel}
                 </button>
                 <button
                     type="button"
@@ -88,10 +120,10 @@ export function AddMoney({
                     <div className="space-y-1 px-4">
                         <p className="text-sm font-medium">No deposit account yet</p>
                         <p className="text-xs text-muted-foreground">
-                            Create a Bridge deposit bank account to receive ACH and wire transfers.
+                            {bankEmptyCopy}
                         </p>
                     </div>
-                    {onCreateDepositAccount && (
+                    {onCreateDepositAccount && !(regionBlocksUsAch && !sepaAvailable) && (
                         <Button
                             onClick={onCreateDepositAccount}
                             disabled={isCreatingDepositAccount}
@@ -109,6 +141,16 @@ export function AddMoney({
                                     Create Deposit Account
                                 </>
                             )}
+                        </Button>
+                    )}
+                    {regionBlocksUsAch && !sepaAvailable && (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDepositMethod('crypto')}
+                        >
+                            Switch to crypto deposit
                         </Button>
                     )}
                 </div>

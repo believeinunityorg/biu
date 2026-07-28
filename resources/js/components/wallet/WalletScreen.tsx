@@ -21,6 +21,10 @@ interface WalletScreenProps {
     onRefresh: () => void
     onCopyAddress: () => void
     onActionViewChange: (view: ActionView) => void
+    /** When Bridge base (US ACH) is region-blocked but SEPA/crypto still work */
+    regionBlocksUsAch?: boolean
+    sepaAvailable?: boolean
+    usAchNotice?: string | null
 }
 
 interface QuickAction {
@@ -66,6 +70,9 @@ export function WalletScreen({
     onRefresh,
     onCopyAddress,
     onActionViewChange,
+    regionBlocksUsAch = false,
+    sepaAvailable = false,
+    usAchNotice = null,
 }: WalletScreenProps) {
     return (
         <motion.div
@@ -81,6 +88,17 @@ export function WalletScreen({
                 isSandbox={isSandbox}
                 variant="hero"
             />
+
+            {(regionBlocksUsAch || usAchNotice) && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-left">
+                    <p className="text-xs text-amber-900 dark:text-amber-100 leading-relaxed">
+                        {usAchNotice
+                            || (sepaAvailable
+                                ? 'US bank transfers (ACH/wire) are not available in your region. You can still use SEPA and crypto deposits.'
+                                : 'US bank transfers (ACH/wire) are not available in your region. Crypto deposits may still be available.')}
+                    </p>
+                </div>
+            )}
 
             {/* Wallet address */}
             {walletAddress && (

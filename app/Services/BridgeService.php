@@ -963,26 +963,103 @@ class BridgeService
     }
 
     /**
-     * Parse base endorsement status from a Bridge customer payload.
+     * Parse endorsement status from a Bridge customer payload by name.
+     *
+     * @see https://apidocs.bridge.xyz/platform/customers/customers/endorsements
      */
-    public function getBaseEndorsementInfo(array $customerData): array
+    public function getEndorsementInfo(array $customerData, string $name): array
     {
+        $name = strtolower(trim($name));
+
         foreach ($customerData['endorsements'] ?? [] as $endorsement) {
-            if (strtolower($endorsement['name'] ?? '') !== 'base') {
+            if (strtolower((string) ($endorsement['name'] ?? '')) !== $name) {
                 continue;
             }
 
-            $status = strtolower($endorsement['status'] ?? '');
+            $status = strtolower((string) ($endorsement['status'] ?? ''));
+            $issues = $endorsement['requirements']['issues'] ?? [];
 
             return [
                 'exists' => true,
                 'approved' => $status === 'approved',
                 'status' => $status,
+                'issues' => is_array($issues) ? array_values($issues) : [],
                 'endorsement' => $endorsement,
             ];
         }
 
-        return ['exists' => false, 'approved' => false, 'status' => null, 'endorsement' => null];
+        return [
+            'exists' => false,
+            'approved' => false,
+            'status' => null,
+            'issues' => [],
+            'endorsement' => null,
+        ];
+    }
+
+    /**
+     * Parse base endorsement status from a Bridge customer payload.
+     *
+     * Base = USD rails (US ACH / wire). Region-blocked customers may still have SEPA/etc.
+     */
+    public function getBaseEndorsementInfo(array $customerData): array
+    {
+        return $this->getEndorsementInfo($customerData, 'base');
+    }
+
+    /**
+     * Summarize which Bridge fiat / wallet endorsements are usable for this customer.
+     *
+     * Per Bridge docs: US ACH is not available in some regions (e.g. Bangladesh) while
+     * SEPA + custodial wallets may still be granted. Share only customer-facing rejection
+     * reasons — never developer_reason.
+     *
+     * @return array{
+     *   base_approved: bool,
+     *   sepa_approved: bool,
+     *   us_ach_available: bool,
+     *   sepa_available: bool,
+     *   custodial_wallet_ok: bool,
+     *   base_status: ?string,
+     *   sepa_status: ?string,
+     *   base_customer_reason: ?string,
+     *   region_blocks_us_ach: bool
+     * }
+     */
+    public function getEndorsementsSummary(array $customerData): array
+    {
+        $base = $this->getEndorsementInfo($customerData, 'base');
+        $sepa = $this->getEndorsementInfo($customerData, 'sepa');
+        $baseIssues = $base['issues'] ?? [];
+        $regionBlocksUs = in_array('endorsement_not_available_in_customers_region', $baseIssues, true)
+            || in_array('rejected_due_to_unsupported_geo', $baseIssues, true);
+
+        $customerActive = strtolower((string) ($customerData['status'] ?? '')) === 'active';
+        $anyFiatApproved = ($base['approved'] ?? false)
+            || ($sepa['approved'] ?? false)
+            || ($this->getEndorsementInfo($customerData, 'spei')['approved'] ?? false)
+            || ($this->getEndorsementInfo($customerData, 'pix')['approved'] ?? false)
+            || ($this->getEndorsementInfo($customerData, 'faster_payments')['approved'] ?? false);
+
+        $baseCustomerReason = null;
+        if ($regionBlocksUs || (($base['status'] ?? null) === 'revoked') || (($base['status'] ?? null) === 'rejected')) {
+            // Customer-shareable copy per Bridge rejection_reasons (not developer_reason).
+            $baseCustomerReason = $regionBlocksUs
+                ? 'Your region is not supported for US bank transfers. SEPA or crypto may still be available.'
+                : 'Your information could not be verified for US bank transfers.';
+        }
+
+        return [
+            'base_approved' => (bool) ($base['approved'] ?? false),
+            'sepa_approved' => (bool) ($sepa['approved'] ?? false),
+            'us_ach_available' => (bool) ($base['approved'] ?? false),
+            'sepa_available' => (bool) ($sepa['approved'] ?? false),
+            'custodial_wallet_ok' => $customerActive || $anyFiatApproved,
+            'base_status' => $base['status'] ?? null,
+            'sepa_status' => $sepa['status'] ?? null,
+            'base_customer_reason' => $baseCustomerReason,
+            'region_blocks_us_ach' => $regionBlocksUs,
+        ];
     }
 
     /**

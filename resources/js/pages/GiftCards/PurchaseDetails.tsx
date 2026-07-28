@@ -12,6 +12,7 @@ import {
   Calendar,
   CheckCircle2,
   Coins,
+  CreditCard,
   Gift,
   Globe,
   Info,
@@ -23,6 +24,7 @@ import {
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import AppSidebarLayout from "@/layouts/app/app-sidebar-layout"
 import toast from "react-hot-toast"
+import { openWalletPopup } from "@/lib/open-wallet-popup"
 import {
   Select,
   SelectContent,
@@ -38,8 +40,10 @@ import { cn } from "@/lib/utils"
 interface Brand {
   productId?: number
   productName?: string
-  /** False for Visa/Mastercard — Gift BP cannot pay; purchased BP only */
+  /** False for Visa/Mastercard — use Bridge Wallet Cards instead of BP */
   allowsGiftBp?: boolean
+  /** True for open-loop Visa/MC — Bridge Wallet path */
+  requiresBridgeWallet?: boolean
   productImage?: string
   denominations?: number[]
   valueRestrictions?: {
@@ -72,6 +76,8 @@ interface PurchaseDetailsProps {
     email: string
     role: string
   } | null
+  /** Prime Supporter tier — required for Visa/MC Bridge Wallet Cards */
+  is_prime_supporter?: boolean
   organizations: Organization[]
   giftCardPurchaseOrganizations?: OrganizationGiftCardPurchase[]
   platformFeeUsd?: number
@@ -90,22 +96,29 @@ export default function PurchaseDetailsPage({
   brand,
   country,
   user,
+  is_prime_supporter: isPrimeSupporterProp = false,
   organizations: organizationsProp,
   giftCardPurchaseOrganizations: giftCardPurchaseOrganizationsProp = [],
   platformFeeUsd: platformFeeUsdProp = 0.5,
 }: PurchaseDetailsProps) {
   const page = usePage()
-  const pageProps = page.props as PurchaseDetailsProps & { auth?: unknown }
+  const pageProps = page.props as PurchaseDetailsProps & { auth?: any }
   const organizations = pageProps.organizations ?? organizationsProp
   const giftCardPurchaseOrganizations =
     pageProps.giftCardPurchaseOrganizations ?? giftCardPurchaseOrganizationsProp
   const platformFeeUsd = Number(pageProps.platformFeeUsd ?? platformFeeUsdProp ?? 0.5) || 0
-  const auth = (page.props as any).auth
+  const auth = pageProps.auth
   const availableBelievePoints = parseFloat(auth?.user?.believe_points) || 0
   const giftedBelievePoints = parseFloat(auth?.user?.gifted_believe_points) || 0
-  const purchasedBelievePoints = Math.max(0, availableBelievePoints - giftedBelievePoints)
-  const allowsGiftBp = brand.allowsGiftBp !== false
-  const spendableForSku = allowsGiftBp ? availableBelievePoints : purchasedBelievePoints
+  const requiresBridgeWallet =
+    brand.requiresBridgeWallet === true || brand.allowsGiftBp === false
+  const spendableForSku = availableBelievePoints
+  const planSlug =
+    (auth?.user?.current_plan_details?.wallet_plan_slug as string | undefined) ??
+    null
+  const isPrimeSupporter =
+    Boolean(pageProps.is_prime_supporter ?? isPrimeSupporterProp) ||
+    planSlug === "prime_supporter"
 
   const isOrgOrAdmin = Boolean(user) && user!.role !== "user" && user!.role !== null
   const Layout = isOrgOrAdmin ? AppSidebarLayout : FrontendLayout
@@ -310,9 +323,9 @@ export default function PurchaseDetailsPage({
                     <Globe className="h-3.5 w-3.5" />
                     {country}
                   </span>
-                  {!allowsGiftBp && (
-                    <Badge className="border-0 bg-slate-950/50 text-[11px] font-medium text-white backdrop-blur-sm">
-                      Purchased BP only
+                  {requiresBridgeWallet && (
+                    <Badge className="border-0 bg-sky-950/55 text-[11px] font-medium text-white backdrop-blur-sm">
+                      {isPrimeSupporter ? "Bridge Wallet · Prime" : "Prime benefit"}
                     </Badge>
                   )}
                   {hasDiscount && (
@@ -323,7 +336,7 @@ export default function PurchaseDetailsPage({
                 </div>
               </div>
 
-              {user && user.role === "user" && (
+              {user && user.role === "user" && !requiresBridgeWallet && (
                 <div className="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm backdrop-blur-sm">
                   <Wallet className="h-4 w-4 shrink-0" />
                   <span className="tabular-nums">
@@ -404,9 +417,158 @@ export default function PurchaseDetailsPage({
               </section>
             </div>
 
-            {/* Purchase panel */}
+            {/* Purchase panel — closed-loop BP, or Bridge Wallet for Visa/MC */}
             <div className="lg:col-span-5">
               <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+                {requiresBridgeWallet ? (
+                  <div className="rounded-2xl border border-sky-500/25 bg-card p-4 shadow-sm sm:p-5 dark:border-sky-500/20 dark:bg-gray-900/80">
+                    <div className="mb-5 flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-600 to-blue-700 text-white shadow-md shadow-sky-600/25">
+                        <CreditCard className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                          {isPrimeSupporter
+                            ? "Get this card via Bridge Wallet"
+                            : "Prime Supporter benefit"}
+                        </h2>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {isPrimeSupporter
+                            ? "Visa and Mastercard are open-loop. Believe Points cannot buy them — use your Bridge balance instead."
+                            : "Visa and Mastercard open-loop cards are available through Bridge Wallet for Prime Supporters only."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isPrimeSupporter ? (
+                      <>
+                        <ol className="mb-5 space-y-3">
+                          {[
+                            {
+                              title: "Open Bridge Wallet",
+                              body: "Use the wallet in the header (or the button below).",
+                            },
+                            {
+                              title: "Add money if needed",
+                              body: "Fund your Bridge balance with ACH, wire, or supported rails.",
+                            },
+                            {
+                              title: "Open Services → Cards",
+                              body: "Issue a virtual card linked to your Bridge Wallet balance.",
+                            },
+                          ].map((step, index) => (
+                            <li key={step.title} className="flex gap-3">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-500/15 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                                {index + 1}
+                              </span>
+                              <div className="min-w-0 pt-0.5">
+                                <p className="text-sm font-semibold text-foreground">{step.title}</p>
+                                <p className="text-xs text-muted-foreground">{step.body}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+
+                        <div className="mb-4 rounded-xl border border-border/70 bg-muted/40 p-3 dark:border-gray-800 dark:bg-gray-800/40">
+                          <div className="flex items-start gap-2">
+                            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                              Closed-loop brand cards (Walmart, Amazon, and similar) stay on Believe Points.
+                              Network cards stay on Bridge so open-loop spend stays on your funded wallet.
+                            </p>
+                          </div>
+                        </div>
+
+                        {!user ? (
+                          <Button
+                            type="button"
+                            size="lg"
+                            className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-md shadow-sky-600/20 hover:from-sky-500 hover:to-blue-600"
+                            onClick={() => router.visit(route("login"))}
+                          >
+                            Login to open Bridge Wallet
+                          </Button>
+                        ) : user.role !== "user" ? (
+                          <Button disabled className="h-12 w-full rounded-xl" variant="outline" size="lg">
+                            Only supporters can use Bridge Cards here
+                          </Button>
+                        ) : (
+                          <div className="space-y-2.5">
+                            <Button
+                              type="button"
+                              size="lg"
+                              className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-600 to-blue-700 text-white shadow-md shadow-sky-600/20 hover:from-sky-500 hover:to-blue-600"
+                              onClick={() => openWalletPopup({ view: "virtual_card" })}
+                            >
+                              <CreditCard className="mr-2 h-5 w-5" />
+                              Open Bridge Wallet → Cards
+                            </Button>
+                            <Button
+                              type="button"
+                              size="lg"
+                              variant="outline"
+                              className="h-11 w-full rounded-xl"
+                              onClick={() => openWalletPopup({ view: "addMoney" })}
+                            >
+                              <Wallet className="mr-2 h-4 w-4" />
+                              Add money to Bridge
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-5 rounded-xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.07] to-blue-600/[0.07] p-4 dark:from-purple-500/10 dark:to-blue-500/10">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-blue-600 text-white">
+                              <Sparkles className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-foreground">
+                                Upgrade to unlock Bridge Cards
+                              </p>
+                              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                                Prime Supporters can issue a Visa/Mastercard-style virtual card from Bridge Wallet.
+                                Free supporters can still buy closed-loop brand gift cards with Believe Points.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {!user ? (
+                          <Button
+                            type="button"
+                            size="lg"
+                            className="h-12 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                            onClick={() =>
+                              router.visit(
+                                route("login", {}, false) +
+                                  "?redirect=" +
+                                  encodeURIComponent("/pricing?tab=supporters"),
+                              )
+                            }
+                          >
+                            Login to become a Prime Supporter
+                          </Button>
+                        ) : user.role !== "user" ? (
+                          <Button disabled className="h-12 w-full rounded-xl" variant="outline" size="lg">
+                            Only supporters can upgrade here
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="lg"
+                            className="h-12 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                            onClick={() => router.visit(route("pricing") + "?tab=supporters")}
+                          >
+                            <Sparkles className="mr-2 h-5 w-5" />
+                            Become a Prime Supporter
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
                 <form
                   onSubmit={handlePurchase}
                   className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5 dark:border-gray-800 dark:bg-gray-900/80"
@@ -640,15 +802,6 @@ export default function PurchaseDetailsPage({
                               <span className="font-medium tabular-nums text-foreground">
                                 {availableBelievePoints.toFixed(2)} BP
                               </span>
-                              {!allowsGiftBp && (
-                                <>
-                                  {" "}
-                                  · Purchased:{" "}
-                                  <span className="font-medium tabular-nums text-foreground">
-                                    {purchasedBelievePoints.toFixed(2)}
-                                  </span>
-                                </>
-                              )}
                             </p>
                             {giftedBelievePoints > 0 && (
                               <p className="mt-1 text-xs text-muted-foreground">
@@ -656,15 +809,14 @@ export default function PurchaseDetailsPage({
                                 <span className="font-medium tabular-nums text-foreground">
                                   {giftedBelievePoints.toFixed(2)}
                                 </span>
-                                {allowsGiftBp
-                                  ? " — included for this gift card"
-                                  : " — cannot pay for Visa/Mastercard"}
+                                {" "}
+                                (reporting subset; decreases on closed-loop gift cards)
                               </p>
                             )}
                             {believePointsSufficientForSku && (
                               <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                                {(spendableForSku - totalChargedBp).toFixed(2)}{" "}
-                                {allowsGiftBp ? "Available" : "purchased"} BP remaining after redemption
+                                {(spendableForSku - totalChargedBp).toFixed(2)} Available BP remaining after
+                                redemption
                               </p>
                             )}
                           </div>
@@ -672,11 +824,9 @@ export default function PurchaseDetailsPage({
 
                         {!believePointsSufficientForSku && (
                           <p className="text-sm text-destructive">
-                            {!allowsGiftBp
-                              ? `Visa/Mastercard needs ${totalChargedBp.toFixed(2)} purchased BP (Gift BP cannot be used). You have ${purchasedBelievePoints.toFixed(2)} purchased.`
-                              : platformFeeUsd > 0
-                                ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
-                                : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${availableBelievePoints.toFixed(2)}.`}
+                            {platformFeeUsd > 0
+                              ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
+                              : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${availableBelievePoints.toFixed(2)}.`}
                           </p>
                         )}
 
@@ -739,6 +889,7 @@ export default function PurchaseDetailsPage({
                     )}
                   </div>
                 </form>
+                )}
 
                 {/* Compact summary */}
                 <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900/80">
@@ -760,7 +911,17 @@ export default function PurchaseDetailsPage({
                         </Badge>
                       </dd>
                     </div>
-                    {selectedOrganization && (
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Payment</dt>
+                      <dd className="text-right font-medium text-foreground">
+                        {requiresBridgeWallet
+                          ? isPrimeSupporter
+                            ? "Bridge Wallet"
+                            : "Prime Supporter"
+                          : "Believe Points"}
+                      </dd>
+                    </div>
+                    {!requiresBridgeWallet && selectedOrganization && (
                       <div className="flex justify-between gap-3">
                         <dt className="text-muted-foreground">Organization</dt>
                         <dd className="max-w-[60%] truncate text-right font-medium text-foreground">
@@ -768,14 +929,16 @@ export default function PurchaseDetailsPage({
                         </dd>
                       </div>
                     )}
-                    <div className="flex justify-between gap-3 border-t border-border/60 pt-2.5 dark:border-gray-800">
-                      <dt className="text-muted-foreground">Range</dt>
-                      <dd className="font-medium tabular-nums text-foreground">
-                        {formatCurrency(minVal)}
-                        {hasMaxLimit ? ` – ${formatCurrency(maxVal!)}` : "+"}
-                      </dd>
-                    </div>
-                    {isValidAmount && (
+                    {!requiresBridgeWallet && (
+                      <div className="flex justify-between gap-3 border-t border-border/60 pt-2.5 dark:border-gray-800">
+                        <dt className="text-muted-foreground">Range</dt>
+                        <dd className="font-medium tabular-nums text-foreground">
+                          {formatCurrency(minVal)}
+                          {hasMaxLimit ? ` – ${formatCurrency(maxVal!)}` : "+"}
+                        </dd>
+                      </div>
+                    )}
+                    {!requiresBridgeWallet && isValidAmount && (
                       <div className="flex justify-between gap-3">
                         <dt className="font-medium text-foreground">Total</dt>
                         <dd className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text font-bold tabular-nums text-transparent">

@@ -149,6 +149,7 @@ export default function MobileBottomNav() {
   const {
     showWalletPopup,
     showSubscriptionModal,
+    initialView,
     openWallet,
     closeWallet,
     closeSubscriptionModal,
@@ -216,7 +217,9 @@ export default function MobileBottomNav() {
 
   return (
     <>
-      {showWalletPopup && <WalletPopup isOpen={showWalletPopup} onClose={closeWallet} />}
+      {showWalletPopup && (
+        <WalletPopup isOpen={showWalletPopup} onClose={closeWallet} initialView={initialView} />
+      )}
       {showSubscriptionModal && (
         <UserWalletSubscriptionModal isOpen={showSubscriptionModal} onClose={closeSubscriptionModal} />
       )}

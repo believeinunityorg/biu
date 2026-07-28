@@ -111,7 +111,9 @@ final class GiftCardLedgerService
             $financials['organization_payout'] = round($orgFeeShare, 2);
             $financials['net_to_organization'] = round($orgFeeShare, 2);
         } else {
-            unset($financials['organization_payout'], $financials['net_to_organization']);
+            // Keep the key present (null) — ledgerReportFinancials / controller require it.
+            unset($financials['organization_payout']);
+            $financials['net_to_organization'] = null;
         }
 
         if ($merchant > 0) {

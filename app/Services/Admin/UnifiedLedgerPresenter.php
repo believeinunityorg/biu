@@ -15,6 +15,8 @@ use App\Services\Admin\UnifiedLedgerClassificationService;
 use App\Services\EnrollmentLedgerService;
 use App\Support\ConnectionHubType;
 use App\Support\UnifiedLedgerBpModule;
+use App\Support\UnifiedLedgerMajorType;
+use App\Support\UnifiedLedgerModule;
 use App\Support\UnifiedLedgerType;
 
 /**
@@ -68,13 +70,27 @@ class UnifiedLedgerPresenter
         }
 
         $parties = $this->applyGeneralModuleTransferParties($t, $module, $connectionHubType, $parties);
+        $parties = $this->ensurePartiesComplete($t, $parties, $module);
         $eventName = $this->resolveBpTransferEventName($t, $module, $connectionHubType)
             ?? $this->resolveEventName($t);
+        $taxonomy = UnifiedLedgerMajorType::classify(
+            $module,
+            $transactionType,
+            $this->effectiveWalletProductType($t),
+        );
+        if ($eventName === null || trim($eventName) === '') {
+            $eventName = $taxonomy['sub_type_label'];
+        }
 
         return [
             'txn_id' => $t->id,
             'datetime_iso' => $when->toIso8601String(),
             'module' => $module,
+            'module_label' => UnifiedLedgerModule::label($module),
+            'major_type' => $taxonomy['major_type'],
+            'major_type_label' => $taxonomy['major_type_label'],
+            'sub_type' => $taxonomy['sub_type'],
+            'sub_type_label' => $taxonomy['sub_type_label'],
             'transaction_type' => $transactionType,
             'direction' => $this->resolveDirection($t, $module),
             'from_type' => $parties['from_type'],
@@ -314,11 +330,11 @@ class UnifiedLedgerPresenter
             'donation' => 'donation',
             'fundme_donation' => 'fundme',
             'care_alliance_donation' => 'campaign',
-            'believe_points_purchase' => 'believe_points',
-            'believe_points_wallet_transfer' => 'believe_points',
-            'bp_settlement' => 'believe_points',
+            'believe_points_purchase' => UnifiedLedgerModule::GENERAL,
+            'believe_points_wallet_transfer' => UnifiedLedgerModule::GENERAL,
+            'bp_settlement' => UnifiedLedgerModule::GENERAL,
             'bp_gift_hold', 'bp_gift_claim', 'bp_gift_hold_refund', 'bp_gift_email_changed',
-            'bp_gift', 'bp_gift_sent', 'bp_gift_claimed', 'bp_gift_cancelled', 'bp_gift_expired', 'bp_gift_refunded' => 'believe_points',
+            'bp_gift', 'bp_gift_sent', 'bp_gift_claimed', 'bp_gift_cancelled', 'bp_gift_expired', 'bp_gift_refunded' => UnifiedLedgerModule::GENERAL,
             'order' => $base === 'MerchantHubOfferRedemption'
                 ? 'merchant_hub'
                 : ($this->isGiftCardPurchaseContext($t)
@@ -340,8 +356,8 @@ class UnifiedLedgerPresenter
                 'Raffle' => 'marketplace',
                 'MerchantHubOfferRedemption' => 'merchant_hub',
                 'MerchantHubReferralReward' => 'merchant_hub',
-                'BelievePointGiftInvite' => 'believe_points',
-                'SupporterBelievePointGift' => 'believe_points',
+                'BelievePointGiftInvite' => UnifiedLedgerModule::GENERAL,
+                'SupporterBelievePointGift' => UnifiedLedgerModule::GENERAL,
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
             default => match ($base) {
@@ -351,8 +367,8 @@ class UnifiedLedgerPresenter
                 'Raffle' => 'marketplace',
                 'MerchantHubOfferRedemption' => 'merchant_hub',
                 'MerchantHubReferralReward' => 'merchant_hub',
-                'BelievePointGiftInvite' => 'believe_points',
-                'SupporterBelievePointGift' => 'believe_points',
+                'BelievePointGiftInvite' => UnifiedLedgerModule::GENERAL,
+                'SupporterBelievePointGift' => UnifiedLedgerModule::GENERAL,
                 default => $this->moduleFromMetaOrType($t, $ledgerReport),
             },
         };
@@ -459,7 +475,7 @@ class UnifiedLedgerPresenter
             'enrollment',
             'free',
             'paid',
-            'cancellation' => 'course',
+            'cancellation' => UnifiedLedgerModule::CONNECTION_HUB,
             'service_order' => 'servicehub',
             'fundme_donation' => 'fundme',
             'donation' => 'donation',
@@ -481,7 +497,7 @@ class UnifiedLedgerPresenter
             'bp_gift_hold_refund',
             'bp_gift_email_changed',
             'believe_points_auto_replenish',
-            'believe_points_auto_replenish_setup' => 'believe_points',
+            'believe_points_auto_replenish_setup' => UnifiedLedgerModule::GENERAL,
             'referral_reward',
             'direct_referral',
             'big_boss_override' => 'merchant_hub',
@@ -551,13 +567,13 @@ class UnifiedLedgerPresenter
         // When source_type is "ledger_unclassified", related_type usually tells the real module.
         if ($rt !== '') {
             if (str_ends_with($rt, 'BelievePointPurchase')) {
-                return 'believe_points';
+                return UnifiedLedgerModule::GENERAL;
             }
             if (str_ends_with($rt, 'BelievePointWalletTransfer')) {
-                return 'believe_points';
+                return UnifiedLedgerModule::GENERAL;
             }
             if (str_ends_with($rt, 'BelievePointGiftInvite')) {
-                return 'believe_points';
+                return UnifiedLedgerModule::GENERAL;
             }
             if (str_contains($rt, 'CareAllianceDonation')) {
                 return 'campaign';
@@ -728,7 +744,7 @@ class UnifiedLedgerPresenter
             'donation' => $this->donationTransactionType($t, $donationPerspective),
             'fundme' => 'fundme_contribution',
             'campaign' => 'campaign_contribution',
-            'believe_points', 'reward' => $this->believePointsTransactionType($t),
+            'believe_points', 'general', 'reward' => $this->believePointsTransactionType($t),
             'gift_card' => 'gift_card_purchase',
             'marketplace' => 'marketplace_sale',
             'servicehub' => 'service_payment',
@@ -1006,7 +1022,7 @@ class UnifiedLedgerPresenter
             }
         }
 
-        if (($module === 'believe_points' || $module === 'reward') && $walletUser) {
+        if ((in_array($module, ['believe_points', 'general', 'reward'], true)) && $walletUser) {
             $rowMeta = is_array($t->meta) ? $t->meta : [];
             if ($this->isBelievePointGiftTransaction($t)) {
                 return $this->resolveBelievePointGiftParties($t, $walletUser, $rowMeta);
@@ -1037,14 +1053,15 @@ class UnifiedLedgerPresenter
                         'to_id' => (int) $walletUser->id,
                     ]
                     : [
-                        'to_type' => '',
-                        'to_name' => null,
+                        'to_type' => 'module',
+                        'to_name' => UnifiedLedgerBpModule::generalLabel(),
                         'to_email' => null,
                         'to_id' => null,
                     ]);
         }
 
         $rowMeta = is_array($t->meta) ? $t->meta : [];
+
         if ($module === 'refund' && $walletUser && ($rowMeta['source'] ?? '') === 'believe_points_purchase_refund') {
             $party = $this->resolveBelievePointsPayerFromUser($walletUser);
             $defaultFrom = [
@@ -1076,7 +1093,95 @@ class UnifiedLedgerPresenter
             ];
         }
 
-        return array_merge($defaultFrom, $defaultTo);
+        $parties = array_merge($defaultFrom, $defaultTo);
+
+        // Fill blanks from writer meta without wiping module-specific party resolution.
+        if (
+            (! isset($parties['from_name']) || trim((string) $parties['from_name']) === '')
+            && isset($rowMeta['from_name'])
+            && trim((string) $rowMeta['from_name']) !== ''
+        ) {
+            $parties['from_name'] = (string) $rowMeta['from_name'];
+            if (! empty($rowMeta['from_type'])) {
+                $parties['from_type'] = (string) $rowMeta['from_type'];
+            }
+            if (array_key_exists('from_email', $rowMeta)) {
+                $parties['from_email'] = $rowMeta['from_email'] !== null ? (string) $rowMeta['from_email'] : null;
+            }
+            if (isset($rowMeta['from_id']) && is_numeric($rowMeta['from_id'])) {
+                $parties['from_id'] = (int) $rowMeta['from_id'];
+            }
+        }
+        if (
+            (! isset($parties['to_name']) || trim((string) $parties['to_name']) === '')
+            && isset($rowMeta['to_name'])
+            && trim((string) $rowMeta['to_name']) !== ''
+        ) {
+            $parties['to_name'] = (string) $rowMeta['to_name'];
+            if (! empty($rowMeta['to_type'])) {
+                $parties['to_type'] = (string) $rowMeta['to_type'];
+            }
+            if (array_key_exists('to_email', $rowMeta)) {
+                $parties['to_email'] = $rowMeta['to_email'] !== null ? (string) $rowMeta['to_email'] : null;
+            }
+            if (isset($rowMeta['to_id']) && is_numeric($rowMeta['to_id'])) {
+                $parties['to_id'] = (int) $rowMeta['to_id'];
+            }
+        }
+
+        return $parties;
+    }
+
+    /**
+     * Guarantee From → To is never blank for ledger reporting.
+     *
+     * @param  array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}  $parties
+     * @return array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}
+     */
+    private function ensurePartiesComplete(Transaction $t, array $parties, string $module): array
+    {
+        $meta = is_array($t->meta) ? $t->meta : [];
+        if (
+            (! isset($parties['from_name']) || trim((string) $parties['from_name']) === '')
+            && isset($meta['from_name'])
+            && trim((string) $meta['from_name']) !== ''
+        ) {
+            $parties['from_name'] = (string) $meta['from_name'];
+            if (! empty($meta['from_type'])) {
+                $parties['from_type'] = (string) $meta['from_type'];
+            }
+        }
+        if (
+            (! isset($parties['to_name']) || trim((string) $parties['to_name']) === '')
+            && isset($meta['to_name'])
+            && trim((string) $meta['to_name']) !== ''
+        ) {
+            $parties['to_name'] = (string) $meta['to_name'];
+            if (! empty($meta['to_type'])) {
+                $parties['to_type'] = (string) $meta['to_type'];
+            }
+        }
+
+        if (! isset($parties['from_type']) || trim((string) $parties['from_type']) === '') {
+            $parties['from_type'] = 'platform';
+        }
+        if (! isset($parties['from_name']) || trim((string) $parties['from_name']) === '') {
+            $parties['from_name'] = $parties['from_type'] === 'module'
+                ? UnifiedLedgerBpModule::generalLabel()
+                : 'BIU Platform';
+        }
+        if (! isset($parties['to_type']) || trim((string) $parties['to_type']) === '') {
+            $parties['to_type'] = in_array($module, ['general', 'believe_points', 'reward'], true)
+                ? 'module'
+                : 'platform';
+        }
+        if (! isset($parties['to_name']) || trim((string) $parties['to_name']) === '') {
+            $parties['to_name'] = $parties['to_type'] === 'module'
+                ? UnifiedLedgerBpModule::generalLabel()
+                : 'BIU Platform';
+        }
+
+        return $parties;
     }
 
     /**
@@ -1425,7 +1530,7 @@ class UnifiedLedgerPresenter
                 return 'Purchased '.$brand.' Gift Card';
             }
 
-            return 'Transfer BP to Gift Card Module';
+            return 'Gift Card Purchase';
         }
 
         if (! empty($meta['course_id']) && is_numeric($meta['course_id'])) {

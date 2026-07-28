@@ -116,7 +116,7 @@ class GiftCard extends Model
     public function scopeDueForFulfillment(Builder $query): Builder
     {
         return $query
-            ->where('payment_method', 'believe_points')
+            ->whereIn('payment_method', ['believe_points', 'bridge_wallet'])
             ->where('status', GiftCardStatus::PendingFulfillment->value)
             ->whereNotNull('scheduled_fulfillment_at')
             ->where('scheduled_fulfillment_at', '<=', now());

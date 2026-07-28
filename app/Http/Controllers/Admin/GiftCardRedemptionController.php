@@ -29,7 +29,7 @@ class GiftCardRedemptionController extends Controller
 
         $redemptions = GiftCard::query()
             ->with(['user:id,name,email', 'organization:id,name'])
-            ->where('payment_method', 'believe_points')
+            ->whereIn('payment_method', ['believe_points', 'bridge_wallet'])
             ->when(
                 $status === GiftCardStatus::Completed->value,
                 fn ($query) => $query->whereIn('status', [
@@ -45,7 +45,7 @@ class GiftCardRedemptionController extends Controller
             ->through(fn (GiftCard $giftCard) => $this->transformRedemption($giftCard));
 
         $counts = GiftCard::query()
-            ->where('payment_method', 'believe_points')
+            ->whereIn('payment_method', ['believe_points', 'bridge_wallet'])
             ->whereIn('status', GiftCardStatus::adminQueueStatuses())
             ->selectRaw('status, COUNT(*) as aggregate')
             ->groupBy('status')

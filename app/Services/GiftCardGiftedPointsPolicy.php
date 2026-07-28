@@ -6,8 +6,8 @@ namespace App\Services;
  * Closed-loop vs open-loop gift card classification.
  *
  * Closed-loop (Walmart, Amazon, …): buy with Available BP via Phaze.
- * Open-loop (Visa / Mastercard): not sold with Believe Points — supporters use
- * Bridge Wallet → Services → Cards (existing virtual card flow).
+ * Open-loop (Visa / Mastercard): pay with BIU Wallet balance (Prime Supporters)
+ * into the platform reserve, then delayed Phaze fulfillment.
  */
 class GiftCardGiftedPointsPolicy
 {
@@ -22,7 +22,7 @@ class GiftCardGiftedPointsPolicy
     }
 
     /**
-     * Open-loop network cards must be obtained via Bridge Wallet, not Phaze + BP.
+     * Open-loop network cards must be paid with BIU Wallet, not Believe Points.
      */
     public static function requiresBridgeWallet(?string $productDisplayName): bool
     {
@@ -58,6 +58,11 @@ class GiftCardGiftedPointsPolicy
 
     public static function openLoopBridgeMessage(): string
     {
-        return 'Visa and Mastercard are open-loop cards. They are not purchased with Believe Points. Open Bridge Wallet → Services → Cards to issue a virtual card funded by your Bridge balance.';
+        return 'Visa and Mastercard are open-loop cards. Pay with BIU Wallet balance (Prime Supporters) — Believe Points cannot buy them.';
+    }
+
+    public static function openLoopPrimeRequiredMessage(): string
+    {
+        return 'Visa and Mastercard gift cards paid with BIU Wallet are available for Prime Supporters only.';
     }
 }

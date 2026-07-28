@@ -507,7 +507,11 @@ export default function SuccessPage({
                                                     {formatCurrency(totalCharged)}
                                                 </span>
                                                 <p className="text-xs text-muted-foreground mt-1">
-                                                    {paymentMethod === 'believe_points' ? 'Believe Points' : 'USD'}
+                                                    {paymentMethod === 'believe_points'
+                                                        ? 'Believe Points'
+                                                        : paymentMethod === 'bridge_wallet'
+                                                            ? 'BIU Wallet'
+                                                            : 'USD'}
                                                 </p>
                                             </div>
                                             <div className="p-4 rounded-full bg-primary/20">

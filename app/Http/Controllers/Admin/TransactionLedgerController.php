@@ -117,13 +117,21 @@ class TransactionLedgerController extends Controller
                 'per_page' => $perPage,
                 'organization_id' => $organizationFilterActive ? $orgId : null,
                 'module' => $request->filled('module') ? $request->string('module')->toString() : 'all',
+                'major_type' => $request->filled('major_type') ? $request->string('major_type')->toString() : 'all',
                 'period' => $request->filled('period') ? $request->string('period')->toString() : 'all',
                 'ledger_type' => $request->filled('ledger_type') ? $request->string('ledger_type')->toString() : 'all',
                 'connection_hub_type' => $request->filled('connection_hub_type') ? $request->string('connection_hub_type')->toString() : 'all',
             ],
             'moduleOptions' => LedgerListFilters::moduleOptions(),
+            'majorTypeOptions' => LedgerListFilters::majorTypeOptions(),
             'connectionHubTypeOptions' => LedgerListFilters::connectionHubTypeOptions(),
             'ledgerTypeOptions' => LedgerListFilters::ledgerTypeOptions(),
+            'moduleLabels' => collect(LedgerListFilters::moduleOptions())
+                ->mapWithKeys(fn (string $slug) => [$slug => \App\Support\UnifiedLedgerModule::label($slug)])
+                ->all(),
+            'majorTypeLabels' => collect(LedgerListFilters::majorTypeOptions())
+                ->mapWithKeys(fn (string $slug) => [$slug => \App\Support\UnifiedLedgerMajorType::label($slug)])
+                ->all(),
             'ledgerOrganizationInitial' => $organizationFilterActive && $orgId > 0
                 ? [
                     [
@@ -317,6 +325,10 @@ class TransactionLedgerController extends Controller
 
         if ($request->filled('module') && $request->string('module') !== 'all') {
             LedgerListFilters::applyModule($query, $request->string('module')->toString());
+        }
+
+        if ($request->filled('major_type') && $request->string('major_type') !== 'all') {
+            LedgerListFilters::applyMajorType($query, $request->string('major_type')->toString());
         }
 
         if ($request->filled('period') && $request->string('period') !== 'all') {

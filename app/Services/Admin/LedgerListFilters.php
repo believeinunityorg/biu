@@ -19,6 +19,8 @@ use App\Models\Raffle;
 use App\Models\ServiceOrder;
 use App\Models\Transaction;
 use App\Support\ConnectionHubType;
+use App\Support\UnifiedLedgerMajorType;
+use App\Support\UnifiedLedgerModule;
 use App\Support\UnifiedLedgerType;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -82,26 +84,102 @@ final class LedgerListFilters
      */
     public static function moduleOptions(): array
     {
-        return [
-            'donation',
-            'fundme',
-            'campaign',
-            'gift_card',
-            'marketplace',
-            'servicehub',
-            'connection_hub',
-            'course',
-            'merchant_hub',
-            'supporter_subscription',
-            'organization_subscription',
-            'merchant_subscription',
-            'payout',
-            'refund',
-            'adjustment',
-            'believe_points',
-            'reward',
-            'wallet',
-        ];
+        return UnifiedLedgerModule::filterOptions();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function majorTypeOptions(): array
+    {
+        return UnifiedLedgerMajorType::all();
+    }
+
+    public static function applyMajorType(Builder $query, string $majorType): void
+    {
+        $majorType = strtolower(trim($majorType));
+        if (! in_array($majorType, UnifiedLedgerMajorType::all(), true)) {
+            return;
+        }
+
+        // Approximate presenter Major Type using module + known type/meta patterns.
+        match ($majorType) {
+            UnifiedLedgerMajorType::DONATION => $query->where(function (Builder $q) {
+                $q->where(function (Builder $d) {
+                    self::whereMatchesDonationModule($d);
+                })->orWhere(function (Builder $fm) {
+                    self::scopeFundme($fm);
+                })->orWhere(function (Builder $ca) {
+                    self::scopeCampaign($ca);
+                });
+            })->whereNot(function (Builder $rf) {
+                $rf->where('type', 'refund')->orWhere('status', Transaction::STATUS_REFUND);
+            }),
+            UnifiedLedgerMajorType::PURCHASE => $query->where(function (Builder $q) {
+                $q->where(function (Builder $gc) {
+                    self::scopeGiftCard($gc);
+                })->orWhere(function (Builder $bp) {
+                    $bp->where(function (Builder $inner) {
+                        self::scopeBelievePoints($inner);
+                    })->where(function (Builder $purchase) {
+                        $purchase->where('type', 'believe_points_purchase')
+                            ->orWhere('meta->source', 'believe_points_purchase')
+                            ->orWhere('meta->source', 'believe_points_purchase_bp')
+                            ->orWhere('related_type', BelievePointPurchase::class)
+                            ->orWhere('related_type', 'like', '%BelievePointPurchase');
+                    });
+                })->orWhereIn('type', ['credit_purchase', 'email_purchase', 'sms_purchase']);
+            }),
+            UnifiedLedgerMajorType::SUBSCRIPTION => $query->where(function (Builder $q) {
+                $q->where(function (Builder $s) {
+                    self::scopeSupporterSubscription($s);
+                })->orWhere(function (Builder $o) {
+                    self::scopeOrganizationSubscription($o);
+                })->orWhere(function (Builder $m) {
+                    self::scopeMerchantSubscription($m);
+                });
+            }),
+            UnifiedLedgerMajorType::TRANSFER => $query->where(function (Builder $q) {
+                $q->where(function (Builder $bp) {
+                    self::scopeBelievePoints($bp);
+                })->whereNot(function (Builder $purchase) {
+                    $purchase->where('type', 'believe_points_purchase')
+                        ->orWhere('meta->source', 'believe_points_purchase')
+                        ->orWhere('meta->source', 'believe_points_purchase_bp');
+                })->orWhere(function (Builder $w) {
+                    self::scopeWallet($w);
+                });
+            }),
+            UnifiedLedgerMajorType::REWARD => self::scopeReward($query),
+            UnifiedLedgerMajorType::ENROLLMENT => self::scopeConnectionHub($query),
+            UnifiedLedgerMajorType::FEE => $query->where(function (Builder $q) {
+                $q->whereIn('type', ['kyc_fee', 'administrative_fee'])
+                    ->orWhereIn('meta->type', ['kyc_fee', 'administrative_fee']);
+            }),
+            UnifiedLedgerMajorType::MARKETPLACE => $query->where(function (Builder $q) {
+                $q->where(function (Builder $m) {
+                    self::scopeMarketplace($m);
+                })->orWhere(function (Builder $s) {
+                    self::scopeServicehub($s);
+                })->orWhere(function (Builder $h) {
+                    self::scopeMerchantHub($h);
+                });
+            }),
+            UnifiedLedgerMajorType::COMPLIANCE => $query->where(function (Builder $q) {
+                $q->whereIn('type', ['form_1023_application', 'compliance_application'])
+                    ->orWhereIn('meta->type', ['form_1023_application', 'compliance_application']);
+            }),
+            UnifiedLedgerMajorType::ADJUSTMENT => $query->where(function (Builder $q) {
+                $q->where(function (Builder $a) {
+                    self::scopeAdjustment($a);
+                })->orWhere(function (Builder $r) {
+                    self::scopeRefund($r);
+                })->orWhere(function (Builder $p) {
+                    self::scopePayout($p);
+                });
+            }),
+            default => null,
+        };
     }
 
     /**
@@ -197,20 +275,21 @@ final class LedgerListFilters
 
     public static function applyModule(Builder $query, string $module): void
     {
-        $module = strtolower(trim($module));
-        $allowed = self::moduleOptions();
-        if (! in_array($module, $allowed, true)) {
+        $raw = strtolower(trim($module));
+        $normalized = UnifiedLedgerModule::normalize($raw);
+        $allowed = array_merge(self::moduleOptions(), ['believe_points', 'course']);
+        if (! in_array($raw, $allowed, true) && ! in_array($normalized, self::moduleOptions(), true)) {
             return;
         }
 
-        match ($module) {
+        match ($normalized) {
             'refund' => self::scopeRefund($query),
             'payout' => self::scopePayout($query),
             'campaign' => self::scopeCampaign(self::withRefundPayoutExclusion($query)),
             'fundme' => self::scopeFundme(self::withRefundPayoutExclusion($query)),
             'donation' => self::scopeDonation(self::withRefundPayoutExclusion($query)),
             'servicehub' => self::scopeServicehub(self::withRefundPayoutExclusion($query)),
-            'connection_hub', 'course' => self::scopeConnectionHub(self::withRefundPayoutExclusion($query)),
+            'connection_hub' => self::scopeConnectionHub(self::withRefundPayoutExclusion($query)),
             'merchant_hub' => self::scopeMerchantHub(self::withRefundPayoutExclusion($query)),
             'supporter_subscription' => self::scopeSupporterSubscription(self::withRefundPayoutExclusion($query)),
             'organization_subscription' => self::scopeOrganizationSubscription(self::withRefundPayoutExclusion($query)),
@@ -218,7 +297,7 @@ final class LedgerListFilters
             'adjustment' => self::scopeAdjustment(self::withRefundPayoutExclusion($query)),
             'gift_card' => self::scopeGiftCard(self::withRefundPayoutExclusion($query)),
             'marketplace' => self::scopeMarketplace(self::withRefundPayoutExclusion($query)),
-            'believe_points' => self::scopeBelievePoints($query),
+            'general' => self::scopeBelievePoints($query),
             'reward' => self::scopeReward($query),
             'wallet' => self::scopeWallet($query),
             default => null,

@@ -153,6 +153,7 @@ interface Props {
     per_page?: number
     organization_id: number | null
     module: string
+    major_type: string
     period: string
     ledger_type: string
     connection_hub_type: string
@@ -160,8 +161,11 @@ interface Props {
   typeOptions: string[]
   statusOptions: string[]
   moduleOptions: string[]
+  majorTypeOptions: string[]
   connectionHubTypeOptions: string[]
   ledgerTypeOptions: string[]
+  moduleLabels?: Record<string, string>
+  majorTypeLabels?: Record<string, string>
   /** Selected org label when URL has organization_id (combobox display before open). */
   ledgerOrganizationInitial: Array<{ value: string; label: string }>
 }
@@ -321,6 +325,11 @@ function ledgerEventLabel(u: UnifiedLedgerRow | undefined): string {
   if (!u) {
     return "—"
   }
+  // Prefer specific stored/presenter event names (brand gift cards, course titles, transfers).
+  const eventName = u.event_name?.trim()
+  if (eventName) {
+    return eventName
+  }
   const giftEvents = [
     "bp_gift_sent",
     "bp_gift_claimed",
@@ -331,21 +340,8 @@ function ledgerEventLabel(u: UnifiedLedgerRow | undefined): string {
   if (giftEvents.includes(u.transaction_type)) {
     return transactionTypeDisplayLabel(u.transaction_type)
   }
-  const eventName = u.event_name?.trim()
-  if (eventName) {
-    if (
-      eventName === "Gift Sent" ||
-      eventName === "Gift Claimed" ||
-      eventName === "Gift Cancelled" ||
-      eventName === "Gift Expired" ||
-      eventName === "Gift Refunded"
-    ) {
-      return eventName
-    }
-    if (eventName.toLowerCase().startsWith("bp gift") || eventName.toLowerCase().startsWith("gift ")) {
-      return eventName
-    }
-    return eventName
+  if (u.sub_type_label?.trim()) {
+    return u.sub_type_label.trim()
   }
   return u.transaction_type.replace(/_/g, " ")
 }
@@ -566,6 +562,7 @@ function moduleTableLabel(m: string) {
   const map: Record<string, string> = {
     donation: "Donation",
     fundme: "Support a project",
+    general: "General",
     campaign: "Campaign",
     believe_points: "General",
     reward: "Reward",
@@ -573,8 +570,8 @@ function moduleTableLabel(m: string) {
     marketplace: "Marketplace",
     gift_card: "Gift Card",
     servicehub: "Service Hub",
-    connection_hub: "Learning Hub",
-    course: "Learning Hub",
+    connection_hub: "Connection Hub",
+    course: "Connection Hub",
     merchant_hub: "Merchant Hub",
     organization_subscription: "Org sub",
     supporter_subscription: "Supporter sub",
@@ -596,10 +593,10 @@ function moduleCellLabel(u: UnifiedLedgerRow | undefined): string {
     tt === "believe_points_wallet_transfer" ||
     event.includes("transfer to bridge wallet")
   ) {
-    return "Bridge Wallet"
+    return "BIU Wallet"
   }
 
-  if (u.module === "believe_points") {
+  if (u.module === "believe_points" || u.module === "general") {
     return "General"
   }
 
@@ -608,7 +605,7 @@ function moduleCellLabel(u: UnifiedLedgerRow | undefined): string {
     return "Events"
   }
   if (u.module === "connection_hub" || u.module === "course") {
-    return "Learning Hub"
+    return "Connection Hub"
   }
 
   return moduleTableLabel(u.module)
@@ -824,23 +821,40 @@ function ledgerPaymentMethodIcon(
 
 function moduleLabel(key: string): string {
   const map: Record<string, string> = {
+    general: "General",
     donation: "Donation",
-    fundme: "Support a project",
+    fundme: "Support a Project",
     campaign: "Campaign",
-    believe_points: "Believe Points",
+    believe_points: "General",
     reward: "Reward",
     wallet: "Wallet",
     marketplace: "Marketplace",
-    gift_card: "Gift card",
-    servicehub: "Service hub",
+    gift_card: "Gift Card",
+    servicehub: "Service Hub",
     connection_hub: "Connection Hub",
     course: "Connection Hub",
-    merchant_hub: "Merchant hub",
-    organization_subscription: "Organization subscription",
-    supporter_subscription: "Supporter subscription",
-    merchant_subscription: "Merchant subscription",
+    merchant_hub: "Merchant Hub",
+    organization_subscription: "Organization Subscription",
+    supporter_subscription: "Supporter Subscription",
+    merchant_subscription: "Merchant Subscription",
     payout: "Payout",
     refund: "Refund",
+    adjustment: "Adjustment",
+  }
+  return map[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function majorTypeLabel(key: string): string {
+  const map: Record<string, string> = {
+    purchase: "Purchase",
+    subscription: "Subscription",
+    transfer: "Transfer",
+    reward: "Reward",
+    enrollment: "Enrollment",
+    donation: "Donation",
+    fee: "Fee",
+    marketplace: "Marketplace",
+    compliance: "Compliance",
     adjustment: "Adjustment",
   }
   return map[key] ?? key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
@@ -864,8 +878,11 @@ export default function TransactionLedger({
   typeOptions,
   statusOptions,
   moduleOptions,
+  majorTypeOptions = [],
   connectionHubTypeOptions,
   ledgerTypeOptions,
+  moduleLabels = {},
+  majorTypeLabels = {},
   ledgerOrganizationInitial,
 }: Props) {
   const [search, setSearch] = useState(filters.search || "")
@@ -876,6 +893,7 @@ export default function TransactionLedger({
     filters.organization_id != null ? String(filters.organization_id) : "all",
   )
   const [module, setModule] = useState(filters.module ?? "all")
+  const [majorType, setMajorType] = useState(filters.major_type ?? "all")
   const [period, setPeriod] = useState(filters.period ?? "all")
   const [ledgerType, setLedgerType] = useState(filters.ledger_type ?? "all")
   const [connectionHubType, setConnectionHubType] = useState(filters.connection_hub_type ?? "all")
@@ -899,6 +917,7 @@ export default function TransactionLedger({
     if (perPage && perPage !== "10") params.per_page = perPage
     if (organizationId && organizationId !== "all") params.organization_id = organizationId
     if (module && module !== "all") params.module = module
+    if (majorType && majorType !== "all") params.major_type = majorType
     if (period && period !== "all") params.period = period
     if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
     if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
@@ -907,7 +926,7 @@ export default function TransactionLedger({
 
   const orgPickerBaseParams = useMemo(
     () => ledgerQueryParams(),
-    [search, type, status, perPage, organizationId, module, period, ledgerType, connectionHubType],
+    [search, type, status, perPage, organizationId, module, majorType, period, ledgerType, connectionHubType],
   )
 
   /** Export URL; `router.visit` sends X-Inertia → server returns 409 + `Inertia::location` → full GET downloads XLSX. */
@@ -915,7 +934,7 @@ export default function TransactionLedger({
     const qs = new URLSearchParams(ledgerQueryParams()).toString()
     const base = route("admin.transactions.ledger.export")
     return qs ? `${base}?${qs}` : base
-  }, [search, type, status, perPage, organizationId, module, period, ledgerType, connectionHubType])
+  }, [search, type, status, perPage, organizationId, module, majorType, period, ledgerType, connectionHubType])
 
   useEffect(() => {
     if (skipSearchDebounceOnce.current) {
@@ -941,6 +960,7 @@ export default function TransactionLedger({
     if (perPage && perPage !== "10") params.per_page = perPage
     if (organizationId && organizationId !== "all") params.organization_id = organizationId
     if (module && module !== "all") params.module = module
+    if (majorType && majorType !== "all") params.major_type = majorType
     if (period && period !== "all") params.period = period
     if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
     if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
@@ -961,6 +981,7 @@ export default function TransactionLedger({
     if (next && next !== "10") params.per_page = next
     if (organizationId && organizationId !== "all") params.organization_id = organizationId
     if (module && module !== "all") params.module = module
+    if (majorType && majorType !== "all") params.major_type = majorType
     if (period && period !== "all") params.period = period
     if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
     if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
@@ -971,14 +992,16 @@ export default function TransactionLedger({
     })
   }
 
-  const applyLedgerFilter = (patch: Partial<{ organizationId: string; module: string; period: string; ledgerType: string; connectionHubType: string }>) => {
+  const applyLedgerFilter = (patch: Partial<{ organizationId: string; module: string; majorType: string; period: string; ledgerType: string; connectionHubType: string }>) => {
     const nextOrg = patch.organizationId ?? organizationId
     const nextMod = patch.module ?? module
+    const nextMajor = patch.majorType ?? majorType
     const nextPeriod = patch.period ?? period
     const nextLedgerType = patch.ledgerType ?? ledgerType
     const nextConnectionHubType = patch.connectionHubType ?? connectionHubType
     if (patch.organizationId !== undefined) setOrganizationId(patch.organizationId)
     if (patch.module !== undefined) setModule(patch.module)
+    if (patch.majorType !== undefined) setMajorType(patch.majorType)
     if (patch.period !== undefined) setPeriod(patch.period)
     if (patch.ledgerType !== undefined) setLedgerType(patch.ledgerType)
     if (patch.connectionHubType !== undefined) setConnectionHubType(patch.connectionHubType)
@@ -990,6 +1013,7 @@ export default function TransactionLedger({
     if (perPage && perPage !== "10") params.per_page = perPage
     if (nextOrg && nextOrg !== "all") params.organization_id = nextOrg
     if (nextMod && nextMod !== "all") params.module = nextMod
+    if (nextMajor && nextMajor !== "all") params.major_type = nextMajor
     if (nextPeriod && nextPeriod !== "all") params.period = nextPeriod
     if (nextLedgerType && nextLedgerType !== "all") params.ledger_type = nextLedgerType
     if (nextConnectionHubType && nextConnectionHubType !== "all") params.connection_hub_type = nextConnectionHubType
@@ -1272,6 +1296,26 @@ export default function TransactionLedger({
                 />
               </div>
               <div className="min-w-0 space-y-1 sm:col-span-2 lg:col-span-1">
+                <Label htmlFor="ledger-major-type" className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Major Type
+                </Label>
+                <select
+                  id="ledger-major-type"
+                  aria-label="Filter by major transaction type"
+                  title="Major Type"
+                  value={majorType}
+                  onChange={(e) => applyLedgerFilter({ majorType: e.target.value })}
+                  className={filterSelectClass}
+                >
+                  <option value="all">All major types</option>
+                  {majorTypeOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {majorTypeLabels[m] ?? majorTypeLabel(m)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-0 space-y-1 sm:col-span-2 lg:col-span-1">
                 <Label htmlFor="ledger-module" className="text-xs uppercase tracking-wide text-muted-foreground">
                   Module
                 </Label>
@@ -1286,7 +1330,7 @@ export default function TransactionLedger({
                   <option value="all">All modules</option>
                   {moduleOptions.map((m) => (
                     <option key={m} value={m}>
-                      {moduleLabel(m)}
+                      {moduleLabels[m] ?? moduleLabel(m)}
                     </option>
                   ))}
                 </select>
@@ -1372,6 +1416,12 @@ export default function TransactionLedger({
                             BRP Activity
                           </th>
                           <th className="whitespace-nowrap px-4 py-3.5">Module</th>
+                          <th className="whitespace-nowrap px-4 py-3.5" title="Reporting bucket (Purchase, Subscription, Transfer, …)">
+                            Major Type
+                          </th>
+                          <th className="min-w-[8rem] whitespace-nowrap px-4 py-3.5" title="Specific transaction subtype">
+                            Sub Type
+                          </th>
                           <th className="min-w-[7rem] whitespace-nowrap px-4 py-3.5">Event</th>
                           <th className="min-w-[12rem] px-4 py-3.5">From → To</th>
                           <th className="whitespace-nowrap px-4 py-3.5 text-right" title="Wallet ledger line amount">
@@ -1591,6 +1641,15 @@ export default function TransactionLedger({
                                 ) : (
                                   <span className="text-muted-foreground">—</span>
                                 )}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-sm text-foreground">
+                                {u?.major_type_label ?? "—"}
+                              </td>
+                              <td
+                                className="max-w-[10rem] truncate px-4 py-3 text-sm text-foreground"
+                                title={u?.sub_type_label ?? undefined}
+                              >
+                                {u?.sub_type_label ?? "—"}
                               </td>
                               <td className="max-w-[10rem] truncate px-4 py-3 text-sm text-foreground" title={ledgerEventLabel(u)}>
                                 {ledgerEventLabel(u)}

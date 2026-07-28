@@ -953,12 +953,14 @@ export default function OrganizationPage({
 
               {/* Profile Stats */}
               <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 md:gap-6 py-3 px-3 sm:px-0 text-sm text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-white/10">
-                <div className="flex items-center gap-1.5">
-                  <Users className="w-4 h-4" />
-                  <span className="whitespace-nowrap text-gray-900 dark:text-white">
-                    {organization.is_care_alliance_public ? `Alliance since ${memberSince}` : `Member since ${memberSince}`}
-                  </span>
-                </div>
+                {(organization.is_registered || organization.is_care_alliance_public) && memberSince !== 'N/A' ? (
+                  <div className="flex items-center gap-1.5">
+                    <Users className="w-4 h-4" />
+                    <span className="whitespace-nowrap text-gray-900 dark:text-white">
+                      {organization.is_care_alliance_public ? `Alliance since ${memberSince}` : `Member since ${memberSince}`}
+                    </span>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-4 h-4" />
                   <span className="truncate max-w-[150px] sm:max-w-none text-gray-900 dark:text-white">{location}</span>

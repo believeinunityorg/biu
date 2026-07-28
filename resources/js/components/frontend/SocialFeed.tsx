@@ -240,7 +240,9 @@ export default function SocialFeed({
     setReelsStrip(Array.isArray(initialFeedReels) ? initialFeedReels : [])
   }, [initialFeedReels])
 
-  const [posts, setPosts] = useState<Post[]>(initialPosts || [])
+  const [posts, setPosts] = useState<Post[]>(
+    (initialPosts || []).filter((p) => p.post_type !== 'youtube_short'),
+  )
   const [loading, setLoading] = useState(false)
   const [hasMore, setHasMore] = useState(initialHasMore)
   const [nextPageUrl, setNextPageUrl] = useState(next_page_url)
@@ -509,7 +511,7 @@ export default function SocialFeed({
 
       if (response.ok) {
         const data = await response.json()
-        const newPosts = data.posts as Post[]
+        const newPosts = (data.posts as Post[]).filter((p) => p.post_type !== 'youtube_short')
         const newHasMore = data.has_more as boolean
         const newNextPageUrl = data.next_page_url as string | null
 
@@ -841,14 +843,13 @@ export default function SocialFeed({
 
       if (response.ok) {
         const data = await response.json() as { post: Post; message?: string }
-        setPosts(prev => [data.post, ...prev])
         setReelsStrip(prev => {
           const next = [data.post, ...prev.filter((p) => p.id !== data.post.id)]
           return next.slice(0, 32)
         })
         setYoutubeShortModalOpen(false)
         setShortYoutubeUrl('')
-        toast.success(data.message || 'Your YouTube Short was shared to the community feed.')
+        toast.success(data.message || 'Your YouTube Short was added to Shorts.')
       } else {
         const errorData = await response.json().catch(() => ({})) as { message?: string }
         toast.error(errorData.message || 'Could not post short. Try again.', { duration: 5000 })
@@ -2052,7 +2053,7 @@ export default function SocialFeed({
           <DialogHeader>
             <DialogTitle>Import YouTube Short</DialogTitle>
             <DialogDescription>
-              Paste a Shorts link and import. We&apos;ll pull the title and thumbnail, add your Short to the community feed and Media library, and attach it to your profile or page context automatically when available.
+              Paste a Shorts link and import. We&apos;ll pull the title and thumbnail, add your Short to Shorts and Media library, and attach it to your profile or page context automatically when available.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">

@@ -53,6 +53,11 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|admin|car
             Route::post('/settings/bridge', [\App\Http\Controllers\BridgeSettingsController::class, 'update'])->name('bridge.update');
             Route::post('/settings/bridge/enable-cards', [\App\Http\Controllers\BridgeSettingsController::class, 'enableCards'])->name('bridge.enable-cards');
 
+            // Twilio WhatsApp / SMS - Admin Only
+            Route::get('/settings/twilio', [\App\Http\Controllers\TwilioSettingsController::class, 'index'])->name('twilio.index');
+            Route::post('/settings/twilio', [\App\Http\Controllers\TwilioSettingsController::class, 'update'])->name('twilio.update');
+            Route::post('/settings/twilio/test', [\App\Http\Controllers\TwilioSettingsController::class, 'test'])->name('twilio.test');
+
             // Application Settings - Admin Only
             Route::get('/settings/application', [\App\Http\Controllers\Settings\ApplicationSettingsController::class, 'index'])->name('application.index');
             Route::post('/settings/application/optimize', [\App\Http\Controllers\Settings\ApplicationSettingsController::class, 'optimize'])->name('application.optimize');

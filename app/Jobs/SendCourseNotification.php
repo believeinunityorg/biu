@@ -2,11 +2,13 @@
 
 namespace App\Jobs;
 
+use App\Enums\PushNotificationModule;
 use App\Jobs\Concerns\UsesPushNotificationQueue;
 use App\Models\Course;
 use App\Models\Organization;
 use App\Services\FirebaseService;
 use App\Support\ConnectionHubType;
+use App\Support\ShortChannelNotification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -98,6 +100,10 @@ class SendCourseNotification implements ShouldQueue
     private function sendNotificationToFollower($follower, Organization $organization, $title, $body, $courseUrl, $firebaseService): void
     {
         try {
+            $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::Courses);
+            $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::Courses);
+            $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
             $data = [
                 'content_item_id' => (string) $this->course->id,
                 'type' => 'new_course',
@@ -105,21 +111,24 @@ class SendCourseNotification implements ShouldQueue
                 'course_slug' => $this->course->slug,
                 'topic_id' => (string) $this->course->topic_id,
                 'organization_id' => (string) $organization->id,
-                'module_name' => 'courses',
+                'module_name' => PushNotificationModule::Courses->value,
                 'module_record_id' => $this->course->id,
                 'created_by' => $this->course->user_id ?? $organization->user_id,
-                'deep_link' => parse_url($courseUrl, PHP_URL_PATH) ?: $courseUrl,
-                'url' => $courseUrl,
-                'click_action' => $courseUrl,
+                'deep_link' => $pushLinks['deep_link'],
+                'url' => $pushLinks['url'],
+                'click_action' => $pushLinks['click_action'],
                 'source_type' => 'course',
                 'source_id' => (string) $this->course->id,
             ];
 
-            // Send Firebase notification (logs to push_notification_logs for admin overview)
-            $result = $firebaseService->sendToUser($follower->id, $title, $body, $data);
+            // Push: short teaser → Notifications. Inbox DB keeps detailed $title/$body.
+            $result = $firebaseService->sendToUser($follower->id, $pushTitle, $pushBody, $data);
 
-            // Store in database notifications
-            $this->storeDatabaseNotification($follower, $title, $body, $data);
+            $this->storeDatabaseNotification($follower, $title, $body, array_merge($data, [
+                'url' => $courseUrl,
+                'click_action' => $courseUrl,
+                'deep_link' => parse_url($courseUrl, PHP_URL_PATH) ?: $courseUrl,
+            ]));
 
             $successCount = is_array($result) ? count(array_filter($result, fn ($r) => ($r['success'] ?? false))) : 0;
             if ($successCount > 0) {

@@ -8,6 +8,7 @@ use App\Models\BridgeIntegration;
 use App\Models\BridgeWallet;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\ShortChannelNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -258,23 +259,26 @@ class BridgeWalletNotifier
     private function sendPush(int $userId, string $title, string $body, array $payload): void
     {
         try {
-            $walletUrl = route('wallet.activity');
+            $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::WalletRewards);
+            $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::WalletRewards);
+            $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
             $pushData = $this->firebaseService->stringifyFcmData([
                 'type' => 'bridge_wallet_'.($payload['kind'] ?? 'update'),
-                'title' => $title,
-                'body' => $body,
-                'url' => $walletUrl,
-                'click_action' => $walletUrl,
+                'title' => $pushTitle,
+                'body' => $pushBody,
+                'url' => $pushLinks['url'],
+                'click_action' => $pushLinks['click_action'],
                 'bridge_state' => (string) ($payload['bridge_state'] ?? ''),
                 'transfer_id' => (string) ($payload['transfer_id'] ?? ''),
                 'amount' => (string) ($payload['amount'] ?? ''),
                 'direction' => (string) ($payload['direction'] ?? ''),
                 'source_type' => 'bridge_wallet',
                 'module_name' => PushNotificationModule::WalletRewards->value,
-                'deep_link' => parse_url($walletUrl, PHP_URL_PATH) ?: $walletUrl,
+                'deep_link' => $pushLinks['deep_link'],
             ]);
 
-            $this->firebaseService->sendToUser($userId, $title, $body, $pushData);
+            $this->firebaseService->sendToUser($userId, $pushTitle, $pushBody, $pushData);
         } catch (\Throwable $e) {
             Log::warning('Bridge wallet push notification failed', [
                 'user_id' => $userId,

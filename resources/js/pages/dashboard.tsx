@@ -1209,7 +1209,7 @@ export default function Dashboard({
                     <Button size="lg" onClick={() => router.visit("/dashboard/compliance/apply")}>{limitedCtaCopy}</Button>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    Need help? <a className="underline" href="mailto:wendhi@stuttiegroup.com">Contact support</a>
+                    Need help? <a className="underline" href="mailto:support@believeinunity.org">Contact support</a>
                   </p>
                 </div>
               </div>

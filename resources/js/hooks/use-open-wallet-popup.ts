@@ -1,5 +1,6 @@
 import { fetchWalletBalance } from "@/lib/wallet-balance-fetch"
 import { hasCareAllianceRole } from "@/lib/mobile-nav-routes"
+import type { ActionView } from "@/components/wallet/types"
 import { useCallback, useState } from "react"
 import toast from "react-hot-toast"
 
@@ -12,8 +13,9 @@ type WalletAuthUser = {
 export function useOpenWalletPopup(auth?: { user?: WalletAuthUser; roles?: string[] }) {
   const [showWalletPopup, setShowWalletPopup] = useState(false)
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
+  const [initialView, setInitialView] = useState<ActionView>("main")
 
-  const openWallet = useCallback(async () => {
+  const openWallet = useCallback(async (view: ActionView = "main") => {
     const user = auth?.user
     if (!user) {
       return false
@@ -45,12 +47,14 @@ export function useOpenWalletPopup(auth?: { user?: WalletAuthUser; roles?: strin
       }
     }
 
+    setInitialView(view)
     setShowWalletPopup(true)
     return true
   }, [auth])
 
   const closeWallet = useCallback(() => {
     setShowWalletPopup(false)
+    setInitialView("main")
   }, [])
 
   const closeSubscriptionModal = useCallback(() => {
@@ -60,6 +64,7 @@ export function useOpenWalletPopup(auth?: { user?: WalletAuthUser; roles?: strin
   return {
     showWalletPopup,
     showSubscriptionModal,
+    initialView,
     openWallet,
     closeWallet,
     closeSubscriptionModal,

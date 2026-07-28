@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\ManualDonationPendingForDonorNotification;
 use App\Notifications\ManualDonationPendingForOrganizationNotification;
 use App\Notifications\ManualDonationRejectedForDonorNotification;
+use App\Support\ShortChannelNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -206,12 +207,17 @@ class ManualDonationNotifier
         string $type,
         ?int $createdBy,
     ): void {
+        // Short-channel standard: Push teaser only; detailed $title/$body remain for inbox/email callers.
+        $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::Donations);
+        $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::Donations);
+        $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
         $pushData = $this->firebaseService->stringifyFcmData([
             'type' => $type,
-            'title' => $title,
-            'body' => $body,
-            'url' => $url,
-            'click_action' => $url,
+            'title' => $pushTitle,
+            'body' => $pushBody,
+            'url' => $pushLinks['url'],
+            'click_action' => $pushLinks['click_action'],
             'donation_id' => (string) $donation->id,
             'organization_id' => (string) $donation->organization_id,
             'source_type' => 'donation',
@@ -219,11 +225,11 @@ class ManualDonationNotifier
             'module_name' => PushNotificationModule::Donations->value,
             'module_record_id' => $donation->id,
             'created_by' => $createdBy,
-            'deep_link' => parse_url($url, PHP_URL_PATH) ?: $url,
+            'deep_link' => $pushLinks['deep_link'],
         ]);
 
         try {
-            $this->firebaseService->sendToUser($userId, $title, $body, $pushData);
+            $this->firebaseService->sendToUser($userId, $pushTitle, $pushBody, $pushData);
         } catch (\Throwable $e) {
             Log::warning('Manual donation push notification failed', [
                 'donation_id' => $donation->id,

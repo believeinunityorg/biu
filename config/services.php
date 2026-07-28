@@ -83,22 +83,16 @@ return [
     ],
 
     'twilio' => [
-        'sid' => env('TWILIO_ACCOUNT_SID'),
-        'token' => env('TWILIO_AUTH_TOKEN'),
-        'whatsapp_from' => env('TWILIO_FROM', 'whatsapp:+14155238886'),
-        /** E.164 sender for SMS (e.g. +15551234567). Not used for WhatsApp. */
-        'sms_from' => env('TWILIO_SMS_FROM'),
-        /** Optional: use a Messaging Service SID instead of sms_from. */
-        'sms_messaging_service_sid' => env('TWILIO_SMS_SERVICE_SID'),
+        // SID / token / From come from admin Settings → Twilio (DB) via TwilioConfigService — not .env
+        'sid' => null,
+        'token' => null,
+        'whatsapp_from' => null,
+        'sms_from' => null,
+        'sms_messaging_service_sid' => null,
         /**
          * Force account mode in errors/logs: trial, full, or auto (fetch from Twilio API).
-         * Use when API lookup is wrong or unavailable.
          */
         'account_mode' => env('TWILIO_ACCOUNT_MODE', 'auto'),
-
-        /**
-         * SSL for Twilio API (cURL). On Windows, set cafile to https://curl.se/ca/cacert.pem or TWILIO_VERIFY_SSL=false for local dev only.
-         */
         'verify_ssl' => filter_var(env('TWILIO_VERIFY_SSL', true), FILTER_VALIDATE_BOOL),
         'cafile' => env('TWILIO_CAFILE'),
     ],

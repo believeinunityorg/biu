@@ -429,7 +429,8 @@ class GiftCardController extends Controller
             'country' => 'required|string',
             'brand_name' => 'required|string',
             'currency' => 'nullable|string|size:3',
-            'payment_method' => 'nullable|string|in:believe_points',
+            'payment_method' => 'nullable|string|in:believe_points,bridge_wallet',
+            'idempotency_key' => 'nullable|string|max:80',
         ]);
 
         try {
@@ -500,20 +501,40 @@ class GiftCardController extends Controller
 
             $purchaseAmount = $validated['amount'];
             $currency = $validated['currency'] ?? 'USD';
-            $paymentMethod = $validated['payment_method'] ?? 'believe_points';
+            $brandNameForPolicy = (string) ($selectedBrand['productName'] ?? $validated['brand_name'] ?? '');
+            $isOpenLoop = GiftCardGiftedPointsPolicy::requiresBridgeWallet($brandNameForPolicy);
+            $paymentMethod = $validated['payment_method']
+                ?? ($isOpenLoop ? 'bridge_wallet' : 'believe_points');
 
-            if ($paymentMethod !== 'believe_points') {
+            if ($isOpenLoop && $paymentMethod !== 'bridge_wallet') {
                 DB::rollBack();
+                $message = GiftCardGiftedPointsPolicy::openLoopBridgeMessage();
 
                 if ($isInertiaRequest) {
                     return back()->withErrors([
-                        'payment_method' => 'Gift cards can only be purchased using Believe Points.',
+                        'payment_method' => $message,
                     ]);
                 }
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Gift cards can only be purchased using Believe Points.',
+                    'message' => $message,
+                    'requires_bridge_wallet' => true,
+                ], 422);
+            }
+
+            if (! $isOpenLoop && $paymentMethod !== 'believe_points') {
+                DB::rollBack();
+
+                if ($isInertiaRequest) {
+                    return back()->withErrors([
+                        'payment_method' => 'This gift card can only be purchased using Believe Points.',
+                    ]);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This gift card can only be purchased using Believe Points.',
                 ], 422);
             }
 
@@ -536,42 +557,60 @@ class GiftCardController extends Controller
             }
 
             $platformFee = BiuPlatformFeeService::getGiftCardPlatformFeeUsd();
-            $pointsRequired = BiuPlatformFeeService::giftCardTotalChargedUsd((float) $purchaseAmount);
+            $totalCharged = BiuPlatformFeeService::giftCardTotalChargedUsd((float) $purchaseAmount);
             $user->refresh();
 
-            $brandNameForPolicy = (string) ($selectedBrand['productName'] ?? $validated['brand_name'] ?? '');
-            $isClosedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($brandNameForPolicy);
-            $eligibleBalance = $isClosedLoop
-                ? $user->currentBelievePoints()
-                : $user->purchasedBelievePointsBalance();
+            if ($paymentMethod === 'believe_points') {
+                $eligibleBalance = $user->currentBelievePoints();
 
-            if ($eligibleBalance < $pointsRequired) {
-                DB::rollBack();
-                $haveAvailable = $user->currentBelievePoints();
-                $havePurchased = $user->purchasedBelievePointsBalance();
-                $haveGifted = round((float) ($user->gifted_believe_points ?? 0), 2);
-
-                if ($isClosedLoop) {
+                if ($eligibleBalance < $totalCharged) {
+                    DB::rollBack();
+                    $haveAvailable = $user->currentBelievePoints();
                     $message = $platformFee > 0
-                        ? "Insufficient Believe Points. You need {$pointsRequired} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$haveAvailable}."
-                        : "Insufficient Believe Points. You need {$pointsRequired} Available BP but only have {$haveAvailable}.";
-                } else {
-                    $message = "Visa/Mastercard cannot be purchased with Gift BP. You need {$pointsRequired} purchased BP (Available − Gift) but only have {$havePurchased} (Available {$haveAvailable}, Gift BP {$haveGifted}).";
-                }
+                        ? "Insufficient Believe Points. You need {$totalCharged} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$haveAvailable}."
+                        : "Insufficient Believe Points. You need {$totalCharged} Available BP but only have {$haveAvailable}.";
 
-                if ($isInertiaRequest) {
-                    return back()->withErrors([
-                        'payment_method' => $message,
-                    ]);
-                }
+                    if ($isInertiaRequest) {
+                        return back()->withErrors([
+                            'payment_method' => $message,
+                        ]);
+                    }
 
-                return response()->json([
-                    'success' => false,
-                    'message' => $message,
-                ], 400);
+                    return response()->json([
+                        'success' => false,
+                        'message' => $message,
+                    ], 400);
+                }
             }
 
             try {
+                if ($paymentMethod === 'bridge_wallet') {
+                    // Bridge HTTP must not run inside the outer DB transaction.
+                    DB::rollBack();
+
+                    $giftCard = $this->giftCardRedemptionService->submitWithBridgeWallet(
+                        $user,
+                        $validated,
+                        $selectedBrand,
+                        $purchaseAmount,
+                        $currency,
+                        $validated['idempotency_key'] ?? null,
+                    );
+
+                    $this->giftCardRedemptionService->scheduleFulfillmentJob($giftCard);
+
+                    if ($isInertiaRequest) {
+                        return redirect()->route('gift-cards.success', ['gift_card_id' => $giftCard->id])
+                            ->with('success', 'Gift card redemption submitted successfully.');
+                    }
+
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Gift card redemption submitted successfully.',
+                        'redirect' => route('gift-cards.success', ['gift_card_id' => $giftCard->id]),
+                    ]);
+                }
+
                 $giftCard = $this->giftCardRedemptionService->submit(
                     $user,
                     $validated,
@@ -580,7 +619,9 @@ class GiftCardController extends Controller
                     $currency,
                 );
             } catch (\RuntimeException $e) {
-                DB::rollBack();
+                if (DB::transactionLevel() > 0) {
+                    DB::rollBack();
+                }
 
                 if ($isInertiaRequest) {
                     return back()->withErrors([
@@ -701,7 +742,7 @@ class GiftCardController extends Controller
             if ($giftCardId && $user) {
                 $giftCard = GiftCard::where('id', $giftCardId)
                     ->where('user_id', $user->id)
-                    ->where('payment_method', 'believe_points')
+                    ->whereIn('payment_method', ['believe_points', 'bridge_wallet'])
                     ->first();
 
                 if ($giftCard) {
@@ -716,7 +757,7 @@ class GiftCardController extends Controller
                     return Inertia::render('GiftCards/Success', [
                         'giftCard' => $this->giftCardSuccessPayload($giftCard->fresh()),
                         'sessionId' => null,
-                        'paymentMethod' => 'believe_points',
+                        'paymentMethod' => $giftCard->payment_method ?? 'believe_points',
                         'phazePurchaseData' => $phazePurchaseData,
                         'phazeDisbursementData' => $phazeDisbursementData,
                         'pendingFulfillment' => $giftCard->fresh()->isPendingFulfillment(),
@@ -729,12 +770,12 @@ class GiftCardController extends Controller
                 }
             }
 
-            // Fallback: Get the most recent gift card purchase for the current user (Believe Points payment)
+            // Fallback: most recent BP / BIU Wallet purchase
             if ($user) {
                 $giftCard = GiftCard::where('user_id', $user->id)
-                    ->where('payment_method', 'believe_points')
-                    ->whereNull('stripe_session_id') // Only Believe Points purchases
-                    ->whereNotNull('purchased_at') // Only purchased cards
+                    ->whereIn('payment_method', ['believe_points', 'bridge_wallet'])
+                    ->whereNull('stripe_session_id')
+                    ->whereNotNull('purchased_at')
                     ->orderBy('purchased_at', 'desc')
                     ->first();
 
@@ -752,7 +793,7 @@ class GiftCardController extends Controller
                     return Inertia::render('GiftCards/Success', [
                         'giftCard' => $this->giftCardSuccessPayload($giftCard),
                         'sessionId' => null,
-                        'paymentMethod' => 'believe_points',
+                        'paymentMethod' => $giftCard->payment_method ?? 'believe_points',
                         'phazePurchaseData' => $phazePurchaseData,
                         'phazeDisbursementData' => $phazeDisbursementData,
                         'pendingFulfillment' => $giftCard->isPendingFulfillment(),
@@ -765,7 +806,7 @@ class GiftCardController extends Controller
                 }
             }
 
-            // If no session_id and no recent Believe Points purchase found, show error
+            // If no session_id and no recent purchase found, show error
             return redirect()->route('gift-cards.index')->withErrors([
                 'message' => 'Invalid payment session. Please try purchasing again.',
             ]);
@@ -1300,6 +1341,10 @@ class GiftCardController extends Controller
                     'email' => $user->email,
                     'role' => $user->role,
                 ] : null,
+                'is_prime_supporter' => $user
+                    && ($user->role ?? null) === 'user'
+                    && \App\Support\SupporterSubscriptionService::currentTierSlug($user)
+                        === \App\Support\SupporterSubscriptionService::SLUG_PRIME,
                 'organizations' => $organizations,
                 'giftCardPurchaseOrganizations' => $giftCardPurchaseOrganizations,
                 'platformFeeUsd' => BiuPlatformFeeService::getGiftCardPlatformFeeUsd(),
@@ -1917,10 +1962,11 @@ class GiftCardController extends Controller
     private function withGiftCardBpEligibility(array $brand): array
     {
         $name = $brand['productName'] ?? '';
-        // false = Visa/MC — Gift BP cannot pay; purchased BP only
-        $brand['allowsGiftBp'] = GiftCardGiftedPointsPolicy::isClosedLoop(
-            is_string($name) ? $name : null
-        );
+        $nameStr = is_string($name) ? $name : null;
+        $closedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($nameStr);
+        // Closed-loop: BP purchase. Open-loop Visa/MC: BIU Wallet pay.
+        $brand['allowsGiftBp'] = $closedLoop;
+        $brand['requiresBridgeWallet'] = ! $closedLoop;
 
         return $brand;
     }

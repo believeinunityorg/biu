@@ -39,7 +39,7 @@ class PostController extends Controller
             ->pluck('post_id')
             ->toArray();
 
-        // Get posts with unseen first, then seen posts
+        // Get posts with unseen first, then seen posts (shorts belong only in the reels strip)
         $posts = Post::with([
             'user.organization',
             'user.createdCareAlliances' => fn ($q) => $q->where('status', 'active')->orderByDesc('id'),
@@ -48,6 +48,10 @@ class PostController extends Controller
             'attachedFundMe',
             'reactions.user',
         ])
+            ->where(function ($query) {
+                $query->whereNull('post_type')
+                    ->orWhere('post_type', '!=', Post::POST_TYPE_YOUTUBE_SHORT);
+            })
             ->withCount(['reactions', 'comments'])
             ->when(count($seenPostIds) > 0, function ($query) use ($seenPostIds) {
                 return $query->orderByRaw('CASE WHEN id IN ('.implode(',', $seenPostIds).') THEN 1 ELSE 0 END');
@@ -1023,7 +1027,7 @@ class PostController extends Controller
         $this->hydratePostCreatorForSocialFeed($post);
 
         $msg = $postType === Post::POST_TYPE_YOUTUBE_SHORT
-            ? 'Your YouTube Short was shared to the community feed.'
+            ? 'Your YouTube Short was added to Shorts.'
             : 'Your video was shared to the community feed.';
 
         return response()->json([
@@ -1293,7 +1297,7 @@ class PostController extends Controller
         $this->hydratePostCreatorForSocialFeed($post);
 
         return response()->json([
-            'message' => 'Your YouTube Short was shared to the community feed.',
+            'message' => 'Your YouTube Short was added to Shorts.',
             'post' => $post,
         ], 201);
     }

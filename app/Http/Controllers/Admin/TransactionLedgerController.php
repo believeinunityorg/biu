@@ -117,13 +117,21 @@ class TransactionLedgerController extends Controller
                 'per_page' => $perPage,
                 'organization_id' => $organizationFilterActive ? $orgId : null,
                 'module' => $request->filled('module') ? $request->string('module')->toString() : 'all',
+                'major_type' => $request->filled('major_type') ? $request->string('major_type')->toString() : 'all',
                 'period' => $request->filled('period') ? $request->string('period')->toString() : 'all',
                 'ledger_type' => $request->filled('ledger_type') ? $request->string('ledger_type')->toString() : 'all',
                 'connection_hub_type' => $request->filled('connection_hub_type') ? $request->string('connection_hub_type')->toString() : 'all',
             ],
             'moduleOptions' => LedgerListFilters::moduleOptions(),
+            'majorTypeOptions' => LedgerListFilters::majorTypeOptions(),
             'connectionHubTypeOptions' => LedgerListFilters::connectionHubTypeOptions(),
             'ledgerTypeOptions' => LedgerListFilters::ledgerTypeOptions(),
+            'moduleLabels' => collect(LedgerListFilters::moduleOptions())
+                ->mapWithKeys(fn (string $slug) => [$slug => \App\Support\UnifiedLedgerModule::label($slug)])
+                ->all(),
+            'majorTypeLabels' => collect(LedgerListFilters::majorTypeOptions())
+                ->mapWithKeys(fn (string $slug) => [$slug => \App\Support\UnifiedLedgerMajorType::label($slug)])
+                ->all(),
             'ledgerOrganizationInitial' => $organizationFilterActive && $orgId > 0
                 ? [
                     [
@@ -317,6 +325,10 @@ class TransactionLedgerController extends Controller
 
         if ($request->filled('module') && $request->string('module') !== 'all') {
             LedgerListFilters::applyModule($query, $request->string('module')->toString());
+        }
+
+        if ($request->filled('major_type') && $request->string('major_type') !== 'all') {
+            LedgerListFilters::applyMajorType($query, $request->string('major_type')->toString());
         }
 
         if ($request->filled('period') && $request->string('period') !== 'all') {
@@ -969,8 +981,8 @@ class TransactionLedgerController extends Controller
             'biu_fee' => $fin['biu_fee'],
             'split_deduction' => $fin['split_deduction'],
             'refund_amount' => $fin['refund_amount'],
-            'net_to_organization' => $fin['net_to_organization'],
-            'payout_status' => $fin['payout_status'],
+            'net_to_organization' => $fin['net_to_organization'] ?? null,
+            'payout_status' => $fin['payout_status'] ?? null,
             'organization_id' => $org['organization_id'],
             'organization_name' => $org['organization_name'],
             'organization_ein' => $org['organization_ein'] ?? null,
@@ -1524,7 +1536,7 @@ class TransactionLedgerController extends Controller
         $out = $this->applyLedgerSellingPayoutsFromMeta($t, $sourceType, $out);
 
         if ($donationPayload !== null && ($donationPayload['kind'] ?? '') === 'donation') {
-            $out['organization_payout'] = $out['net_to_organization'];
+            $out['organization_payout'] = $out['net_to_organization'] ?? null;
         }
 
         return $out;

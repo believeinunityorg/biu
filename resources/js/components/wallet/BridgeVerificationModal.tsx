@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useCallback, useEffect, useRef } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ExternalLink, Loader2, Shield, X } from "lucide-react"
 import { createPortal } from "react-dom"
@@ -20,6 +20,30 @@ export interface BridgeVerificationModalProps {
     fallbackLinkUrl?: string | null
 }
 
+/**
+ * Keep Persona inside this modal.
+ * Do not allow top-window navigation — that makes the last "Next" open a new window/tab.
+ * Completion is via postMessage (iframe-origin), not redirect_uri.
+ */
+const VERIFICATION_IFRAME_SANDBOX =
+    "allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
+
+function isSameOriginVerificationCallback(href: string): boolean {
+    try {
+        const url = new URL(href)
+        if (url.origin !== window.location.origin) {
+            return false
+        }
+
+        return (
+            url.pathname.includes("/wallet/kyc-callback") ||
+            url.pathname.includes("/wallet/kyb-callback")
+        )
+    } catch {
+        return false
+    }
+}
+
 export function BridgeVerificationModal({
     isOpen,
     onClose,
@@ -29,8 +53,24 @@ export function BridgeVerificationModal({
     isLoading = false,
     fallbackLinkUrl = null,
 }: BridgeVerificationModalProps) {
+    const iframeRef = useRef<HTMLIFrameElement | null>(null)
+    const completedRef = useRef(false)
+
+    const finishVerification = useCallback(() => {
+        if (completedRef.current) {
+            return
+        }
+        completedRef.current = true
+        if (onVerificationComplete) {
+            onVerificationComplete()
+        } else {
+            onClose()
+        }
+    }, [onClose, onVerificationComplete])
+
     useEffect(() => {
         if (!isOpen) {
+            completedRef.current = false
             return
         }
 
@@ -40,11 +80,7 @@ export function BridgeVerificationModal({
             }
 
             if (isBridgePersonaVerificationCompleteMessage(event.data)) {
-                if (onVerificationComplete) {
-                    onVerificationComplete()
-                } else {
-                    onClose()
-                }
+                finishVerification()
             }
         }
 
@@ -53,7 +89,23 @@ export function BridgeVerificationModal({
         return () => {
             window.removeEventListener("message", handleMessage)
         }
-    }, [isOpen, onClose, onVerificationComplete])
+    }, [isOpen, finishVerification])
+
+    const handleIframeLoad = useCallback(() => {
+        const frame = iframeRef.current
+        if (!frame) {
+            return
+        }
+
+        try {
+            const href = frame.contentWindow?.location?.href
+            if (href && isSameOriginVerificationCallback(href)) {
+                finishVerification()
+            }
+        } catch {
+            // Cross-origin Persona pages — expected until completion redirects same-origin.
+        }
+    }, [finishVerification])
 
     if (typeof document === "undefined") {
         return null
@@ -129,13 +181,15 @@ export function BridgeVerificationModal({
                                 </div>
                             ) : widgetUrl ? (
                                 <iframe
+                                    ref={iframeRef}
                                     key={widgetUrl}
                                     src={widgetUrl}
                                     allow="camera; microphone; fullscreen"
                                     className="absolute inset-0 h-full w-full border-0 bg-white"
                                     title={title}
                                     referrerPolicy="origin"
-                                    sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
+                                    sandbox={VERIFICATION_IFRAME_SANDBOX}
+                                    onLoad={handleIframeLoad}
                                 />
                             ) : (
                                 <div className="flex h-full min-h-[320px] flex-col items-center justify-center gap-4 px-6 text-center">

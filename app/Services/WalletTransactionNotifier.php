@@ -6,6 +6,7 @@ use App\Enums\PushNotificationModule;
 use App\Jobs\SendWalletTransactionEmail;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\ShortChannelNotification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -114,12 +115,16 @@ class WalletTransactionNotifier
 
     private function sendPush(User $user, Transaction $transaction, string $title, string $body, string $walletUrl): void
     {
+        $pushTitle = ShortChannelNotification::pushTitle(PushNotificationModule::WalletRewards);
+        $pushBody = ShortChannelNotification::pushBody(PushNotificationModule::WalletRewards);
+        $pushLinks = ShortChannelNotification::pushDeepLinkData();
+
         $pushData = $this->firebaseService->stringifyFcmData([
             'type' => 'wallet_transaction_'.$transaction->type,
-            'title' => $title,
-            'body' => $body,
-            'url' => $walletUrl,
-            'click_action' => $walletUrl,
+            'title' => $pushTitle,
+            'body' => $pushBody,
+            'url' => $pushLinks['url'],
+            'click_action' => $pushLinks['click_action'],
             'transaction_id' => (string) $transaction->id,
             'transaction_type' => (string) $transaction->type,
             'amount' => (string) $transaction->amount,
@@ -128,11 +133,11 @@ class WalletTransactionNotifier
             'module_name' => PushNotificationModule::WalletRewards->value,
             'module_record_id' => $transaction->id,
             'created_by' => $user->id,
-            'deep_link' => parse_url($walletUrl, PHP_URL_PATH) ?: $walletUrl,
+            'deep_link' => $pushLinks['deep_link'],
         ]);
 
         try {
-            $this->firebaseService->sendToUser($user->id, $title, $body, $pushData);
+            $this->firebaseService->sendToUser($user->id, $pushTitle, $pushBody, $pushData);
         } catch (\Throwable $e) {
             Log::warning('Wallet transaction push notification failed', [
                 'transaction_id' => $transaction->id,

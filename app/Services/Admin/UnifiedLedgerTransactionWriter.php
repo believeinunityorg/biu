@@ -489,8 +489,8 @@ final class UnifiedLedgerTransactionWriter
                         ? 'wallet_transfer_refund'
                         : 'bp_redemption',
                     'event_name' => $transfer->status === BelievePointWalletTransfer::STATUS_REFUNDED
-                        ? 'Transfer to Bridge Wallet Refund'
-                        : 'Transfer to Bridge Wallet',
+                        ? 'Transfer to BIU Wallet Refund'
+                        : 'Transfer to BIU Wallet',
                     'description' => self::walletTransferBpDescription($transfer),
                     'bp_wallet_delta' => $transfer->status === BelievePointWalletTransfer::STATUS_REFUNDED
                         ? $amount
@@ -500,7 +500,7 @@ final class UnifiedLedgerTransactionWriter
                     'from_name' => 'General Module',
                     'from_id' => $user->id,
                     'to_type' => 'module',
-                    'to_name' => 'Bridge Wallet',
+                    'to_name' => 'BIU Wallet',
                     'current_owner' => $user->name,
                     'owner_type' => 'supporter',
                 ], static fn ($v) => $v !== null && $v !== ''),
@@ -530,7 +530,7 @@ final class UnifiedLedgerTransactionWriter
                     'source' => 'bridge_wallet_transfer',
                     'ledger_type' => UnifiedLedgerType::MONEY,
                     'ledger_role' => 'bridge_money_transfer',
-                    'event_name' => 'Bridge Wallet Transfer',
+                    'event_name' => 'BIU Wallet Transfer',
                     'description' => self::walletTransferMoneyDescription($transfer),
                     'gross_amount' => $amount,
                     'from_type' => 'BIU Platform',

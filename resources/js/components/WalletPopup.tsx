@@ -29,6 +29,7 @@ import {
     patchRecentWalletActivityCache,
     setRecentWalletActivityCache,
 } from '@/lib/wallet-activity-cache'
+import type { ActionView } from '@/components/wallet/types'
 import {
     SuccessMessage,
     BalanceDisplay,
@@ -71,6 +72,8 @@ interface WalletPopupProps {
     isOpen: boolean
     onClose: () => void
     organizationName?: string
+    /** Deep-link into a wallet sub-view when the popup opens (e.g. virtual_card). */
+    initialView?: ActionView
 }
 
 // Use the getCsrfToken from wallet utils
@@ -87,7 +90,7 @@ interface SharedData {
     }
 }
 
-export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupProps) {
+export function WalletPopup({ isOpen, onClose, organizationName, initialView = 'main' }: WalletPopupProps) {
     const { auth } = usePage<SharedData>().props
     const [walletBalance, setWalletBalance] = useState<number | null>(null)
     const [walletAddress, setWalletAddress] = useState<string | null>(null)
@@ -98,7 +101,7 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false)
     const [copied, setCopied] = useState(false)
     const [activeTab, setActiveTab] = useState<'account' | 'activity'>('account')
-    const [actionView, setActionView] = useState<'main' | 'send' | 'receive' | 'swap' | 'addMoney' | 'external_accounts' | 'transfer_from_external' | 'withdraw_to_external' | 'virtual_card' | 'services_menu' | 'activity' | 'transaction_details'>('main')
+    const [actionView, setActionView] = useState<ActionView>(initialView || 'main')
     const [externalAccounts, setExternalAccounts] = useState<Array<{
         id: string;
         account_number: string;
@@ -166,6 +169,13 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
     const [bridgeInitialized, setBridgeInitialized] = useState(false)
     const [hasWallet, setHasWallet] = useState(false)
     const [isSandbox, setIsSandbox] = useState(false)
+    const [bridgeEndorsements, setBridgeEndorsements] = useState<{
+        us_ach_available?: boolean
+        sepa_available?: boolean
+        region_blocks_us_ach?: boolean
+        base_customer_reason?: string | null
+        custodial_wallet_ok?: boolean
+    } | null>(null)
     const [hasCardWallet, setHasCardWallet] = useState<boolean | null>(null)
     const [isCheckingCardWallet, setIsCheckingCardWallet] = useState(false)
     const [hasBankAccounts, setHasBankAccounts] = useState<boolean | null>(null)
@@ -721,6 +731,10 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                     setHasWallet(statusData.has_wallet)
                 }
 
+                if (statusData.endorsements && typeof statusData.endorsements === 'object') {
+                    setBridgeEndorsements(statusData.endorsements)
+                }
+
                 // Track if we're in sandbox mode
                 if (statusData.is_sandbox !== undefined) {
                     setIsSandbox(statusData.is_sandbox)
@@ -1000,6 +1014,14 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
             window.removeEventListener('message', handleMessage)
         }
     }, [])
+
+    // Apply deep-link view whenever the popup opens (Bridge Cards, Add Money, etc.).
+    useEffect(() => {
+        if (!isOpen) {
+            return
+        }
+        setActionView(initialView || 'main')
+    }, [isOpen, initialView])
 
     // Fetch wallet activity once per popup open (Reverb patches update in place)
     useEffect(() => {
@@ -2643,9 +2665,9 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
         setVerificationModalWidgetUrl(null)
 
         try {
-            const callbackPath = linkType === 'kyb' ? '/wallet/kyb-callback' : '/wallet/kyc-callback'
             const endpoint = linkType === 'kyb' ? '/wallet/bridge/kyb-link' : '/wallet/bridge/kyc-link'
 
+            // Empty redirect_url tells the API this is an iframe embed — no hosted redirect on "Next".
             const response = await fetch(endpoint, {
                 method: 'POST',
                             headers: {
@@ -2657,7 +2679,7 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                             credentials: 'include',
                             cache: 'no-store',
                 body: JSON.stringify({
-                    redirect_url: `${window.location.origin}${callbackPath}`,
+                    redirect_url: '',
                     endorsement,
                 }),
             })
@@ -3609,6 +3631,9 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                 isCreatingDepositAccount={isCreatingDepositAccount}
                                                 onCreateDepositAccount={handleCreateBridgeDepositAccount}
                                                 isSandbox={isSandbox}
+                                                regionBlocksUsAch={bridgeEndorsements?.region_blocks_us_ach === true}
+                                                sepaAvailable={bridgeEndorsements?.sepa_available === true}
+                                                usAchNotice={bridgeEndorsements?.base_customer_reason ?? null}
                                             />
                                         )
                                     ) : actionView === 'main' ? (
@@ -3618,11 +3643,11 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                 return 'skeleton'
                                             }
 
-                                            // PRIORITY 1: If we have a wallet/virtual account address, show wallet screen
-                                            // In sandbox mode, we might have a virtual account (walletAddress) but hasWallet might be false
-                                            // So check for walletAddress first - if we have an address, show the wallet screen
-                                            if (walletAddress) {
-                                                return 'wallet_screen' // Show wallet screen
+                                            // PRIORITY 1: Local Bridge wallet OR display address → full wallet UI
+                                            // Org wallets may have hasWallet without a displayable walletAddress.
+                                            const walletReady = Boolean(walletAddress) || hasWallet
+                                            if (walletReady) {
+                                                return 'wallet_screen'
                                             }
 
                                             // PRIORITY 2: Check if account is approved but wallet doesn't exist
@@ -3631,8 +3656,8 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                 (verificationType === 'kyc' && kycStatus === 'approved')
                                             )
 
-                                            // Only show create wallet screen if approved AND we don't have a wallet address
-                                            if (isApproved && !walletAddress) {
+                                            // Only show create wallet screen if approved AND we don't have a wallet yet
+                                            if (isApproved && !walletReady) {
                                                 return 'create_wallet' // Show Create Wallet screen
                                             }
 
@@ -3657,8 +3682,9 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                 <ActivitySkeleton />
                                             </div>
                                         ) : (() => {
-                                            // PRIORITY 1: If we have a wallet/virtual account address, show wallet screen
-                                            if (walletAddress) {
+                                            // PRIORITY 1: Local Bridge wallet OR display address → full wallet UI
+                                            const walletReady = Boolean(walletAddress) || hasWallet
+                                            if (walletReady) {
                                                 return 'wallet_screen'
                                             }
 
@@ -3668,7 +3694,7 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                 (verificationType === 'kyc' && kycStatus === 'approved')
                                             )
 
-                                            if (isApproved && !walletAddress) {
+                                            if (isApproved && !walletReady) {
                                                 return 'create_wallet'
                                             }
 
@@ -3689,15 +3715,19 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                 onRefresh={handleRefresh}
                                                 onCopyAddress={handleCopyAddress}
                                                 onActionViewChange={setActionView}
+                                                regionBlocksUsAch={bridgeEndorsements?.region_blocks_us_ach === true}
+                                                sepaAvailable={bridgeEndorsements?.sepa_available === true}
+                                                usAchNotice={bridgeEndorsements?.base_customer_reason ?? null}
                                             />
                                         ) : (() => {
                                             // PRIORITY 1: Check if account is approved but wallet doesn't exist
+                                            const walletReady = Boolean(walletAddress) || hasWallet
                                             const isApproved = verificationType && (
                                                 (verificationType === 'kyb' && kybStatus === 'approved') ||
                                                 (verificationType === 'kyc' && kycStatus === 'approved')
                                             )
 
-                                            if (isApproved && !hasWallet) {
+                                            if (isApproved && !walletReady) {
                                                 return 'create_wallet' // Show Create Wallet screen
                                             }
 
@@ -4144,104 +4174,31 @@ export function WalletPopup({ isOpen, onClose, organizationName }: WalletPopupPr
                                                     </p>
                                                 </div>
                                             </motion.div>
+                                        ) : (Boolean(walletAddress) || hasWallet) ? (
+                                            /* Verified Bridge account with a wallet — never fall through to balance-only UI */
+                                            <WalletScreen
+                                                key="wallet-screen-verified"
+                                                walletBalance={walletBalance}
+                                                walletAddress={walletAddress}
+                                                isLoading={isLoading}
+                                                copied={copied}
+                                                isSandbox={isSandbox}
+                                                onRefresh={handleRefresh}
+                                                onCopyAddress={handleCopyAddress}
+                                                onActionViewChange={setActionView}
+                                                regionBlocksUsAch={bridgeEndorsements?.region_blocks_us_ach === true}
+                                                sepaAvailable={bridgeEndorsements?.sepa_available === true}
+                                                usAchNotice={bridgeEndorsements?.base_customer_reason ?? null}
+                                            />
                                         ) : (
-                                            <div className="p-4 space-y-4">
-                                                {/* Balance - Prominent display */}
-                                                <div className="text-center py-4">
-                                                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide">Balance</p>
-                                                    <div className="flex items-center justify-center gap-2">
-                                                        <span className="text-3xl font-bold">
-                                                            ${walletBalance !== null
-                                                                ? walletBalance.toLocaleString('en-US', {
-                                                                    minimumFractionDigits: 2,
-                                                                    maximumFractionDigits: 2
-                                                                })
-                                                                : '0.00'
-                                                            }
-                                                        </span>
-                                                        <button
-                                                            onClick={handleRefresh}
-                                                            className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                                                            disabled={isLoading}
-                                                            title="Refresh balance"
-                                                        >
-                                                            <RefreshCw className={`h-4 w-4 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Transfer/Deposit Actions - MetaMask style */}
-                                                {hasWallet && (
-                                                    <div className="grid grid-cols-4 gap-2 pb-4 border-b border-border">
-                                                        <button
-                                                            onClick={() => setActionView('addMoney')}
-                                                            className="flex flex-col items-center justify-center p-3 rounded-lg hover:bg-muted transition-colors group"
-                                                        >
-                                                            <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                                                                <Plus className="h-4 w-4 text-white" />
-                                                            </div>
-                                                            <span className="text-xs font-medium">Deposit</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setActionView('send')}
-                                                            className="flex flex-col items-center justify-center p-3 rounded-lg hover:bg-muted transition-colors group"
-                                                        >
-                                                            <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                                                                <ArrowUpRight className="h-4 w-4 text-white" />
-                                                            </div>
-                                                            <span className="text-xs font-medium">Send</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setActionView('receive')}
-                                                            className="flex flex-col items-center justify-center p-3 rounded-lg hover:bg-muted transition-colors group"
-                                                        >
-                                                            <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                                                                <ArrowDownLeft className="h-4 w-4 text-white" />
-                                                            </div>
-                                                            <span className="text-xs font-medium">Receive</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setActionView('swap')}
-                                                            className="flex flex-col items-center justify-center p-3 rounded-lg hover:bg-muted transition-colors group"
-                                                        >
-                                                            <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-full mb-2 group-hover:scale-110 transition-transform">
-                                                                <ArrowRightLeft className="h-4 w-4 text-white" />
-                                                            </div>
-                                                            <span className="text-xs font-medium">Swap</span>
-                                                        </button>
-                                                    </div>
-                                                )}
-
-                                                {/* Wallet Address - MetaMask style */}
-                                                {walletAddress && (
-                                                    <div className="space-y-2">
-                                                        <div className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border hover:border-primary/50 transition-colors cursor-pointer">
-                                                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                                <div className="h-8 w-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 flex items-center justify-center flex-shrink-0">
-                                                                    <Wallet className="h-4 w-4 text-white" />
-                                                                </div>
-                                                                <code className="text-sm font-mono truncate">
-                                                                    {formatAddress(walletAddress)}
-                                                                </code>
-                                                            </div>
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    handleCopyAddress()
-                                                                }}
-                                                                className="p-1.5 rounded-lg hover:bg-background transition-colors flex-shrink-0 ml-2"
-                                                                title="Copy address"
-                                                            >
-                                                                {copied ? (
-                                                                    <Check className="h-4 w-4 text-green-500" />
-                                                                ) : (
-                                                                    <Copy className="h-4 w-4 text-muted-foreground" />
-                                                                )}
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            /* Verified but no local wallet yet — prompt create instead of empty Balance */
+                                            <CreateWallet
+                                                key="create-wallet-verified"
+                                                isLoading={isLoading}
+                                                isSandbox={isSandbox}
+                                                verificationType={verificationType}
+                                                onCreateWallet={handleCreateWallet}
+                                            />
                                         )
                                     ) : null}
 

@@ -121,12 +121,12 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
 
     const canAdminRetry = (card: GiftCard) =>
         isAdmin &&
-        card.payment_method === 'believe_points' &&
+        (card.payment_method === 'believe_points' || card.payment_method === 'bridge_wallet') &&
         (card.status === 'failed' || card.status === 'capacity_reached')
 
     const canAdminForceFulfill = (card: GiftCard) =>
         isAdmin &&
-        card.payment_method === 'believe_points' &&
+        (card.payment_method === 'believe_points' || card.payment_method === 'bridge_wallet') &&
         (card.status === 'pending_fulfillment' || card.status === 'processing')
 
     const retryFulfillment = (id: number) => {

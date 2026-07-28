@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BelievePointWalletTransfer;
 use App\Models\BridgeIntegration;
 use App\Models\BridgeWallet;
+use App\Models\GiftCard;
 use App\Models\Organization;
 use App\Models\User;
 use Carbon\Carbon;
@@ -32,6 +33,9 @@ class BridgeWalletReadService
 
     /** @var array<string, BelievePointWalletTransfer|null> */
     private array $believePointWalletTransferByBridgeId = [];
+
+    /** @var array<string, GiftCard|null> */
+    private array $giftCardByBridgeTransferId = [];
 
     private bool $platformWalletIndexBuilt = false;
 
@@ -677,35 +681,38 @@ class BridgeWalletReadService
                 }
             }
 
-            $activities[] = $this->applyBelievePointsWalletTransferPresentation([
-                'id' => 'bridge_wallet_'.$id,
-                'dedupe_key' => $dedupeKey,
-                'deposit_id' => ($depositId !== null && $depositId !== '') ? $depositId : null,
-                'virtual_account_event_id' => ($vaEventId !== null && $vaEventId !== '') ? $vaEventId : null,
-                'bridge_transfer_id' => $transferId,
-                'type' => $activityType,
-                'amount' => $amount,
-                'date' => $date,
-                'status' => $historyStatus,
-                'bridge_state' => $bridgeTransferState ?? $historyStatus,
-                'bridge_transfer_state' => $bridgeTransferState,
-                'bridge_state_label' => $bridgeStateLabel,
-                'bridge_event_type' => $type,
-                'donor_name' => $donorName,
-                'donor_email' => null,
-                'display_label' => $displayLabel,
-                'payment_method' => is_array($paymentMethod)
-                    ? ($paymentMethod['method'] ?? null)
-                    : ($activityType === 'withdrawal' ? strtolower((string) ($paymentMethodLabel ?? '')) : null),
-                'payment_method_label' => $paymentMethodLabel,
-                'frequency' => 'one-time',
-                'message' => $displayLabel,
-                'transaction_id' => $id,
-                'is_outgoing' => $activityOutgoing,
-                'recipient_type' => $recipientType,
-                'source' => 'bridge_wallet_history',
-                'sort_date' => $date,
-            ], $transferId);
+            $activities[] = $this->applyGiftCardWalletTransferPresentation(
+                $this->applyBelievePointsWalletTransferPresentation([
+                    'id' => 'bridge_wallet_'.$id,
+                    'dedupe_key' => $dedupeKey,
+                    'deposit_id' => ($depositId !== null && $depositId !== '') ? $depositId : null,
+                    'virtual_account_event_id' => ($vaEventId !== null && $vaEventId !== '') ? $vaEventId : null,
+                    'bridge_transfer_id' => $transferId,
+                    'type' => $activityType,
+                    'amount' => $amount,
+                    'date' => $date,
+                    'status' => $historyStatus,
+                    'bridge_state' => $bridgeTransferState ?? $historyStatus,
+                    'bridge_transfer_state' => $bridgeTransferState,
+                    'bridge_state_label' => $bridgeStateLabel,
+                    'bridge_event_type' => $type,
+                    'donor_name' => $donorName,
+                    'donor_email' => null,
+                    'display_label' => $displayLabel,
+                    'payment_method' => is_array($paymentMethod)
+                        ? ($paymentMethod['method'] ?? null)
+                        : ($activityType === 'withdrawal' ? strtolower((string) ($paymentMethodLabel ?? '')) : null),
+                    'payment_method_label' => $paymentMethodLabel,
+                    'frequency' => 'one-time',
+                    'message' => $displayLabel,
+                    'transaction_id' => $id,
+                    'is_outgoing' => $activityOutgoing,
+                    'recipient_type' => $recipientType,
+                    'source' => 'bridge_wallet_history',
+                    'sort_date' => $date,
+                ], $transferId),
+                $transferId,
+            );
         }
 
         return $activities;
@@ -831,6 +838,7 @@ class BridgeWalletReadService
             }
         }
         $this->warmBelievePointWalletTransfers($transferIds);
+        $this->warmGiftCardsByBridgeTransferIds($transferIds);
         $this->warmWalletOwnerNames($counterpartyWalletIds);
 
         $viewerWalletIdSet = array_fill_keys($viewerWalletIds, true);
@@ -942,7 +950,10 @@ class BridgeWalletReadService
                 'sort_date' => $date,
             ];
 
-            $activities[] = $this->applyBelievePointsWalletTransferPresentation($activity, $transferId);
+            $activities[] = $this->applyGiftCardWalletTransferPresentation(
+                $this->applyBelievePointsWalletTransferPresentation($activity, $transferId),
+                $transferId,
+            );
         }
 
         return $activities;
@@ -1577,6 +1588,109 @@ class BridgeWalletReadService
         $activity['payment_method_label'] = 'Believe Points';
         $activity['is_outgoing'] = false;
         $activity['recipient_type'] = null;
+        $activity['message'] = $label;
+
+        if (($activity['status'] ?? '') === 'pending') {
+            $stateLabel = trim((string) ($activity['bridge_state_label'] ?? ''));
+            $activity['message'] = $stateLabel !== ''
+                ? $label.' ('.$stateLabel.')'
+                : $label.' (processing)';
+        }
+
+        return $activity;
+    }
+
+    /**
+     * @param  array<int, string>  $bridgeTransferIds
+     */
+    private function warmGiftCardsByBridgeTransferIds(array $bridgeTransferIds): void
+    {
+        $missing = [];
+        foreach ($bridgeTransferIds as $bridgeTransferId) {
+            $bridgeTransferId = trim($bridgeTransferId);
+            if ($bridgeTransferId === '' || array_key_exists($bridgeTransferId, $this->giftCardByBridgeTransferId)) {
+                continue;
+            }
+            $missing[] = $bridgeTransferId;
+        }
+
+        if ($missing === []) {
+            return;
+        }
+
+        GiftCard::query()
+            ->where('payment_method', 'bridge_wallet')
+            ->whereIn('meta->bridge_transfer_id', $missing)
+            ->with(['user:id,name'])
+            ->get(['id', 'user_id', 'brand', 'brand_name', 'meta', 'payment_method'])
+            ->each(function (GiftCard $giftCard): void {
+                $bridgeTransferId = trim((string) (data_get($giftCard->meta, 'bridge_transfer_id') ?? ''));
+                if ($bridgeTransferId !== '') {
+                    $this->giftCardByBridgeTransferId[$bridgeTransferId] = $giftCard;
+                }
+            });
+
+        foreach ($missing as $bridgeTransferId) {
+            if (! array_key_exists($bridgeTransferId, $this->giftCardByBridgeTransferId)) {
+                $this->giftCardByBridgeTransferId[$bridgeTransferId] = null;
+            }
+        }
+    }
+
+    private function findGiftCardByBridgeTransfer(?string $bridgeTransferId): ?GiftCard
+    {
+        $bridgeTransferId = trim((string) ($bridgeTransferId ?? ''));
+        if ($bridgeTransferId === '') {
+            return null;
+        }
+
+        if (! array_key_exists($bridgeTransferId, $this->giftCardByBridgeTransferId)) {
+            $this->warmGiftCardsByBridgeTransferIds([$bridgeTransferId]);
+        }
+
+        return $this->giftCardByBridgeTransferId[$bridgeTransferId] ?? null;
+    }
+
+    /**
+     * Label BIU Wallet ↔ reserve charges that funded an open-loop gift card.
+     * Member (outgoing): Gift Card Purchase. Reserve (incoming): why funds arrived.
+     *
+     * @param  array<string, mixed>  $activity
+     * @return array<string, mixed>
+     */
+    private function applyGiftCardWalletTransferPresentation(array $activity, ?string $bridgeTransferId): array
+    {
+        if (($activity['type'] ?? '') === 'believe_points_wallet') {
+            return $activity;
+        }
+
+        $giftCard = $this->findGiftCardByBridgeTransfer($bridgeTransferId);
+        if ($giftCard === null) {
+            return $activity;
+        }
+
+        $brand = trim((string) ($giftCard->brand_name ?? $giftCard->brand ?? ''));
+        $buyer = trim((string) ($giftCard->user?->name ?? ''));
+        $isIncoming = ! (bool) ($activity['is_outgoing'] ?? false)
+            || ($activity['type'] ?? '') === 'transfer_received';
+
+        if ($isIncoming) {
+            if ($brand !== '' && $buyer !== '') {
+                $label = 'Gift Card · '.$brand.' from '.$buyer;
+            } elseif ($buyer !== '') {
+                $label = 'Gift Card purchase from '.$buyer;
+            } elseif ($brand !== '') {
+                $label = 'Gift Card purchase · '.$brand;
+            } else {
+                $label = 'Gift Card purchase';
+            }
+            $activity['donor_name'] = $buyer !== '' ? $buyer : ($brand !== '' ? $brand : 'Gift Card');
+        } else {
+            $label = $brand !== '' ? 'Gift Card · '.$brand : 'Gift Card Purchase';
+            $activity['donor_name'] = $brand !== '' ? $brand : 'Gift Card';
+        }
+
+        $activity['display_label'] = $label;
         $activity['message'] = $label;
 
         if (($activity['status'] ?? '') === 'pending') {

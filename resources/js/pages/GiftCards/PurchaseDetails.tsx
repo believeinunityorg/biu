@@ -1,7 +1,7 @@
 "use client"
 
 import { Head, router, useForm, usePage } from "@inertiajs/react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -23,6 +23,14 @@ import {
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import AppSidebarLayout from "@/layouts/app/app-sidebar-layout"
 import toast from "react-hot-toast"
+import { openWalletPopup } from "@/lib/open-wallet-popup"
+import { fetchWalletBalance, pickWalletBalance } from "@/lib/wallet-balance-fetch"
+import {
+  applyWalletBridgeStatusPayload,
+  isBridgeVerificationActionRequired,
+  isBridgeVerificationAwaitingReview,
+  isWalletBridgeAccountVerified,
+} from "@/lib/bridge-verification"
 import {
   Select,
   SelectContent,
@@ -38,8 +46,10 @@ import { cn } from "@/lib/utils"
 interface Brand {
   productId?: number
   productName?: string
-  /** False for Visa/Mastercard — Gift BP cannot pay; purchased BP only */
+  /** False for Visa/Mastercard — pay with BIU Wallet (not BP) */
   allowsGiftBp?: boolean
+  /** True for open-loop Visa/MC — BIU Wallet path */
+  requiresBridgeWallet?: boolean
   productImage?: string
   denominations?: number[]
   valueRestrictions?: {
@@ -72,6 +82,8 @@ interface PurchaseDetailsProps {
     email: string
     role: string
   } | null
+  /** Prime Supporter tier — required for Visa/MC BIU Wallet purchase */
+  is_prime_supporter?: boolean
   organizations: Organization[]
   giftCardPurchaseOrganizations?: OrganizationGiftCardPurchase[]
   platformFeeUsd?: number
@@ -90,22 +102,29 @@ export default function PurchaseDetailsPage({
   brand,
   country,
   user,
+  is_prime_supporter: isPrimeSupporterProp = false,
   organizations: organizationsProp,
   giftCardPurchaseOrganizations: giftCardPurchaseOrganizationsProp = [],
   platformFeeUsd: platformFeeUsdProp = 0.5,
 }: PurchaseDetailsProps) {
   const page = usePage()
-  const pageProps = page.props as PurchaseDetailsProps & { auth?: unknown }
+  const pageProps = page.props as PurchaseDetailsProps & { auth?: any }
   const organizations = pageProps.organizations ?? organizationsProp
   const giftCardPurchaseOrganizations =
     pageProps.giftCardPurchaseOrganizations ?? giftCardPurchaseOrganizationsProp
   const platformFeeUsd = Number(pageProps.platformFeeUsd ?? platformFeeUsdProp ?? 0.5) || 0
-  const auth = (page.props as any).auth
+  const auth = pageProps.auth
   const availableBelievePoints = parseFloat(auth?.user?.believe_points) || 0
   const giftedBelievePoints = parseFloat(auth?.user?.gifted_believe_points) || 0
-  const purchasedBelievePoints = Math.max(0, availableBelievePoints - giftedBelievePoints)
-  const allowsGiftBp = brand.allowsGiftBp !== false
-  const spendableForSku = allowsGiftBp ? availableBelievePoints : purchasedBelievePoints
+  const requiresBridgeWallet =
+    brand.requiresBridgeWallet === true || brand.allowsGiftBp === false
+  const spendableForSku = availableBelievePoints
+  const planSlug =
+    (auth?.user?.current_plan_details?.wallet_plan_slug as string | undefined) ??
+    null
+  const isPrimeSupporter =
+    Boolean(pageProps.is_prime_supporter ?? isPrimeSupporterProp) ||
+    planSlug === "prime_supporter"
 
   const isOrgOrAdmin = Boolean(user) && user!.role !== "user" && user!.role !== null
   const Layout = isOrgOrAdmin ? AppSidebarLayout : FrontendLayout
@@ -142,8 +161,139 @@ export default function PurchaseDetailsPage({
     country: country,
     brand_name: brand.productName || "",
     currency: "USD",
-    payment_method: "believe_points" as const,
+    payment_method: requiresBridgeWallet ? ("bridge_wallet" as const) : ("believe_points" as const),
+    idempotency_key: "",
   })
+
+  const [bridgeBalance, setBridgeBalance] = useState<number | null>(null)
+  const [bridgeBalanceLoading, setBridgeBalanceLoading] = useState(false)
+  const [walletGate, setWalletGate] = useState<
+    "loading" | "connect" | "verify" | "pending" | "rejected" | "create_wallet" | "ready"
+  >("loading")
+
+  type WalletGate = typeof walletGate
+
+  useEffect(() => {
+    setData("payment_method", requiresBridgeWallet ? "bridge_wallet" : "believe_points")
+  }, [requiresBridgeWallet, setData])
+
+  useEffect(() => {
+    if (!requiresBridgeWallet || !isPrimeSupporter || !user || user.role !== "user") {
+      return
+    }
+
+    let cancelled = false
+
+    const csrf =
+      document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || ""
+
+    const refreshWalletReadiness = async () => {
+      setWalletGate("loading")
+      setBridgeBalanceLoading(true)
+
+      try {
+        const statusResponse = await fetch(`/wallet/bridge/status?t=${Date.now()}`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            "X-CSRF-TOKEN": csrf,
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          credentials: "include",
+          cache: "no-cache",
+        })
+
+        if (cancelled) return
+
+        const statusData = statusResponse.ok ? await statusResponse.json() : null
+        const bridgeStatus = applyWalletBridgeStatusPayload(statusData ?? {})
+        const verificationType =
+          (statusData?.verification_type as string | undefined) ?? "kyc"
+        const kycStatus = String(statusData?.kyc_status ?? bridgeStatus.kycStatus ?? "not_started")
+        const kybStatus = String(statusData?.kyb_status ?? bridgeStatus.kybStatus ?? "not_started")
+        const relevantStatus = verificationType === "kyb" ? kybStatus : kycStatus
+        const hasWallet = Boolean(statusData?.has_wallet)
+        const walletAddress =
+          typeof statusData?.wallet_address === "string" && statusData.wallet_address !== ""
+            ? statusData.wallet_address
+            : typeof statusData?.bridge_wallet_id === "string" && statusData.bridge_wallet_id !== ""
+              ? statusData.bridge_wallet_id
+              : null
+
+        const verified = isWalletBridgeAccountVerified({
+          initialized: bridgeStatus.bridgeInitialized,
+          verification_type: verificationType,
+          kyc_status: kycStatus,
+          kyb_status: kybStatus,
+          tos_status: bridgeStatus.tosStatus,
+          tos_accepted:
+            bridgeStatus.tosStatus === "accepted" || bridgeStatus.tosStatus === "approved",
+          requires_verification: bridgeStatus.requiresVerification,
+          bridge_account_verified: statusData?.bridge_account_verified,
+        })
+
+        let nextGate: WalletGate = "ready"
+
+        if (!bridgeStatus.bridgeInitialized) {
+          nextGate = "connect"
+        } else if (relevantStatus === "rejected" || relevantStatus === "offboarded") {
+          nextGate = "rejected"
+        } else if (isBridgeVerificationAwaitingReview(relevantStatus)) {
+          nextGate = "pending"
+        } else if (
+          !verified ||
+          isBridgeVerificationActionRequired(relevantStatus) ||
+          bridgeStatus.requiresVerification
+        ) {
+          nextGate = "verify"
+        } else if (!hasWallet && !walletAddress) {
+          nextGate = "create_wallet"
+        } else {
+          nextGate = "ready"
+        }
+
+        if (!cancelled) {
+          setWalletGate(nextGate)
+        }
+
+        if (nextGate === "ready") {
+          const res = await fetchWalletBalance({ force: true })
+          if (!cancelled && res) {
+            setBridgeBalance(pickWalletBalance(res))
+          } else if (!cancelled) {
+            setBridgeBalance(null)
+          }
+        } else if (!cancelled) {
+          setBridgeBalance(null)
+        }
+      } catch {
+        if (!cancelled) {
+          setWalletGate("connect")
+          setBridgeBalance(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setBridgeBalanceLoading(false)
+        }
+      }
+    }
+
+    void refreshWalletReadiness()
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshWalletReadiness()
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    window.addEventListener("focus", onVisible)
+
+    return () => {
+      cancelled = true
+      document.removeEventListener("visibilitychange", onVisible)
+      window.removeEventListener("focus", onVisible)
+    }
+  }, [requiresBridgeWallet, isPrimeSupporter, user])
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -233,11 +383,41 @@ export default function PurchaseDetailsPage({
       return
     }
 
+    if (requiresBridgeWallet) {
+      if (!isPrimeSupporter) {
+        toast.error("Prime Supporter is required to buy Visa/Mastercard with BIU Wallet.")
+        return
+      }
+      if (walletGate !== "ready") {
+        toast.error("Finish connecting and verifying your BIU Wallet before purchasing.")
+        openWalletPopup({ view: "main" })
+        return
+      }
+      if (bridgeBalance !== null && totalChargedBp > bridgeBalance) {
+        toast.error(
+          `Insufficient BIU Wallet balance. You need ${formatCurrency(totalChargedBp)} but only have ${formatCurrency(bridgeBalance)}.`,
+        )
+        return
+      }
+    } else if (!believePointsSufficientForSku) {
+      toast.error("Insufficient Available Believe Points.")
+      return
+    }
+
+    setData({
+      ...data,
+      payment_method: requiresBridgeWallet ? "bridge_wallet" : "believe_points",
+      idempotency_key: crypto.randomUUID(),
+    })
+
+    // setData is async for next render; post with transform to ensure values
     post(route("gift-cards.purchase.store"), {
       preserveScroll: true,
-      onSuccess: () => {
-        // Redirect handled by response
-      },
+      transform: (form) => ({
+        ...form,
+        payment_method: requiresBridgeWallet ? "bridge_wallet" : "believe_points",
+        idempotency_key: form.idempotency_key || crypto.randomUUID(),
+      }),
       onError: (errs) => {
         if (errs && typeof errs === "object") {
           Object.entries(errs).forEach(([, value]) => {
@@ -310,9 +490,9 @@ export default function PurchaseDetailsPage({
                     <Globe className="h-3.5 w-3.5" />
                     {country}
                   </span>
-                  {!allowsGiftBp && (
-                    <Badge className="border-0 bg-slate-950/50 text-[11px] font-medium text-white backdrop-blur-sm">
-                      Purchased BP only
+                  {requiresBridgeWallet && (
+                    <Badge className="border-0 bg-white/20 text-[11px] font-medium text-white backdrop-blur-sm">
+                      {isPrimeSupporter ? "BIU Wallet · Prime" : "Prime benefit"}
                     </Badge>
                   )}
                   {hasDiscount && (
@@ -323,7 +503,7 @@ export default function PurchaseDetailsPage({
                 </div>
               </div>
 
-              {user && user.role === "user" && (
+              {user && user.role === "user" && !requiresBridgeWallet && (
                 <div className="flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm backdrop-blur-sm">
                   <Wallet className="h-4 w-4 shrink-0" />
                   <span className="tabular-nums">
@@ -389,12 +569,20 @@ export default function PurchaseDetailsPage({
                   How it works
                 </h2>
                 <ul className="mt-4 space-y-3">
-                  {[
-                    `Pay with Available Believe Points${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
-                    "BP is deducted immediately when you submit",
-                    "Gift card issuance begins after a 72-hour waiting period",
-                    "You will be notified when your gift card is ready",
-                  ].map((text) => (
+                  {(requiresBridgeWallet
+                    ? [
+                        `Pay with BIU Wallet balance${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
+                        "Funds move to the platform reserve when you submit",
+                        "Gift card issuance begins after a 72-hour waiting period",
+                        "Prime Supporters only — Believe Points are not used",
+                      ]
+                    : [
+                        `Pay with Available Believe Points${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
+                        "BP is deducted immediately when you submit",
+                        "Gift card issuance begins after a 72-hour waiting period",
+                        "You will be notified when your gift card is ready",
+                      ]
+                  ).map((text) => (
                     <li key={text} className="flex items-start gap-2.5 text-sm text-muted-foreground">
                       <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-purple-600" />
                       <span>{text}</span>
@@ -407,20 +595,80 @@ export default function PurchaseDetailsPage({
             {/* Purchase panel */}
             <div className="lg:col-span-5">
               <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+                {requiresBridgeWallet && !isPrimeSupporter ? (
+                  <div className="rounded-2xl border border-purple-500/25 bg-card p-4 shadow-sm sm:p-5 dark:border-purple-500/20 dark:bg-gray-900/80">
+                    <div className="mb-5 flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/25">
+                        <Sparkles className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                          Prime Supporter benefit
+                        </h2>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          Visa and Mastercard gift cards are purchased with BIU Wallet balance — available for Prime Supporters only.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mb-5 rounded-xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.07] to-blue-600/[0.07] p-4 dark:from-purple-500/10 dark:to-blue-500/10">
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        Free supporters can still buy closed-loop brand cards (Walmart, Amazon, and similar) with Believe Points.
+                      </p>
+                    </div>
+
+                    {!user ? (
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="h-12 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                        onClick={() =>
+                          router.visit(
+                            route("login", {}, false) +
+                              "?redirect=" +
+                              encodeURIComponent("/pricing?tab=supporters"),
+                          )
+                        }
+                      >
+                        Login to become a Prime Supporter
+                      </Button>
+                    ) : user.role !== "user" ? (
+                      <Button disabled className="h-12 w-full rounded-xl" variant="outline" size="lg">
+                        Only supporters can upgrade here
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="h-12 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                        onClick={() => router.visit(route("pricing") + "?tab=supporters")}
+                      >
+                        <Sparkles className="mr-2 h-5 w-5" />
+                        Become a Prime Supporter
+                      </Button>
+                    )}
+                  </div>
+                ) : (
                 <form
                   onSubmit={handlePurchase}
                   className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:p-5 dark:border-gray-800 dark:bg-gray-900/80"
                 >
                   <div className="mb-5 flex items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/25">
-                      <Sparkles className="h-5 w-5" />
+                      {requiresBridgeWallet ? (
+                        <Wallet className="h-5 w-5" />
+                      ) : (
+                        <Sparkles className="h-5 w-5" />
+                      )}
                     </div>
                     <div>
                       <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                        Purchase
+                        {requiresBridgeWallet ? "Pay with BIU Wallet" : "Purchase"}
                       </h2>
                       <p className="mt-0.5 text-sm text-muted-foreground">
-                        Choose organization and amount
+                        {requiresBridgeWallet
+                          ? "Choose organization and amount — charged from your BIU Wallet balance"
+                          : "Choose organization and amount"}
                       </p>
                     </div>
                   </div>
@@ -463,10 +711,6 @@ export default function PurchaseDetailsPage({
                                       className="dark:focus:bg-gray-800 dark:hover:bg-gray-800"
                                     >
                                       {org.name}
-                                      {typeof org.purchased_total === "number" &&
-                                      org.purchased_total > 0
-                                        ? ` — ${formatCurrency(org.purchased_total)} total`
-                                        : ""}
                                     </SelectItem>
                                   ))}
                               </SelectGroup>
@@ -615,78 +859,237 @@ export default function PurchaseDetailsPage({
                               )}
                             </div>
                           </div>
-                          <Coins className="h-8 w-8 shrink-0 text-purple-600/50" />
+                          {requiresBridgeWallet ? (
+                            <Wallet className="h-8 w-8 shrink-0 text-purple-600/50" />
+                          ) : (
+                            <Coins className="h-8 w-8 shrink-0 text-purple-600/50" />
+                          )}
                         </div>
                       </div>
                     )}
 
-                    {isValidAmount && user && user.role === "user" && (
-                      <div className="space-y-3 rounded-xl border border-border/70 bg-muted/40 p-4 dark:border-gray-800 dark:bg-gray-800/40">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
-                            <Coins className="h-4 w-4 text-amber-600" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-foreground">Believe Points</p>
-                              {!believePointsSufficientForSku && (
-                                <Badge variant="destructive" className="text-[10px]">
+                    {isValidAmount && user && user.role === "user" && requiresBridgeWallet && (
+                      <div className="relative overflow-hidden rounded-xl border border-border bg-card">
+                        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-purple-600 to-blue-600" />
+                        <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-purple-600/10 to-blue-600/5 blur-2xl" />
+
+                        <div className="relative space-y-3 p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 shadow-sm">
+                                <Wallet className="h-4 w-4 text-white" />
+                              </div>
+                              <span className="truncate text-xs font-medium text-muted-foreground">
+                                BIU Wallet
+                              </span>
+                            </div>
+                            {walletGate === "ready" &&
+                              bridgeBalance !== null &&
+                              bridgeBalance < totalChargedBp &&
+                              isValidAmount && (
+                                <Badge variant="destructive" className="shrink-0 text-[10px]">
                                   Insufficient
                                 </Badge>
                               )}
-                            </div>
-                            <p className="mt-0.5 text-sm text-muted-foreground">
-                              Available:{" "}
-                              <span className="font-medium tabular-nums text-foreground">
-                                {availableBelievePoints.toFixed(2)} BP
-                              </span>
-                              {!allowsGiftBp && (
-                                <>
-                                  {" "}
-                                  · Purchased:{" "}
-                                  <span className="font-medium tabular-nums text-foreground">
-                                    {purchasedBelievePoints.toFixed(2)}
-                                  </span>
-                                </>
-                              )}
-                            </p>
-                            {giftedBelievePoints > 0 && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Gift BP:{" "}
-                                <span className="font-medium tabular-nums text-foreground">
-                                  {giftedBelievePoints.toFixed(2)}
-                                </span>
-                                {allowsGiftBp
-                                  ? " — included for this gift card"
-                                  : " — cannot pay for Visa/Mastercard"}
-                              </p>
+                            {walletGate === "pending" && (
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 border-amber-500/40 text-[10px] text-amber-700 dark:text-amber-300"
+                              >
+                                Under review
+                              </Badge>
                             )}
-                            {believePointsSufficientForSku && (
-                              <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                                {(spendableForSku - totalChargedBp).toFixed(2)}{" "}
-                                {allowsGiftBp ? "Available" : "purchased"} BP remaining after redemption
-                              </p>
+                            {walletGate === "rejected" && (
+                              <Badge variant="destructive" className="shrink-0 text-[10px]">
+                                Rejected
+                              </Badge>
                             )}
                           </div>
+
+                          {walletGate === "loading" ? (
+                            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Checking BIU Wallet…
+                            </div>
+                          ) : walletGate === "connect" ? (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                Connect your BIU Wallet to pay for this gift card.
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-10 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                                onClick={() => openWalletPopup({ view: "main" })}
+                              >
+                                <Wallet className="mr-2 h-4 w-4 text-white" />
+                                Connect BIU Wallet
+                              </Button>
+                            </>
+                          ) : walletGate === "verify" ? (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                Complete identity verification (KYC) before paying with BIU Wallet.
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-10 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                                onClick={() => openWalletPopup({ view: "main" })}
+                              >
+                                <ShieldCheck className="mr-2 h-4 w-4 text-white" />
+                                Verify KYC
+                              </Button>
+                            </>
+                          ) : walletGate === "pending" ? (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                Your KYC is under review. You can buy once verification is approved.
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-10 w-full rounded-xl"
+                                onClick={() => openWalletPopup({ view: "main" })}
+                              >
+                                <Loader2 className="mr-2 h-4 w-4" />
+                                Check verification status
+                              </Button>
+                            </>
+                          ) : walletGate === "rejected" ? (
+                            <>
+                              <p className="text-sm text-destructive">
+                                Wallet verification was rejected. Open your wallet for next steps.
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-10 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                                onClick={() => openWalletPopup({ view: "main" })}
+                              >
+                                <ShieldCheck className="mr-2 h-4 w-4 text-white" />
+                                Open BIU Wallet
+                              </Button>
+                            </>
+                          ) : walletGate === "create_wallet" ? (
+                            <>
+                              <p className="text-sm text-muted-foreground">
+                                Verification is complete. Create your BIU Wallet to continue.
+                              </p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-10 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                                onClick={() => openWalletPopup({ view: "main" })}
+                              >
+                                <Wallet className="mr-2 h-4 w-4 text-white" />
+                                Create BIU Wallet
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-2xl font-semibold text-muted-foreground">$</span>
+                                <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-4xl font-bold tracking-tight text-transparent tabular-nums">
+                                  {bridgeBalanceLoading
+                                    ? "…"
+                                    : bridgeBalance !== null
+                                      ? bridgeBalance.toLocaleString("en-US", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })
+                                      : "—"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">USD · Believe In Unity Wallet</p>
+
+                              {isValidAmount &&
+                                bridgeBalance !== null &&
+                                bridgeBalance >= totalChargedBp && (
+                                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                                    {formatCurrency(bridgeBalance - totalChargedBp)} remaining after
+                                    purchase
+                                  </p>
+                                )}
+                              {isValidAmount &&
+                                bridgeBalance !== null &&
+                                bridgeBalance < totalChargedBp && (
+                                  <p className="text-sm text-destructive">
+                                    You need {formatCurrency(totalChargedBp)} but only have{" "}
+                                    {formatCurrency(bridgeBalance)}.
+                                  </p>
+                                )}
+
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-10 w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/20 hover:from-purple-500 hover:to-blue-500"
+                                onClick={() => openWalletPopup({ view: "addMoney" })}
+                              >
+                                <Wallet className="mr-2 h-4 w-4 text-white" />
+                                Add money to BIU Wallet
+                              </Button>
+                            </>
+                          )}
                         </div>
+                      </div>
+                    )}
 
-                        {!believePointsSufficientForSku && (
-                          <p className="text-sm text-destructive">
-                            {!allowsGiftBp
-                              ? `Visa/Mastercard needs ${totalChargedBp.toFixed(2)} purchased BP (Gift BP cannot be used). You have ${purchasedBelievePoints.toFixed(2)} purchased.`
-                              : platformFeeUsd > 0
-                                ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
-                                : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${availableBelievePoints.toFixed(2)}.`}
-                          </p>
-                        )}
+                    {isValidAmount && user && user.role === "user" && !requiresBridgeWallet && (
+                      <div className="space-y-3 rounded-xl border border-border/70 bg-muted/40 p-4 dark:border-gray-800 dark:bg-gray-800/40">
+                            <div className="flex items-start gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15">
+                                <Coins className="h-4 w-4 text-amber-600" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-semibold text-foreground">Believe Points</p>
+                                  {!believePointsSufficientForSku && (
+                                    <Badge variant="destructive" className="text-[10px]">
+                                      Insufficient
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-sm text-muted-foreground">
+                                  Available:{" "}
+                                  <span className="font-medium tabular-nums text-foreground">
+                                    {availableBelievePoints.toFixed(2)} BP
+                                  </span>
+                                </p>
+                                {giftedBelievePoints > 0 && (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    Gift BP:{" "}
+                                    <span className="font-medium tabular-nums text-foreground">
+                                      {giftedBelievePoints.toFixed(2)}
+                                    </span>{" "}
+                                    (reporting subset; decreases on closed-loop gift cards)
+                                  </p>
+                                )}
+                                {believePointsSufficientForSku && (
+                                  <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                                    {(spendableForSku - totalChargedBp).toFixed(2)} Available BP remaining after
+                                    redemption
+                                  </p>
+                                )}
+                              </div>
+                            </div>
 
-                        <p className="text-xs text-muted-foreground">
-                          Points are deducted immediately
-                          {platformFeeUsd > 0
-                            ? ` (includes a ${formatCurrency(platformFeeUsd)} platform fee)`
-                            : ""}
-                          . Issuance starts after 72 hours.
-                        </p>
+                            {!believePointsSufficientForSku && (
+                              <p className="text-sm text-destructive">
+                                {platformFeeUsd > 0
+                                  ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
+                                  : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${availableBelievePoints.toFixed(2)}.`}
+                              </p>
+                            )}
+
+                            <p className="text-xs text-muted-foreground">
+                              Points are deducted immediately
+                              {platformFeeUsd > 0
+                                ? ` (includes a ${formatCurrency(platformFeeUsd)} platform fee)`
+                                : ""}
+                              . Issuance starts after 72 hours.
+                            </p>
                       </div>
                     )}
 
@@ -716,7 +1119,12 @@ export default function PurchaseDetailsPage({
                           !isValidForm ||
                           processing ||
                           !isOrganizationApproved ||
-                          !believePointsSufficientForSku
+                          (requiresBridgeWallet
+                            ? walletGate !== "ready" ||
+                              bridgeBalanceLoading ||
+                              bridgeBalance === null ||
+                              bridgeBalance < totalChargedBp
+                            : !believePointsSufficientForSku)
                         }
                       >
                         {processing ? (
@@ -729,6 +1137,11 @@ export default function PurchaseDetailsPage({
                             <Info className="mr-2 h-5 w-5" />
                             Organization approval required
                           </>
+                        ) : requiresBridgeWallet ? (
+                          <>
+                            <Wallet className="mr-2 h-5 w-5" />
+                            Pay with BIU Wallet
+                          </>
                         ) : (
                           <>
                             <Coins className="mr-2 h-5 w-5" />
@@ -739,6 +1152,7 @@ export default function PurchaseDetailsPage({
                     )}
                   </div>
                 </form>
+                )}
 
                 {/* Compact summary */}
                 <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900/80">
@@ -760,6 +1174,16 @@ export default function PurchaseDetailsPage({
                         </Badge>
                       </dd>
                     </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted-foreground">Payment</dt>
+                      <dd className="text-right font-medium text-foreground">
+                        {requiresBridgeWallet
+                          ? isPrimeSupporter
+                            ? "BIU Wallet"
+                            : "Prime Supporter"
+                          : "Believe Points"}
+                      </dd>
+                    </div>
                     {selectedOrganization && (
                       <div className="flex justify-between gap-3">
                         <dt className="text-muted-foreground">Organization</dt>
@@ -779,7 +1203,8 @@ export default function PurchaseDetailsPage({
                       <div className="flex justify-between gap-3">
                         <dt className="font-medium text-foreground">Total</dt>
                         <dd className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text font-bold tabular-nums text-transparent">
-                          {formatCurrency(totalChargedBp)} BP
+                          {formatCurrency(totalChargedBp)}
+                          {!requiresBridgeWallet ? " BP" : ""}
                         </dd>
                       </div>
                     )}

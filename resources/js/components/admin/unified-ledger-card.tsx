@@ -26,6 +26,11 @@ export interface UnifiedLedgerRow {
   txn_id: number
   datetime_iso: string
   module: string
+  module_label?: string
+  major_type?: string
+  major_type_label?: string
+  sub_type?: string
+  sub_type_label?: string
   transaction_type: string
   direction: string
   from_type: string
@@ -37,6 +42,9 @@ export interface UnifiedLedgerRow {
   to_email: string | null
   to_id: number | null
   related_record: string
+  event_name?: string | null
+  connection_hub_type?: string | null
+  connection_hub_type_label?: string | null
   subtotal_amount: number | null
   sales_tax_amount: number | null
   shipping_amount: number | null
@@ -78,9 +86,6 @@ export interface UnifiedLedgerRow {
   bp_status_label?: string
   brp_activity_type?: string | null
   brp_activity_label?: string
-  event_name?: string | null
-  connection_hub_type?: string | null
-  connection_hub_type_label?: string | null
   current_owner?: string | null
   available_at?: string | null
 }
@@ -194,8 +199,9 @@ function sellingPayoutsVisible(data: UnifiedLedgerRow): boolean {
 
 function moduleLabel(m: string) {
   const map: Record<string, string> = {
+    general: "General",
     donation: "Donation",
-    fundme: "Support a project",
+    fundme: "Support a Project",
     campaign: "Campaign",
     believe_points: "General",
     reward: "Reward",
@@ -203,12 +209,12 @@ function moduleLabel(m: string) {
     marketplace: "Marketplace",
     gift_card: "Gift Card",
     servicehub: "Service Hub",
-    connection_hub: "Learning Hub",
-    course: "Learning Hub",
+    connection_hub: "Connection Hub",
+    course: "Connection Hub",
     merchant_hub: "Merchant Hub",
-    organization_subscription: "Org subscription",
-    supporter_subscription: "Supporter subscription",
-    merchant_subscription: "Merchant subscription",
+    organization_subscription: "Organization Subscription",
+    supporter_subscription: "Supporter Subscription",
+    merchant_subscription: "Merchant Subscription",
     payout: "Payout",
     refund: "Refund",
     adjustment: "Adjustment",
@@ -217,18 +223,14 @@ function moduleLabel(m: string) {
 }
 
 function moduleCellLabel(data: UnifiedLedgerRow): string {
-  const tt = (data.transaction_type || "").toLowerCase()
-  const event = (data.event_name || "").toLowerCase()
-  if (
-    tt === "bp_redemption" ||
-    tt === "believe_points_wallet_transfer" ||
-    event.includes("transfer to bridge wallet")
-  ) {
-    return "Bridge Wallet"
+  if (data.module_label?.trim()) {
+    return data.module_label.trim()
   }
-  const hubType = (data.connection_hub_type || "").toLowerCase()
-  if ((data.module === "connection_hub" || data.module === "course") && hubType === "events") {
-    return "Events"
+  if (data.module === "believe_points" || data.module === "general") {
+    return "General"
+  }
+  if (data.module === "connection_hub" || data.module === "course") {
+    return "Connection Hub"
   }
   return moduleLabel(data.module)
 }
@@ -340,7 +342,8 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
             </Badge>
             <span className="text-muted-foreground max-sm:hidden">·</span>
             <span className="min-w-0 font-medium text-foreground">
-              {data.event_name ||
+              {data.sub_type_label ||
+                data.event_name ||
                 (data.transaction_type?.startsWith("bp_gift")
                   ? data.transaction_type
                       .replace(/^bp_/, "")
@@ -473,14 +476,19 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
           </div>
           <div className="min-w-0 space-y-1 rounded-xl border border-border/50 bg-muted/20 p-3 sm:p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Module</p>
-            <p className="text-lg font-semibold capitalize text-foreground">{moduleLabel(data.module)}</p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Transaction</p>
-            <p className="font-mono text-sm text-primary">
-              {data.transaction_type?.startsWith("bp_gift")
-                ? data.event_name || data.transaction_type
-                : data.transaction_type}
+            <p className="text-lg font-semibold capitalize text-foreground">
+              {data.module_label ?? moduleLabel(data.module)}
             </p>
-            <p className="text-xs text-muted-foreground">Type of activity (purchase, donation, etc.)</p>
+            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Major Type</p>
+            <p className="text-sm font-medium text-foreground">{data.major_type_label ?? "—"}</p>
+            <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Sub Type</p>
+            <p className="text-sm font-medium text-foreground">
+              {data.sub_type_label
+                ?? (data.transaction_type?.startsWith("bp_gift")
+                  ? data.event_name || data.transaction_type
+                  : data.transaction_type)}
+            </p>
+            <p className="text-xs text-muted-foreground">Reporting type vs specific activity</p>
           </div>
           <div className="min-w-0 space-y-1 rounded-xl border border-border/50 bg-muted/20 p-3 sm:col-span-2 sm:p-4 lg:col-span-1">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Related record</p>

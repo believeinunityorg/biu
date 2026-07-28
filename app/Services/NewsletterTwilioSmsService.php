@@ -13,6 +13,8 @@ class NewsletterTwilioSmsService
 {
     public function isConfigured(): bool
     {
+        TwilioConfigService::applyToConfig();
+
         $sid = config('services.twilio.sid');
         $token = config('services.twilio.token');
         $from = config('services.twilio.sms_from');
@@ -103,6 +105,8 @@ class NewsletterTwilioSmsService
      */
     public function send(string $toE164, string $body): string
     {
+        TwilioConfigService::applyToConfig();
+
         $mode = $this->getAccountMode();
         $modeLabel = $this->accountModeLabel();
 

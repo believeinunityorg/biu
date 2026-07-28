@@ -22,6 +22,7 @@ class GiftCardRedemptionService
         private readonly PhazeBalanceService $phazeBalanceService,
         private readonly GiftCardService $giftCardService,
         private readonly GiftCardRedemptionNotifier $redemptionNotifier,
+        private readonly GiftCardBridgePaymentService $bridgePaymentService,
     ) {}
 
     public function fulfillmentDelayHours(): int
@@ -52,9 +53,13 @@ class GiftCardRedemptionService
         $requestedAt = now();
         $scheduledAt = $requestedAt->copy()->addHours($delayHours);
 
-        $finalBrandName = $selectedBrand['productName'] ?? $validated['brand_name'];
+            $finalBrandName = $selectedBrand['productName'] ?? $validated['brand_name'];
         if (empty($finalBrandName)) {
             $finalBrandName = 'Gift Card #'.($validated['productId'] ?? 'Unknown');
+        }
+
+        if (GiftCardGiftedPointsPolicy::requiresBridgeWallet($finalBrandName)) {
+            throw new \RuntimeException(GiftCardGiftedPointsPolicy::openLoopBridgeMessage());
         }
 
         $giftCard = DB::transaction(function () use (
@@ -76,10 +81,7 @@ class GiftCardRedemptionService
             $isClosedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($finalBrandName);
             $deducted = $lockedUser->deductAvailableBelievePointsForGiftCard($pointsRequired, $isClosedLoop);
             if ($deducted === null) {
-                $message = $isClosedLoop
-                    ? 'Insufficient Available Believe Points.'
-                    : 'Visa/Mastercard cannot be purchased with Gift BP. Use purchased Believe Points (Available − Gift).';
-                throw new \RuntimeException($message);
+                throw new \RuntimeException('Insufficient Available Believe Points.');
             }
             $fromGifted = $deducted['from_gifted'];
             $reduceGiftReporting = $fromGifted > 0;
@@ -190,6 +192,177 @@ class GiftCardRedemptionService
             'amount' => $faceValue,
             'platform_fee' => $platformFee,
             'total_charged' => $pointsRequired,
+            'scheduled_fulfillment_at' => $giftCard->scheduled_fulfillment_at?->toIso8601String(),
+            'order_id' => $orderId,
+        ]);
+
+        $giftCard = $giftCard->fresh(['user', 'organization']);
+        $this->redemptionNotifier->notifySubmitted($giftCard);
+
+        return $giftCard;
+    }
+
+    /**
+     * Open-loop (Visa/MC): charge BIU Wallet → platform reserve, then delayed Phaze fulfillment.
+     *
+     * @param  array<string, mixed>  $validated
+     * @param  array<string, mixed>|null  $selectedBrand
+     */
+    public function submitWithBridgeWallet(
+        User $user,
+        array $validated,
+        ?array $selectedBrand,
+        float $purchaseAmount,
+        string $currency,
+        ?string $idempotencyKey = null,
+    ): GiftCard {
+        $faceValue = round($purchaseAmount, 2);
+        $platformFee = BiuPlatformFeeService::getGiftCardPlatformFeeUsd();
+        $totalCharged = BiuPlatformFeeService::giftCardTotalChargedUsd($faceValue);
+        $feeMeta = BiuPlatformFeeService::giftCardLedgerMetaSlice($faceValue);
+        $orderId = Str::uuid()->toString();
+        $delayHours = $this->fulfillmentDelayHours();
+        $requestedAt = now();
+        $scheduledAt = $requestedAt->copy()->addHours($delayHours);
+
+        $finalBrandName = $selectedBrand['productName'] ?? $validated['brand_name'];
+        if (empty($finalBrandName)) {
+            $finalBrandName = 'Gift Card #'.($validated['productId'] ?? 'Unknown');
+        }
+
+        if (! GiftCardGiftedPointsPolicy::requiresBridgeWallet($finalBrandName)) {
+            throw new \RuntimeException('This gift card is paid with Believe Points, not BIU Wallet.');
+        }
+
+        $charge = $this->bridgePaymentService->chargeToPlatformReserve(
+            $user,
+            $totalCharged,
+            $idempotencyKey,
+        );
+
+        if (! ($charge['success'] ?? false)) {
+            throw new \RuntimeException(
+                (string) ($charge['message'] ?? 'Could not charge BIU Wallet.'),
+            );
+        }
+
+        $giftCard = DB::transaction(function () use (
+            $user,
+            $validated,
+            $selectedBrand,
+            $faceValue,
+            $platformFee,
+            $currency,
+            $totalCharged,
+            $feeMeta,
+            $orderId,
+            $requestedAt,
+            $scheduledAt,
+            $finalBrandName,
+            $charge,
+        ) {
+            $brandMeta = $selectedBrand ? [
+                'productId' => $selectedBrand['productId'] ?? null,
+                'productImage' => $selectedBrand['productImage'] ?? null,
+                'denominations' => $selectedBrand['denominations'] ?? [],
+                'valueRestrictions' => $selectedBrand['valueRestrictions'] ?? [],
+                'productDescription' => $selectedBrand['productDescription'] ?? null,
+                'termsAndConditions' => $selectedBrand['termsAndConditions'] ?? null,
+                'howToUse' => $selectedBrand['howToUse'] ?? null,
+                'expiryAndValidity' => $selectedBrand['expiryAndValidity'] ?? null,
+                'discount' => $selectedBrand['discount'] ?? 0,
+            ] : [];
+
+            $giftCard = GiftCard::create([
+                'user_id' => $user->id,
+                'organization_id' => $validated['organization_id'],
+                'card_number' => GiftCard::generateUniqueCardNumber(),
+                'amount' => $faceValue,
+                'platform_fee' => $feeMeta['platform_fee'],
+                'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
+                'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
+                'brand' => $finalBrandName,
+                'brand_name' => $finalBrandName,
+                'country' => $validated['country'] ?? null,
+                'currency' => $currency,
+                'status' => GiftCardStatus::PendingFulfillment->value,
+                'payment_method' => 'bridge_wallet',
+                'purchased_at' => $requestedAt,
+                'requested_at' => $requestedAt,
+                'scheduled_fulfillment_at' => $scheduledAt,
+                'expires_at' => $requestedAt->copy()->addYear(),
+                'meta' => array_merge($brandMeta, $feeMeta, [
+                    'orderId' => $orderId,
+                    'productId' => (int) $validated['productId'],
+                    'bridge_wallet_charged' => $totalCharged,
+                    'bridge_transfer_id' => $charge['transfer_id'] ?? null,
+                    'bridge_wallet_id' => $charge['bridge_wallet_id'] ?? null,
+                    'closed_loop' => false,
+                    'open_loop' => true,
+                    'redemption_submitted_at' => $requestedAt->toIso8601String(),
+                    'scheduled_fulfillment_at' => $scheduledAt->toIso8601String(),
+                    'fulfillment_audit' => [[
+                        'event' => 'submitted_bridge_wallet',
+                        'at' => $requestedAt->toIso8601String(),
+                        'amount' => $faceValue,
+                        'platform_fee' => $platformFee,
+                        'total_charged' => $totalCharged,
+                        'bridge_transfer_id' => $charge['transfer_id'] ?? null,
+                        'order_id' => $orderId,
+                    ]],
+                ]),
+            ]);
+
+            Transaction::record([
+                'user_id' => $user->id,
+                'related_id' => $giftCard->id,
+                'related_type' => GiftCard::class,
+                'type' => 'purchase',
+                'ledger_type' => UnifiedLedgerType::MONEY,
+                'bp_status' => UnifiedLedgerBpStatus::NA,
+                'status' => Transaction::STATUS_PENDING,
+                'amount' => $totalCharged,
+                'fee' => $platformFee,
+                'currency' => $currency,
+                'payment_method' => 'bridge_wallet',
+                'transaction_id' => 'bridge_wallet_gift_card_pending_'.$giftCard->id,
+                'meta' => array_merge($feeMeta, [
+                    'gift_card_id' => $giftCard->id,
+                    'ledger_type' => UnifiedLedgerType::MONEY,
+                    'event_name' => 'Gift Card Purchase (BIU Wallet)',
+                    'description' => trim((string) ($validated['brand_name'] ?? '')) !== ''
+                        ? 'Purchased '.trim((string) $validated['brand_name']).' Gift Card via BIU Wallet'
+                        : 'Gift Card Purchase via BIU Wallet',
+                    'bridge_transfer_id' => $charge['transfer_id'] ?? null,
+                    'bridge_wallet_id' => $charge['bridge_wallet_id'] ?? null,
+                    'phaze_order_id' => $orderId,
+                    'brand' => $validated['brand_name'] ?? $finalBrandName,
+                    'fulfillment_status' => GiftCardStatus::PendingFulfillment->value,
+                    'gift_card_sales' => $faceValue,
+                    'from_type' => 'module',
+                    'from_name' => 'BIU Wallet',
+                    'to_type' => 'module',
+                    'to_name' => 'Gift Card Module',
+                ]),
+            ]);
+
+            $this->appendAudit($giftCard, 'bridge_wallet_charged', [
+                'amount' => $totalCharged,
+                'face_value' => $faceValue,
+                'platform_fee' => $platformFee,
+                'bridge_transfer_id' => $charge['transfer_id'] ?? null,
+            ]);
+
+            return $giftCard;
+        });
+
+        Log::info('Gift card BIU Wallet redemption submitted for delayed fulfillment', [
+            'gift_card_id' => $giftCard->id,
+            'user_id' => $user->id,
+            'amount' => $faceValue,
+            'platform_fee' => $platformFee,
+            'total_charged' => $totalCharged,
+            'bridge_transfer_id' => $charge['transfer_id'] ?? null,
             'scheduled_fulfillment_at' => $giftCard->scheduled_fulfillment_at?->toIso8601String(),
             'order_id' => $orderId,
         ]);
@@ -327,7 +500,7 @@ class GiftCardRedemptionService
                 return null;
             }
 
-            if ($giftCard->payment_method !== 'believe_points') {
+            if (! in_array($giftCard->payment_method, ['believe_points', 'bridge_wallet'], true)) {
                 return null;
             }
 
@@ -535,8 +708,8 @@ class GiftCardRedemptionService
             throw new \InvalidArgumentException('Only failed or capacity reached redemptions can be retried.');
         }
 
-        if ($giftCard->payment_method !== 'believe_points') {
-            throw new \InvalidArgumentException('Only Believe Points redemptions support delayed fulfillment retry.');
+        if (! in_array($giftCard->payment_method, ['believe_points', 'bridge_wallet'], true)) {
+            throw new \InvalidArgumentException('Only Believe Points or BIU Wallet redemptions support delayed fulfillment retry.');
         }
 
         $giftCard->update([
@@ -562,8 +735,8 @@ class GiftCardRedemptionService
      */
     public function queueAdminForceFulfill(GiftCard $giftCard, User $admin): GiftCard
     {
-        if ($giftCard->payment_method !== 'believe_points') {
-            throw new \InvalidArgumentException('Only Believe Points redemptions support forced fulfillment.');
+        if (! in_array($giftCard->payment_method, ['believe_points', 'bridge_wallet'], true)) {
+            throw new \InvalidArgumentException('Only Believe Points or BIU Wallet redemptions support forced fulfillment.');
         }
 
         if (! GiftCardStatus::isForceFulfillEligible($giftCard->status)) {
@@ -738,16 +911,22 @@ class GiftCardRedemptionService
         );
 
         $meta = $giftCard->meta ?? [];
+        $isBridgeWallet = $giftCard->payment_method === 'bridge_wallet';
+        $ledgerType = $isBridgeWallet ? UnifiedLedgerType::MONEY : UnifiedLedgerType::BP;
+        $bpStatus = $isBridgeWallet ? UnifiedLedgerBpStatus::NA : UnifiedLedgerBpStatus::AVAILABLE;
+        $transactionId = $isBridgeWallet
+            ? 'bridge_wallet_gift_card_'.$giftCard->id
+            : 'believe_points_gift_card_'.$giftCard->id;
 
         $transaction->update([
             'status' => Transaction::STATUS_COMPLETED,
-            'ledger_type' => UnifiedLedgerType::BP,
-            'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
-            'transaction_id' => 'believe_points_gift_card_'.$giftCard->id,
+            'ledger_type' => $ledgerType,
+            'bp_status' => $bpStatus,
+            'transaction_id' => $transactionId,
             'processed_at' => now(),
             'meta' => array_merge($transaction->meta ?? [], $ledgerSlice, [
-                'ledger_type' => UnifiedLedgerType::BP,
-                'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
+                'ledger_type' => $ledgerType,
+                'bp_status' => $bpStatus,
                 'phaze_purchase_id' => $giftCard->external_id,
                 'phaze_status' => $meta['phaze_status'] ?? null,
                 'fulfillment_status' => GiftCardStatus::Completed->value,

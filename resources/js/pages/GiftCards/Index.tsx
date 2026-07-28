@@ -34,8 +34,10 @@ import { cn } from "@/lib/utils"
 interface Brand {
   productId?: number
   productName?: string
-  /** False for Visa/Mastercard — Gift BP cannot pay */
+  /** False for Visa/Mastercard — pay with BIU Wallet (not BP) */
   allowsGiftBp?: boolean
+  /** True for open-loop Visa/MC */
+  requiresBridgeWallet?: boolean
   productImage?: string
   denominations?: number[]
   valueRestrictions?: {
@@ -620,9 +622,9 @@ export default function GiftCardsIndex({
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-80" />
 
                       <div className="absolute top-2.5 left-2.5 flex max-w-[70%] flex-wrap gap-1.5">
-                        {brand.allowsGiftBp === false && (
-                          <Badge className="border-0 bg-slate-950/80 text-[10px] font-medium text-white backdrop-blur-sm">
-                            Purchased BP only
+                        {(brand.requiresBridgeWallet === true || brand.allowsGiftBp === false) && (
+                          <Badge className="border-0 bg-sky-950/85 text-[10px] font-medium text-white backdrop-blur-sm">
+                            Prime · BIU
                           </Badge>
                         )}
                       </div>

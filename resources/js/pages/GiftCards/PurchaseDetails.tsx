@@ -711,10 +711,6 @@ export default function PurchaseDetailsPage({
                                       className="dark:focus:bg-gray-800 dark:hover:bg-gray-800"
                                     >
                                       {org.name}
-                                      {typeof org.purchased_total === "number" &&
-                                      org.purchased_total > 0
-                                        ? ` — ${formatCurrency(org.purchased_total)} total`
-                                        : ""}
                                     </SelectItem>
                                   ))}
                               </SelectGroup>

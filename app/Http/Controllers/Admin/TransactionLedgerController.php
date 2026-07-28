@@ -969,8 +969,8 @@ class TransactionLedgerController extends Controller
             'biu_fee' => $fin['biu_fee'],
             'split_deduction' => $fin['split_deduction'],
             'refund_amount' => $fin['refund_amount'],
-            'net_to_organization' => $fin['net_to_organization'],
-            'payout_status' => $fin['payout_status'],
+            'net_to_organization' => $fin['net_to_organization'] ?? null,
+            'payout_status' => $fin['payout_status'] ?? null,
             'organization_id' => $org['organization_id'],
             'organization_name' => $org['organization_name'],
             'organization_ein' => $org['organization_ein'] ?? null,
@@ -1524,7 +1524,7 @@ class TransactionLedgerController extends Controller
         $out = $this->applyLedgerSellingPayoutsFromMeta($t, $sourceType, $out);
 
         if ($donationPayload !== null && ($donationPayload['kind'] ?? '') === 'donation') {
-            $out['organization_payout'] = $out['net_to_organization'];
+            $out['organization_payout'] = $out['net_to_organization'] ?? null;
         }
 
         return $out;

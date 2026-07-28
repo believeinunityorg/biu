@@ -1319,6 +1319,8 @@ class BridgeService
         }
 
         parse_str($parts['query'] ?? '', $query);
+        // Embedded widget completes via postMessage; redirect params open a new window on final steps.
+        unset($query['redirect-uri'], $query['redirect_uri']);
         $query['iframe-origin'] = $iframeOrigin;
 
         $scheme = $parts['scheme'] ?? 'https';

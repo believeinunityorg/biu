@@ -2569,32 +2569,41 @@ class BridgeWebhookController extends Controller
             }
 
             if (!$hasVirtualAccount) {
+                $sourceCurrency = $this->bridgeService->resolvePreferredVirtualAccountSourceCurrency(
+                    null,
+                    $customerId,
+                );
+
                 if ($this->bridgeService->isSandbox()) {
                     // Sandbox mode: Create virtual account with dummy data per Bridge.xyz docs
-                    // Uses Ethereum payment rail with auto-generated address and USDC currency
-                    $source = ['currency' => 'usd'];
+                    $source = ['currency' => $sourceCurrency];
                     $destination = [
                         'payment_rail' => 'ethereum',
                         'currency' => 'usdc',
-                        'address' => $this->bridgeService->generateEthereumAddress(), // Auto-generated dummy address
+                        'address' => $this->bridgeService->generateEthereumAddress(),
                     ];
                     
                     $virtualAccountResult = $this->bridgeService->createVirtualAccount($customerId, $source, $destination);
                 } elseif ($walletId) {
-                    // Production mode with wallet: Create virtual account linked to wallet
+                    // Production: EUR IBAN when SEPA granted / US blocked; otherwise USD ACH
                     $virtualAccountResult = $this->bridgeService->createVirtualAccountForWallet(
                         $customerId,
                         $walletId,
-                        'USD',
+                        $sourceCurrency,
                         $walletChain,
                     );
                 } else {
-                    // Production mode without wallet: Create virtual account with ACH push
-                    $source = ['currency' => 'usd'];
-                    $destination = [
-                        'payment_rail' => 'ach_push',
-                        'currency' => 'usd',
-                    ];
+                    $source = ['currency' => $sourceCurrency];
+                    $destination = $sourceCurrency === 'eur'
+                        ? [
+                            'payment_rail' => 'ethereum',
+                            'currency' => 'usdc',
+                            'address' => $this->bridgeService->generateEthereumAddress(),
+                        ]
+                        : [
+                            'payment_rail' => 'ach_push',
+                            'currency' => 'usd',
+                        ];
                     
                     $virtualAccountResult = $this->bridgeService->createVirtualAccount($customerId, $source, $destination);
                 }

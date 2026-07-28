@@ -2319,16 +2319,44 @@ class BridgeService
 
     /**
      * Resolve the best virtual account for deposits from Bridge (sync from API).
+     *
+     * Prefers an account matching $preferredSourceCurrency (usd|eur) when provided.
      */
-    public function resolveVirtualAccountFromBridge(string $customerId, ?string $preferredBridgeWalletId = null): ?array
-    {
+    public function resolveVirtualAccountFromBridge(
+        string $customerId,
+        ?string $preferredBridgeWalletId = null,
+        ?string $preferredSourceCurrency = null,
+    ): ?array {
         $accounts = $this->normalizeBridgeListData($this->getVirtualAccounts($customerId));
 
         if ($accounts === []) {
             return null;
         }
 
+        $preferredSourceCurrency = $preferredSourceCurrency
+            ? strtolower($preferredSourceCurrency)
+            : null;
+
+        $matchesCurrency = static function (array $account) use ($preferredSourceCurrency): bool {
+            if ($preferredSourceCurrency === null) {
+                return true;
+            }
+            $instructions = is_array($account['source_deposit_instructions'] ?? null)
+                ? $account['source_deposit_instructions']
+                : [];
+            $source = is_array($account['source'] ?? null) ? $account['source'] : [];
+            $currency = strtolower((string) ($instructions['currency'] ?? $source['currency'] ?? ''));
+
+            return $currency === $preferredSourceCurrency;
+        };
+
         if ($preferredBridgeWalletId) {
+            foreach ($accounts as $account) {
+                $destination = $account['destination'] ?? [];
+                if (($destination['bridge_wallet_id'] ?? null) === $preferredBridgeWalletId && $matchesCurrency($account)) {
+                    return $this->enrichVirtualAccountDetails($customerId, $account);
+                }
+            }
             foreach ($accounts as $account) {
                 $destination = $account['destination'] ?? [];
                 if (($destination['bridge_wallet_id'] ?? null) === $preferredBridgeWalletId) {
@@ -2338,8 +2366,13 @@ class BridgeService
         }
 
         foreach ($accounts as $account) {
-            $instructions = $account['source_deposit_instructions'] ?? [];
-            if (! empty($instructions['bank_routing_number']) || ! empty($instructions['bank_account_number'])) {
+            if ($matchesCurrency($account) && $this->virtualAccountHasDepositInstructions($account)) {
+                return $this->enrichVirtualAccountDetails($customerId, $account);
+            }
+        }
+
+        foreach ($accounts as $account) {
+            if ($this->virtualAccountHasDepositInstructions($account)) {
                 return $this->enrichVirtualAccountDetails($customerId, $account);
             }
         }
@@ -2355,8 +2388,7 @@ class BridgeService
      */
     public function enrichVirtualAccountDetails(string $customerId, array $account): array
     {
-        $instructions = $account['source_deposit_instructions'] ?? [];
-        if (! empty($instructions['bank_routing_number']) || ! empty($instructions['bank_account_number'])) {
+        if ($this->virtualAccountHasDepositInstructions($account)) {
             return $account;
         }
 
@@ -4467,13 +4499,101 @@ class BridgeService
     }
 
     /**
-     * Create a virtual account for USD deposits to Bridge wallet
+     * Prefer EUR (SEPA IBAN) when US ACH is unavailable and SEPA is granted.
+     * Prefer USD when base/US ACH is available.
+     *
+     * @see https://apidocs.bridge.xyz/get-started/guides/move-money/eur-integration-guide
+     * @see https://apidocs.bridge.xyz/platform/customers/compliance/supported-countries-list
+     *
+     * @param  array<string, mixed>|null  $customerData
+     */
+    public function resolvePreferredVirtualAccountSourceCurrency(?array $customerData = null, ?string $customerId = null): string
+    {
+        if ($customerData === null && $customerId) {
+            $result = $this->getCustomer($customerId);
+            $customerData = ($result['success'] ?? false) ? ($result['data'] ?? []) : [];
+        }
+
+        $summary = $this->getEndorsementsSummary(is_array($customerData) ? $customerData : []);
+
+        if (($summary['us_ach_available'] ?? false)) {
+            return 'usd';
+        }
+
+        if (($summary['sepa_available'] ?? false)) {
+            return 'eur';
+        }
+
+        return 'usd';
+    }
+
+    /**
+     * Whether a Bridge virtual-account payload has usable deposit instructions (USD ACH or EUR IBAN).
+     *
+     * @param  array<string, mixed>  $account
+     */
+    public function virtualAccountHasDepositInstructions(array $account): bool
+    {
+        $instructions = $account['source_deposit_instructions'] ?? [];
+        if (! is_array($instructions)) {
+            return false;
+        }
+
+        return ! empty($instructions['bank_routing_number'])
+            || ! empty($instructions['bank_account_number'])
+            || ! empty($instructions['iban']);
+    }
+
+    /**
+     * Normalize Bridge deposit instructions for the wallet UI (USD ACH/wire + EUR SEPA IBAN).
+     *
+     * @param  array<string, mixed>  $instructions
+     * @return array<string, mixed>
+     */
+    public function normalizeDepositInstructionsForUi(array $instructions): array
+    {
+        $currency = strtolower((string) ($instructions['currency'] ?? ''));
+        $rails = $instructions['payment_rails'] ?? null;
+        if (is_string($rails)) {
+            $rails = [$rails];
+        }
+        if (! is_array($rails)) {
+            $rails = [];
+        }
+        $rail = strtolower((string) ($instructions['payment_rail'] ?? ($rails[0] ?? '')));
+
+        if ($currency === 'eur' || $rail === 'sepa' || in_array('sepa', $rails, true) || ! empty($instructions['iban'])) {
+            if (! in_array('sepa', $rails, true)) {
+                $rails[] = 'sepa';
+            }
+
+            return array_filter([
+                'currency' => $instructions['currency'] ?? 'eur',
+                'payment_rail' => $instructions['payment_rail'] ?? 'sepa',
+                'payment_rails' => array_values(array_unique($rails)),
+                'iban' => $instructions['iban'] ?? null,
+                'bic' => $instructions['bic'] ?? null,
+                'bank_name' => $instructions['bank_name'] ?? null,
+                'bank_address' => $instructions['bank_address'] ?? null,
+                'bank_beneficiary_name' => $instructions['account_holder_name']
+                    ?? $instructions['bank_beneficiary_name']
+                    ?? null,
+                'bank_beneficiary_address' => $instructions['bank_beneficiary_address'] ?? null,
+                'bank_account_number' => $instructions['iban'] ?? $instructions['bank_account_number'] ?? null,
+            ], static fn ($v) => $v !== null && $v !== '' && $v !== []);
+        }
+
+        return $instructions;
+    }
+
+    /**
+     * Create a virtual account for Bridge wallet deposits (USD ACH or EUR SEPA IBAN).
      * 
      * Per Bridge API: production destination uses chain name as payment_rail + bridge_wallet_id.
      * 
      * @param string $customerId Bridge customer ID
      * @param string $walletId Bridge wallet ID
-     * @param string $currency Currency (default: USD)
+     * @param string $currency Source fiat currency (usd or eur)
      * @param string|null $chain Wallet chain (solana, ethereum, base, etc.)
      * @return array
      */
@@ -4490,7 +4610,7 @@ class BridgeService
         if ($this->isSandbox()) {
             $destination = [
                 'payment_rail' => 'ethereum',
-            'currency' => 'usdc',
+                'currency' => 'usdc',
                 'address' => $this->generateEthereumAddress(),
             ];
         } else {
@@ -4498,7 +4618,7 @@ class BridgeService
                 ? strtolower($chain)
                 : $this->resolveWalletChain($customerId, $walletId);
 
-            if (in_array($walletChain, ['usd', 'fiat'], true)) {
+            if (in_array($walletChain, ['usd', 'fiat', 'eur'], true)) {
                 $walletChain = $this->resolveWalletChain($customerId, $walletId);
             }
 
@@ -4518,6 +4638,8 @@ class BridgeService
      * @param string $customerId Bridge customer ID
      * @param string $walletId Bridge wallet ID
      * @param string $chain Blockchain chain (solana, ethereum, etc.)
+     * @param string|null $walletAddress Optional destination address
+     * @param string $sourceCurrency usd or eur
      * @return array
      */
     public function createVirtualAccountForChainWallet(
@@ -4525,12 +4647,12 @@ class BridgeService
         string $walletId,
         string $chain = 'solana',
         ?string $walletAddress = null,
+        string $sourceCurrency = 'usd',
     ): array {
         $source = [
-            'currency' => 'usd',
+            'currency' => strtolower($sourceCurrency),
         ];
 
-        // In sandbox mode, always use Ethereum with generated address
         if ($this->isSandbox()) {
             $destination = [
                 'payment_rail' => 'ethereum',

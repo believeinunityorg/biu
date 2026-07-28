@@ -325,12 +325,12 @@ function ledgerEventLabel(u: UnifiedLedgerRow | undefined): string {
   if (!u) {
     return "—"
   }
-  // Event matches Sub Type for consistent reporting.
-  if (u.sub_type_label?.trim()) {
-    return u.sub_type_label.trim()
-  }
+  // Prefer presenter event_name (equals Sub Type except BP Settlement → BP Available).
   if (u.event_name?.trim()) {
     return u.event_name.trim()
+  }
+  if (u.sub_type_label?.trim()) {
+    return u.sub_type_label.trim()
   }
   const giftEvents = [
     "bp_gift_sent",
@@ -834,6 +834,7 @@ function majorTypeLabel(key: string): string {
     purchase: "Purchase",
     subscription: "Subscription",
     transfer: "Transfer",
+    settlement: "Settlement",
     reward: "Reward",
     enrollment: "Enrollment",
     donation: "Donation",

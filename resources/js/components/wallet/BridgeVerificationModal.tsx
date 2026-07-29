@@ -114,8 +114,8 @@ export function BridgeVerificationModal({
     const title = verificationType === "kyb" ? "Business verification" : "Identity verification"
     const subtitle =
         verificationType === "kyb"
-            ? "Complete your business verification securely with Bridge."
-            : "Verify your identity and card eligibility with Bridge. One flow covers your wallet, date of birth, address, and ID."
+            ? "Complete your business verification securely with Believe Cash."
+            : "Verify your identity and card eligibility with Believe Cash. One flow covers your wallet, date of birth, address, and ID."
 
     return createPortal(
         <AnimatePresence>
@@ -213,7 +213,7 @@ export function BridgeVerificationModal({
 
                         <div className="flex items-center justify-between gap-2 border-t border-border bg-card px-4 py-3 sm:px-5">
                             <p className="text-[11px] text-muted-foreground sm:text-xs">
-                                Secure verification powered by Bridge
+                                Secure verification powered by Believe Cash
                             </p>
                             <Button type="button" variant="outline" size="sm" onClick={onClose}>
                                 Done for now

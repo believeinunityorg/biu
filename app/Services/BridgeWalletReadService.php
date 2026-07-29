@@ -1500,7 +1500,7 @@ class BridgeWalletReadService
             'avalanche', 'avax' => 'Avalanche',
             'tron' => 'Tron',
             'stellar' => 'Stellar',
-            'bridge_wallet' => 'Bridge Wallet',
+            'bridge_wallet' => 'Believe Cash',
             default => $rail !== '' ? ucfirst(str_replace('_', ' ', $rail)) : '',
         };
     }
@@ -1652,7 +1652,7 @@ class BridgeWalletReadService
     }
 
     /**
-     * Label BIU Wallet ↔ reserve charges that funded an open-loop gift card.
+     * Label Believe Cash ↔ reserve charges that funded an open-loop gift card.
      * Member (outgoing): Gift Card Purchase. Reserve (incoming): why funds arrived.
      *
      * @param  array<string, mixed>  $activity

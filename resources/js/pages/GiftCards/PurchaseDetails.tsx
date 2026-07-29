@@ -46,9 +46,9 @@ import { cn } from "@/lib/utils"
 interface Brand {
   productId?: number
   productName?: string
-  /** False for Visa/Mastercard — pay with BIU Wallet (not BP) */
+  /** False for Visa/Mastercard — pay with Believe Cash (not BP) */
   allowsGiftBp?: boolean
-  /** True for open-loop Visa/MC — BIU Wallet path */
+  /** True for open-loop Visa/MC — Believe Cash path */
   requiresBridgeWallet?: boolean
   productImage?: string
   denominations?: number[]
@@ -82,7 +82,7 @@ interface PurchaseDetailsProps {
     email: string
     role: string
   } | null
-  /** Prime Supporter tier — required for Visa/MC BIU Wallet purchase */
+  /** Prime Supporter tier — required for Visa/MC Believe Cash purchase */
   is_prime_supporter?: boolean
   organizations: Organization[]
   giftCardPurchaseOrganizations?: OrganizationGiftCardPurchase[]
@@ -385,17 +385,17 @@ export default function PurchaseDetailsPage({
 
     if (requiresBridgeWallet) {
       if (!isPrimeSupporter) {
-        toast.error("Prime Supporter is required to buy Visa/Mastercard with BIU Wallet.")
+        toast.error("Prime Supporter is required to buy Visa/Mastercard with Believe Cash.")
         return
       }
       if (walletGate !== "ready") {
-        toast.error("Finish connecting and verifying your BIU Wallet before purchasing.")
+        toast.error("Finish connecting and verifying your Believe Cash before purchasing.")
         openWalletPopup({ view: "main" })
         return
       }
       if (bridgeBalance !== null && totalChargedBp > bridgeBalance) {
         toast.error(
-          `Insufficient BIU Wallet balance. You need ${formatCurrency(totalChargedBp)} but only have ${formatCurrency(bridgeBalance)}.`,
+          `Insufficient Believe Cash balance. You need ${formatCurrency(totalChargedBp)} but only have ${formatCurrency(bridgeBalance)}.`,
         )
         return
       }
@@ -492,7 +492,7 @@ export default function PurchaseDetailsPage({
                   </span>
                   {requiresBridgeWallet && (
                     <Badge className="border-0 bg-white/20 text-[11px] font-medium text-white backdrop-blur-sm">
-                      {isPrimeSupporter ? "BIU Wallet · Prime" : "Prime benefit"}
+                      {isPrimeSupporter ? "Believe Cash · Prime" : "Prime benefit"}
                     </Badge>
                   )}
                   {hasDiscount && (
@@ -571,7 +571,7 @@ export default function PurchaseDetailsPage({
                 <ul className="mt-4 space-y-3">
                   {(requiresBridgeWallet
                     ? [
-                        `Pay with BIU Wallet balance${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
+                        `Pay with Believe Cash balance${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
                         "Funds move to the platform reserve when you submit",
                         "Gift card issuance begins after a 72-hour waiting period",
                         "Prime Supporters only — Believe Points are not used",
@@ -606,7 +606,7 @@ export default function PurchaseDetailsPage({
                           Prime Supporter benefit
                         </h2>
                         <p className="mt-0.5 text-sm text-muted-foreground">
-                          Visa and Mastercard gift cards are purchased with BIU Wallet balance — available for Prime Supporters only.
+                          Visa and Mastercard gift cards are purchased with Believe Cash balance — available for Prime Supporters only.
                         </p>
                       </div>
                     </div>
@@ -663,11 +663,11 @@ export default function PurchaseDetailsPage({
                     </div>
                     <div>
                       <h2 className="text-lg font-semibold tracking-tight text-foreground">
-                        {requiresBridgeWallet ? "Pay with BIU Wallet" : "Purchase"}
+                        {requiresBridgeWallet ? "Pay with Believe Cash" : "Purchase"}
                       </h2>
                       <p className="mt-0.5 text-sm text-muted-foreground">
                         {requiresBridgeWallet
-                          ? "Choose organization and amount — charged from your BIU Wallet balance"
+                          ? "Choose organization and amount — charged from your Believe Cash balance"
                           : "Choose organization and amount"}
                       </p>
                     </div>
@@ -880,7 +880,7 @@ export default function PurchaseDetailsPage({
                                 <Wallet className="h-4 w-4 text-white" />
                               </div>
                               <span className="truncate text-xs font-medium text-muted-foreground">
-                                BIU Wallet
+                                Believe Cash
                               </span>
                             </div>
                             {walletGate === "ready" &&
@@ -909,12 +909,12 @@ export default function PurchaseDetailsPage({
                           {walletGate === "loading" ? (
                             <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              Checking BIU Wallet…
+                              Checking Believe Cash…
                             </div>
                           ) : walletGate === "connect" ? (
                             <>
                               <p className="text-sm text-muted-foreground">
-                                Connect your BIU Wallet to pay for this gift card.
+                                Connect your Believe Cash to pay for this gift card.
                               </p>
                               <Button
                                 type="button"
@@ -923,13 +923,13 @@ export default function PurchaseDetailsPage({
                                 onClick={() => openWalletPopup({ view: "main" })}
                               >
                                 <Wallet className="mr-2 h-4 w-4 text-white" />
-                                Connect BIU Wallet
+                                Connect Believe Cash
                               </Button>
                             </>
                           ) : walletGate === "verify" ? (
                             <>
                               <p className="text-sm text-muted-foreground">
-                                Complete identity verification (KYC) before paying with BIU Wallet.
+                                Complete identity verification (KYC) before paying with Believe Cash.
                               </p>
                               <Button
                                 type="button"
@@ -969,13 +969,13 @@ export default function PurchaseDetailsPage({
                                 onClick={() => openWalletPopup({ view: "main" })}
                               >
                                 <ShieldCheck className="mr-2 h-4 w-4 text-white" />
-                                Open BIU Wallet
+                                Open Believe Cash
                               </Button>
                             </>
                           ) : walletGate === "create_wallet" ? (
                             <>
                               <p className="text-sm text-muted-foreground">
-                                Verification is complete. Create your BIU Wallet to continue.
+                                Verification is complete. Create your Believe Cash to continue.
                               </p>
                               <Button
                                 type="button"
@@ -984,7 +984,7 @@ export default function PurchaseDetailsPage({
                                 onClick={() => openWalletPopup({ view: "main" })}
                               >
                                 <Wallet className="mr-2 h-4 w-4 text-white" />
-                                Create BIU Wallet
+                                Create Believe Cash
                               </Button>
                             </>
                           ) : (
@@ -1028,7 +1028,7 @@ export default function PurchaseDetailsPage({
                                 onClick={() => openWalletPopup({ view: "addMoney" })}
                               >
                                 <Wallet className="mr-2 h-4 w-4 text-white" />
-                                Add money to BIU Wallet
+                                Add money to Believe Cash
                               </Button>
                             </>
                           )}
@@ -1140,7 +1140,7 @@ export default function PurchaseDetailsPage({
                         ) : requiresBridgeWallet ? (
                           <>
                             <Wallet className="mr-2 h-5 w-5" />
-                            Pay with BIU Wallet
+                            Pay with Believe Cash
                           </>
                         ) : (
                           <>
@@ -1179,7 +1179,7 @@ export default function PurchaseDetailsPage({
                       <dd className="text-right font-medium text-foreground">
                         {requiresBridgeWallet
                           ? isPrimeSupporter
-                            ? "BIU Wallet"
+                            ? "Believe Cash"
                             : "Prime Supporter"
                           : "Believe Points"}
                       </dd>

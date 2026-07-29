@@ -524,7 +524,7 @@ export function AddBankAccount({ isLoading, onLinkAccount, onCancel }: AddBankAc
                             <div className="flex items-start gap-2 rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
                                 <Shield className="h-4 w-4 text-purple-600 shrink-0 mt-0.5" />
                                 <p className="text-xs text-muted-foreground">
-                                    Your bank details are encrypted and processed securely through Bridge.
+                                    Your bank details are encrypted and processed securely through Believe Cash.
                                     Street line 1 must be 3–35 characters for US bank transfers.
                                 </p>
                             </div>

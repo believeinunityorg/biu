@@ -890,7 +890,7 @@ class ServiceHubController extends Controller
                         'gig_id' => $gig->id,
                         'service_order_id' => $order->id,
                         'from_type' => 'module',
-                        'from_name' => 'General Module',
+                        'from_name' => \App\Support\UnifiedLedgerBpModule::generalLabel(),
                         'to_type' => 'module',
                         'to_name' => 'Service Hub Module',
                         'believe_points_used' => $pointsRequired,
@@ -3552,7 +3552,7 @@ class ServiceHubController extends Controller
                     'from_type' => 'module',
                     'from_name' => 'Service Hub Module',
                     'to_type' => 'module',
-                    'to_name' => 'General Module',
+                    'to_name' => \App\Support\UnifiedLedgerBpModule::generalLabel(),
                 ],
                 'processed_at' => now(),
             ]);

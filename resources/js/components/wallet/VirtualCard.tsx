@@ -171,7 +171,7 @@ export function VirtualCard({
                     data.message ||
                         'Install the Bridge Cards Stripe App on your Stripe Sandbox, then Enable Bridge Cards in Settings.'
                 )
-                showErrorToast(data.message || 'Stripe cardholder not ready. Check Bridge + Stripe setup.')
+                showErrorToast(data.message || 'Stripe cardholder not ready. Check Believe Cash + Stripe setup.')
             } else if (data.error_code === 'cards_endorsement_required') {
                 setIssueCardError(data.message || 'Complete cards verification to issue your card.')
                 showErrorToast(data.message || 'Complete cards verification to issue your card.')

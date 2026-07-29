@@ -157,6 +157,7 @@ interface Props {
     period: string
     ledger_type: string
     connection_hub_type: string
+    quick: string
   }
   typeOptions: string[]
   statusOptions: string[]
@@ -164,6 +165,8 @@ interface Props {
   majorTypeOptions: string[]
   connectionHubTypeOptions: string[]
   ledgerTypeOptions: string[]
+  quickFilterOptions?: string[]
+  quickFilterLabels?: Record<string, string>
   moduleLabels?: Record<string, string>
   majorTypeLabels?: Record<string, string>
   /** Selected org label when URL has organization_id (combobox display before open). */
@@ -857,6 +860,22 @@ function periodLabel(key: string): string {
   return map[key] ?? key
 }
 
+function formatBpWalletBalance(n: number | null | undefined): ReactNode {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  const value = Number(n)
+  return (
+    <span className="inline-flex items-center justify-end gap-1.5 tabular-nums text-foreground">
+      <Coins className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" aria-hidden />
+      {value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}{" "}
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-purple-600/90 dark:text-purple-400/90">
+        BP
+      </span>
+    </span>
+  )
+}
+
 export default function TransactionLedger({
   transactions,
   stats,
@@ -867,6 +886,8 @@ export default function TransactionLedger({
   majorTypeOptions = [],
   connectionHubTypeOptions,
   ledgerTypeOptions,
+  quickFilterOptions = ["all", "purchases", "gifts", "rewards", "donations", "gift_cards", "wallet", "subscriptions", "marketplace"],
+  quickFilterLabels = {},
   moduleLabels = {},
   majorTypeLabels = {},
   ledgerOrganizationInitial,
@@ -883,6 +904,7 @@ export default function TransactionLedger({
   const [period, setPeriod] = useState(filters.period ?? "all")
   const [ledgerType, setLedgerType] = useState(filters.ledger_type ?? "all")
   const [connectionHubType, setConnectionHubType] = useState(filters.connection_hub_type ?? "all")
+  const [quick, setQuick] = useState(filters.quick ?? "all")
   const skipSearchDebounceOnce = useRef(true)
   const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: number | null; ref: string }>({
     open: false,
@@ -907,12 +929,13 @@ export default function TransactionLedger({
     if (period && period !== "all") params.period = period
     if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
     if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
+    if (quick && quick !== "all") params.quick = quick
     return params
   }
 
   const orgPickerBaseParams = useMemo(
     () => ledgerQueryParams(),
-    [search, type, status, perPage, organizationId, module, majorType, period, ledgerType, connectionHubType],
+    [search, type, status, perPage, organizationId, module, majorType, period, ledgerType, connectionHubType, quick],
   )
 
   /** Export URL; `router.visit` sends X-Inertia → server returns 409 + `Inertia::location` → full GET downloads XLSX. */
@@ -920,7 +943,7 @@ export default function TransactionLedger({
     const qs = new URLSearchParams(ledgerQueryParams()).toString()
     const base = route("admin.transactions.ledger.export")
     return qs ? `${base}?${qs}` : base
-  }, [search, type, status, perPage, organizationId, module, majorType, period, ledgerType, connectionHubType])
+  }, [search, type, status, perPage, organizationId, module, majorType, period, ledgerType, connectionHubType, quick])
 
   useEffect(() => {
     if (skipSearchDebounceOnce.current) {
@@ -950,6 +973,7 @@ export default function TransactionLedger({
     if (period && period !== "all") params.period = period
     if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
     if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
+    if (quick && quick !== "all") params.quick = quick
 
     router.get(route("admin.transactions.ledger"), params, {
       preserveState: true,
@@ -971,6 +995,29 @@ export default function TransactionLedger({
     if (period && period !== "all") params.period = period
     if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
     if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
+    if (quick && quick !== "all") params.quick = quick
+    router.get(route("admin.transactions.ledger"), params, {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true,
+    })
+  }
+
+  const applyQuickFilter = (nextQuick: string) => {
+    setQuick(nextQuick)
+    const params: Record<string, string> = {}
+    if (search.trim()) params.search = search.trim()
+    if (type && type !== "all") params.type = type
+    if (status && status !== "all") params.status = status
+    if (perPage && perPage !== "10") params.per_page = perPage
+    if (organizationId && organizationId !== "all") params.organization_id = organizationId
+    if (module && module !== "all") params.module = module
+    if (majorType && majorType !== "all") params.major_type = majorType
+    if (period && period !== "all") params.period = period
+    if (ledgerType && ledgerType !== "all") params.ledger_type = ledgerType
+    if (connectionHubType && connectionHubType !== "all") params.connection_hub_type = connectionHubType
+    if (nextQuick && nextQuick !== "all") params.quick = nextQuick
+
     router.get(route("admin.transactions.ledger"), params, {
       preserveState: true,
       preserveScroll: true,
@@ -1003,6 +1050,7 @@ export default function TransactionLedger({
     if (nextPeriod && nextPeriod !== "all") params.period = nextPeriod
     if (nextLedgerType && nextLedgerType !== "all") params.ledger_type = nextLedgerType
     if (nextConnectionHubType && nextConnectionHubType !== "all") params.connection_hub_type = nextConnectionHubType
+    if (quick && quick !== "all") params.quick = quick
 
     router.get(route("admin.transactions.ledger"), params, {
       preserveState: true,
@@ -1156,6 +1204,31 @@ export default function TransactionLedger({
           </div>
 
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Quick filters</p>
+              <div className="flex flex-wrap gap-2">
+                {quickFilterOptions.map((slug) => {
+                  const active = quick === slug
+                  const label = quickFilterLabels[slug] ?? (slug === "all" ? "All" : slug.replace(/_/g, " "))
+                  return (
+                    <button
+                      key={slug}
+                      type="button"
+                      onClick={() => applyQuickFilter(slug)}
+                      className={cn(
+                        "inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium transition-colors sm:text-sm",
+                        active
+                          ? "border-transparent bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-sm"
+                          : "border-border/60 bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Row 1: Search + Type + Status + Per page (inputs aligned) */}
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-3">
               <div className="min-w-0 flex-1 space-y-1.5">
@@ -1413,6 +1486,12 @@ export default function TransactionLedger({
                           <th className="whitespace-nowrap px-4 py-3.5 text-right" title="Wallet ledger line amount">
                             Wallet amt
                           </th>
+                          <th
+                            className="whitespace-nowrap px-4 py-3.5 text-right"
+                            title="BP Wallet balance (available + processing) after this transaction"
+                          >
+                            Balance
+                          </th>
                           <th className="whitespace-nowrap px-4 py-3.5 text-right">Gross</th>
                           <th className="whitespace-nowrap px-4 py-3.5 text-right" title="Product subtotal (order lines)">
                             Subtotal
@@ -1645,6 +1724,9 @@ export default function TransactionLedger({
                               </td>
                               <td className="whitespace-nowrap px-4 py-3 text-right text-base font-semibold tabular-nums text-foreground">
                                 {formatAmountForLedger(ledgerKind, walletAmt, cur)}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-right text-base font-semibold tabular-nums text-foreground">
+                                {formatBpWalletBalance(u?.bp_wallet_balance_after)}
                               </td>
                               <td className="whitespace-nowrap px-4 py-3 text-right text-sm tabular-nums text-muted-foreground">
                                 {formatMoneyColumnForLedger(ledgerKind, grossDisplayPlain, cur, "text-muted-foreground")}

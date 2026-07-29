@@ -1478,7 +1478,7 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
             showErrorToast(
                 isSandbox
                     ? 'Bank withdrawals are not available in sandbox mode.'
-                    : 'Bridge wallet required before withdrawing to a bank account.'
+                    : 'Believe Cash required before withdrawing to a bank account.'
             )
             return
         }
@@ -3820,7 +3820,7 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
                                                         Connecting Wallet...
                                                     </h3>
                                                     <p className="text-sm text-muted-foreground">
-                                                        Setting up your Bridge account
+                                                        Setting up your Believe Cash account
                                                     </p>
                                                 </motion.div>
 
@@ -3860,6 +3860,11 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
                                                 key="connect-wallet"
                                                 isLoading={isLoading}
                                                 organizationName={organizationName}
+                                                isOrganizationAccount={
+                                                    auth?.user?.role === 'organization' ||
+                                                    auth?.user?.role === 'organization_pending' ||
+                                                    auth?.user?.role === 'care_alliance'
+                                                }
                                                 onConnect={handleConnectWallet}
                                             />
                                         ) : (() => {
@@ -4028,7 +4033,7 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
                                                                         )}
                                                                     </div>
                                                                     <p className="text-xs text-muted-foreground dark:text-muted-foreground mb-0 text-left">
-                                                                        Review and accept Bridge's terms of service to proceed
+                                                                        Review and accept Believe Cash terms of service to proceed
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -4100,8 +4105,8 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
                                                                     </div>
                                                                     <p className="text-xs text-muted-foreground mb-0 text-left">
                                                                         {verificationType === 'kyb'
-                                                                            ? 'Complete business verification in the Bridge window'
-                                                                            : 'Complete identity verification in the Bridge window'}
+                                                                            ? 'Complete business verification in the Believe Cash window'
+                                                                            : 'Complete identity verification in the Believe Cash window'}
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -4230,7 +4235,7 @@ export function WalletPopup({ isOpen, onClose, organizationName, initialView = '
                         {/* Footer Actions */}
                         <div className="border-t border-border p-3 bg-muted/30">
                             <div className="text-xs text-muted-foreground text-center">
-                                Secure wallet powered by Believe In Unity
+                                Secure Believe Cash powered by Believe In Unity
                             </div>
                         </div>
 

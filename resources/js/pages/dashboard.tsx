@@ -227,13 +227,6 @@ const AdminDashboard = ({
     return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">Pending</Badge>
   }
 
-  const getRegistrationStatusBadge = (status: string) => {
-    if (status === 'approved') {
-      return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300">Approved</Badge>
-    }
-    return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">Pending</Badge>
-  }
-
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Admin Dashboard" />
@@ -588,10 +581,7 @@ const AdminDashboard = ({
                   {recentOrganizations.map((org) => (
                     <div key={org.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-sm truncate">{org.name}</p>
-                          {getRegistrationStatusBadge(org.registration_status)}
-                        </div>
+                        <p className="font-medium text-sm truncate">{org.name}</p>
                         <p className="text-xs text-muted-foreground mt-1">
                           Created {formatDate(org.created_at)}
                         </p>
@@ -649,7 +639,6 @@ interface AdminDashboardProps {
   recentOrganizations?: Array<{
     id: number
     name: string
-    registration_status: string
     created_at: string
   }>
   paymentStats?: {

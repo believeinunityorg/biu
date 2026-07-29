@@ -23,6 +23,7 @@ use App\Models\ServiceOrder;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Admin\LedgerListFilters;
+use App\Services\Admin\UnifiedLedgerBpWalletBalanceAfterService;
 use App\Services\Admin\UnifiedLedgerFlatFileMapper;
 use App\Services\Admin\UnifiedLedgerPresenter;
 use App\Services\DonationProcessingFeeEstimator;
@@ -68,12 +69,17 @@ class TransactionLedgerController extends Controller
             $perPage = 10;
         }
 
-        $transactions = $query
+        $paginator = $query
             ->orderByDesc('id')
             ->paginate($perPage)
-            ->withQueryString()
-            ->through(function (Transaction $t) {
+            ->withQueryString();
+
+        $balances = UnifiedLedgerBpWalletBalanceAfterService::forPage($paginator->getCollection());
+
+        $transactions = $paginator->through(function (Transaction $t) use ($balances) {
                 $p = $this->prepareLedgerPresentation($t);
+                $unified = $p['unified'];
+                $unified['bp_wallet_balance_after'] = $balances[$t->id] ?? null;
 
                 return [
                     'id' => $t->id,
@@ -101,7 +107,7 @@ class TransactionLedgerController extends Controller
                     ] : null,
                     'meta' => $t->meta,
                     'ledger_report' => $p['ledgerReport'],
-                    'unified_ledger' => $p['unified'],
+                    'unified_ledger' => $unified,
                 ];
             });
 
@@ -121,7 +127,12 @@ class TransactionLedgerController extends Controller
                 'period' => $request->filled('period') ? $request->string('period')->toString() : 'all',
                 'ledger_type' => $request->filled('ledger_type') ? $request->string('ledger_type')->toString() : 'all',
                 'connection_hub_type' => $request->filled('connection_hub_type') ? $request->string('connection_hub_type')->toString() : 'all',
+                'quick' => $request->filled('quick') ? $request->string('quick')->toString() : 'all',
             ],
+            'quickFilterOptions' => LedgerListFilters::quickFilterOptions(),
+            'quickFilterLabels' => collect(LedgerListFilters::quickFilterOptions())
+                ->mapWithKeys(fn (string $slug) => [$slug => LedgerListFilters::quickFilterLabel($slug)])
+                ->all(),
             'moduleOptions' => LedgerListFilters::moduleOptions(),
             'majorTypeOptions' => LedgerListFilters::majorTypeOptions(),
             'connectionHubTypeOptions' => LedgerListFilters::connectionHubTypeOptions(),
@@ -223,20 +234,24 @@ class TransactionLedgerController extends Controller
         $query = $baseQuery->clone()->with(['user:id,name,email'])->orderBy('id');
 
         $rows = (function () use ($query) {
+            $buffer = [];
             foreach ($query->cursor() as $t) {
                 if (! $t instanceof Transaction) {
                     continue;
                 }
-                $presentation = $this->prepareLedgerPresentation($t);
-                $flat = $this->flatFileMapper->map(
-                    $t,
-                    $presentation['unified'],
-                    $presentation['related'],
-                );
-                yield array_map(
-                    static fn (string $h) => $flat[$h] ?? '',
-                    UnifiedLedgerFlatFileMapper::CSV_HEADERS
-                );
+                $buffer[] = $t;
+                if (count($buffer) < 100) {
+                    continue;
+                }
+                foreach ($this->mapLedgerExportChunk($buffer) as $row) {
+                    yield $row;
+                }
+                $buffer = [];
+            }
+            if ($buffer !== []) {
+                foreach ($this->mapLedgerExportChunk($buffer) as $row) {
+                    yield $row;
+                }
             }
         })();
 
@@ -245,6 +260,32 @@ class TransactionLedgerController extends Controller
             $filename,
             ExcelWriterType::XLSX,
         );
+    }
+
+    /**
+     * @param  list<Transaction>  $chunk
+     * @return list<list<string|int|float|null>>
+     */
+    private function mapLedgerExportChunk(array $chunk): array
+    {
+        $balances = UnifiedLedgerBpWalletBalanceAfterService::forPage($chunk);
+        $rows = [];
+        foreach ($chunk as $t) {
+            $presentation = $this->prepareLedgerPresentation($t);
+            $unified = $presentation['unified'];
+            $unified['bp_wallet_balance_after'] = $balances[$t->id] ?? null;
+            $flat = $this->flatFileMapper->map(
+                $t,
+                $unified,
+                $presentation['related'],
+            );
+            $rows[] = array_map(
+                static fn (string $h) => $flat[$h] ?? '',
+                UnifiedLedgerFlatFileMapper::CSV_HEADERS
+            );
+        }
+
+        return $rows;
     }
 
     /**
@@ -341,6 +382,10 @@ class TransactionLedgerController extends Controller
 
         if ($request->filled('connection_hub_type') && $request->string('connection_hub_type') !== 'all') {
             LedgerListFilters::applyConnectionHubType($query, $request->string('connection_hub_type')->toString());
+        }
+
+        if ($request->filled('quick') && $request->string('quick') !== 'all') {
+            LedgerListFilters::applyQuickFilter($query, $request->string('quick')->toString());
         }
 
         return [$query, $organizationFilterActive, $orgId];
@@ -518,6 +563,16 @@ class TransactionLedgerController extends Controller
             'related_display_name' => $related['related_display_name'],
         ];
 
+        $unified = $this->unifiedLedgerPresenter->present(
+            $t,
+            $ledgerReportRow,
+            $donationLedger,
+            $donationPerspective,
+            $unifiedRelated,
+        );
+        $balances = UnifiedLedgerBpWalletBalanceAfterService::forPage([$t]);
+        $unified['bp_wallet_balance_after'] = $balances[$t->id] ?? null;
+
         return [
             'id' => $t->id,
             'transaction_id' => $t->transaction_id,
@@ -550,13 +605,7 @@ class TransactionLedgerController extends Controller
             'donation_ledger_perspective' => $donationPerspective,
             'ledger_actor_context' => $this->resolveLedgerActorContext($t, $donationLedger),
             'ledger_report' => $ledgerReportRow,
-            'unified_ledger' => $this->unifiedLedgerPresenter->present(
-                $t,
-                $ledgerReportRow,
-                $donationLedger,
-                $donationPerspective,
-                $unifiedRelated,
-            ),
+            'unified_ledger' => $unified,
         ];
     }
 

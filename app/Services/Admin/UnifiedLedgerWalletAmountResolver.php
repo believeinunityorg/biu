@@ -29,7 +29,7 @@ final class UnifiedLedgerWalletAmountResolver
         $sourceEarly = (string) ($meta['source'] ?? '');
         $typeEarly = (string) $transaction->type;
 
-        // Processing → Available is a status change inside General Module — total BP unchanged.
+        // Processing → Available is a status change inside BP Wallet — total BP unchanged.
         // Check before bp_wallet_delta / spend heuristics so live rows never show ±N.
         if ($typeEarly === 'bp_settlement' || $sourceEarly === 'bp_settlement') {
             return 0.0;

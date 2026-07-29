@@ -11,6 +11,7 @@ use App\Models\RewardPointLedger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\BelievePointPurchaseSettlementStatusService;
+use App\Support\UnifiedLedgerBpModule;
 use App\Support\UnifiedLedgerBpStatus;
 use App\Support\UnifiedLedgerBrpActivity;
 use App\Support\UnifiedLedgerOwner;
@@ -105,7 +106,7 @@ final class UnifiedLedgerTransactionWriter
             'from_type' => 'module',
             'from_name' => 'BIU Platform',
             'to_type' => 'module',
-            'to_name' => 'General Module',
+            'to_name' => UnifiedLedgerBpModule::generalLabel(),
             'to_id' => $user->id,
         ];
 
@@ -489,18 +490,18 @@ final class UnifiedLedgerTransactionWriter
                         ? 'wallet_transfer_refund'
                         : 'bp_redemption',
                     'event_name' => $transfer->status === BelievePointWalletTransfer::STATUS_REFUNDED
-                        ? 'Transfer to BIU Wallet Refund'
-                        : 'Transfer to BIU Wallet',
+                        ? 'Transfer to Believe Cash Refund'
+                        : 'Transfer to Believe Cash',
                     'description' => self::walletTransferBpDescription($transfer),
                     'bp_wallet_delta' => $transfer->status === BelievePointWalletTransfer::STATUS_REFUNDED
                         ? $amount
                         : -$amount,
                     'gross_amount' => $amount,
                     'from_type' => 'module',
-                    'from_name' => 'General Module',
+                    'from_name' => UnifiedLedgerBpModule::generalLabel(),
                     'from_id' => $user->id,
                     'to_type' => 'module',
-                    'to_name' => 'BIU Wallet',
+                    'to_name' => 'Believe Cash',
                     'current_owner' => $user->name,
                     'owner_type' => 'supporter',
                 ], static fn ($v) => $v !== null && $v !== ''),
@@ -530,7 +531,7 @@ final class UnifiedLedgerTransactionWriter
                     'source' => 'bridge_wallet_transfer',
                     'ledger_type' => UnifiedLedgerType::MONEY,
                     'ledger_role' => 'bridge_money_transfer',
-                    'event_name' => 'BIU Wallet Transfer',
+                    'event_name' => 'Believe Cash Transfer',
                     'description' => self::walletTransferMoneyDescription($transfer),
                     'gross_amount' => $amount,
                     'from_type' => 'BIU Platform',

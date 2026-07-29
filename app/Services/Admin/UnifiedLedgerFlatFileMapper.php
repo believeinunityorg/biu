@@ -95,7 +95,7 @@ class UnifiedLedgerFlatFileMapper
         'bp_debit' => 'BP Debit',
         'processing_bp' => 'Processing BP',
         'available_bp' => 'Available BP',
-        'balance_after_transaction' => 'Balance After Transaction',
+        'balance_after_transaction' => 'BP Wallet Balance',
         'gross_amount' => 'Gross Amount',
         'payment_processing_fee' => 'Payment Provider Fee',
         'platform_fee_amount' => 'Platform Fee',
@@ -180,7 +180,9 @@ class UnifiedLedgerFlatFileMapper
             'bp_debit' => $this->nullableMoney($bpAmounts['debit'] ?? null),
             'processing_bp' => $this->nullableMoney($bpAmounts['processing'] ?? null),
             'available_bp' => $this->nullableMoney($bpAmounts['available'] ?? null),
-            'balance_after_transaction' => $this->nullableMoney($bpAmounts['balance_after'] ?? null),
+            'balance_after_transaction' => $this->nullableMoney(
+                $unified['bp_wallet_balance_after'] ?? $bpAmounts['balance_after'] ?? null
+            ),
             'gross_amount' => $this->money($unified['gross_amount'] ?? 0),
             'payment_processing_fee' => $this->money($unified['processor_fee_amount'] ?? 0),
             'platform_fee_amount' => $this->money($unified['biu_fee_amount'] ?? 0),

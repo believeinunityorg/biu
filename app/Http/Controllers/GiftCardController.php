@@ -770,7 +770,7 @@ class GiftCardController extends Controller
                 }
             }
 
-            // Fallback: most recent BP / BIU Wallet purchase
+            // Fallback: most recent BP / Believe Cash purchase
             if ($user) {
                 $giftCard = GiftCard::where('user_id', $user->id)
                     ->whereIn('payment_method', ['believe_points', 'bridge_wallet'])
@@ -1964,7 +1964,7 @@ class GiftCardController extends Controller
         $name = $brand['productName'] ?? '';
         $nameStr = is_string($name) ? $name : null;
         $closedLoop = GiftCardGiftedPointsPolicy::isClosedLoop($nameStr);
-        // Closed-loop: BP purchase. Open-loop Visa/MC: BIU Wallet pay.
+        // Closed-loop: BP purchase. Open-loop Visa/MC: Believe Cash pay.
         $brand['allowsGiftBp'] = $closedLoop;
         $brand['requiresBridgeWallet'] = ! $closedLoop;
 

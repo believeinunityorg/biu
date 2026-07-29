@@ -23,7 +23,7 @@ export function KycVerificationStatusPanel({
     onRefresh,
     isRefreshing = false,
     title = "KYC Verification Pending",
-    description = "Your identity verification has been submitted and is being reviewed by Bridge.",
+    description = "Your identity verification has been submitted and is being reviewed for Believe Cash.",
 }: KycVerificationStatusPanelProps) {
     const pending = isBridgeVerificationAwaitingReview(kycStatus)
     const statusLabel = formatBridgeVerificationStatusLabel(kycStatus)

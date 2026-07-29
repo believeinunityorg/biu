@@ -39,6 +39,105 @@ final class LedgerListFilters
         return UnifiedLedgerType::all();
     }
 
+    /**
+     * Client V1.0 quick-filter pills (All, Purchases, Gifts, …).
+     *
+     * @return list<string>
+     */
+    public static function quickFilterOptions(): array
+    {
+        return [
+            'all',
+            'purchases',
+            'gifts',
+            'rewards',
+            'donations',
+            'gift_cards',
+            'wallet',
+            'subscriptions',
+            'marketplace',
+        ];
+    }
+
+    public static function quickFilterLabel(string $quick): string
+    {
+        return match (strtolower(trim($quick))) {
+            'purchases' => 'Purchases',
+            'gifts' => 'Gifts',
+            'rewards' => 'Rewards',
+            'donations' => 'Donations',
+            'gift_cards' => 'Gift Cards',
+            'wallet' => 'Wallet',
+            'subscriptions' => 'Subscriptions',
+            'marketplace' => 'Marketplace',
+            default => 'All',
+        };
+    }
+
+    public static function applyQuickFilter(Builder $query, string $quick): void
+    {
+        $quick = strtolower(trim($quick));
+        if ($quick === '' || $quick === 'all' || ! in_array($quick, self::quickFilterOptions(), true)) {
+            return;
+        }
+
+        match ($quick) {
+            'purchases' => $query->where(function (Builder $q) {
+                $q->where(function (Builder $bp) {
+                    $bp->where('type', 'believe_points_purchase')
+                        ->orWhere('meta->source', 'believe_points_purchase')
+                        ->orWhere('meta->source', 'believe_points_purchase_bp')
+                        ->orWhere('related_type', BelievePointPurchase::class)
+                        ->orWhere('related_type', 'like', '%BelievePointPurchase');
+                })->orWhereIn('type', [
+                    'credit_purchase',
+                    'email_purchase',
+                    'sms_purchase',
+                    'email_credit_purchase',
+                    'sms_credit_purchase',
+                    'newsletter_pro_targeting_purchase',
+                ]);
+            }),
+            'gifts' => $query->where(function (Builder $q) {
+                $q->whereIn('type', [
+                    'bp_gift',
+                    'bp_gift_sent',
+                    'bp_gift_claimed',
+                    'bp_gift_cancelled',
+                    'bp_gift_expired',
+                    'bp_gift_refunded',
+                    'bp_gift_hold',
+                    'bp_gift_claim',
+                    'bp_gift_hold_refund',
+                    'bp_gift_email_changed',
+                ])->orWhere('transaction_id', 'like', 'bp_gift%')
+                    ->orWhere('meta->source', 'like', 'bp_gift%');
+            }),
+            'rewards' => self::applyMajorType($query, UnifiedLedgerMajorType::REWARD),
+            'donations' => self::applyMajorType($query, UnifiedLedgerMajorType::DONATION),
+            'gift_cards' => self::scopeGiftCard(self::withRefundPayoutExclusion($query)),
+            'wallet' => $query->where(function (Builder $q) {
+                $q->where(function (Builder $w) {
+                    self::scopeWallet($w);
+                })->orWhere(function (Builder $transfer) {
+                    $transfer->whereIn('type', [
+                        'believe_points_wallet_transfer',
+                        'bp_redemption',
+                        'bridge_wallet_transfer',
+                    ])->orWhereIn('meta->source', [
+                        'believe_points_wallet_transfer',
+                        'bp_redemption',
+                        'bridge_wallet_transfer',
+                    ])->orWhere('related_type', BelievePointWalletTransfer::class)
+                        ->orWhere('related_type', 'like', '%BelievePointWalletTransfer');
+                });
+            }),
+            'subscriptions' => self::applyMajorType($query, UnifiedLedgerMajorType::SUBSCRIPTION),
+            'marketplace' => self::applyMajorType($query, UnifiedLedgerMajorType::MARKETPLACE),
+            default => null,
+        };
+    }
+
     public static function applyLedgerType(Builder $query, string $ledgerType): void
     {
         $ledgerType = strtolower(trim($ledgerType));

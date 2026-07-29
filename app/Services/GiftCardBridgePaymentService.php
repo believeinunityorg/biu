@@ -47,7 +47,7 @@ class GiftCardBridgePaymentService
         ) {
             return [
                 'success' => false,
-                'message' => 'Visa and Mastercard gift cards paid with BIU Wallet are available for Prime Supporters only.',
+                'message' => 'Visa and Mastercard gift cards paid with Believe Cash are available for Prime Supporters only.',
                 'error_code' => 'PRIME_REQUIRED',
             ];
         }
@@ -55,7 +55,7 @@ class GiftCardBridgePaymentService
         if ($this->bridgeService->isSandbox()) {
             return [
                 'success' => false,
-                'message' => 'BIU Wallet gift card purchases are only available in production.',
+                'message' => 'Believe Cash gift card purchases are only available in production.',
                 'error_code' => 'SANDBOX_UNAVAILABLE',
             ];
         }
@@ -74,7 +74,7 @@ class GiftCardBridgePaymentService
         if ($integration === null || empty($integration->bridge_customer_id)) {
             return [
                 'success' => false,
-                'message' => 'Connect and verify your BIU Wallet before buying with BIU Wallet balance.',
+                'message' => 'Connect and verify your Believe Cash before buying with Believe Cash balance.',
                 'error_code' => 'BRIDGE_WALLET_REQUIRED',
             ];
         }
@@ -83,7 +83,7 @@ class GiftCardBridgePaymentService
         if ($senderWallet === null || ($senderWallet['initiation_required'] ?? false)) {
             return [
                 'success' => false,
-                'message' => 'Your BIU Wallet is not ready yet. Finish wallet setup, then try again.',
+                'message' => 'Your Believe Cash is not ready yet. Finish wallet setup, then try again.',
                 'error_code' => 'BRIDGE_WALLET_REQUIRED',
             ];
         }
@@ -102,7 +102,7 @@ class GiftCardBridgePaymentService
             return [
                 'success' => false,
                 'message' => sprintf(
-                    'Insufficient BIU Wallet balance. You need $%s but only have $%s.',
+                    'Insufficient Believe Cash balance. You need $%s but only have $%s.',
                     number_format($amount, 2),
                     number_format($available, 2),
                 ),
@@ -140,7 +140,7 @@ class GiftCardBridgePaymentService
                 'success' => false,
                 'message' => $message !== ''
                     ? $message
-                    : 'Could not charge your BIU Wallet. Please try again.',
+                    : 'Could not charge your Believe Cash. Please try again.',
                 'error_code' => (string) ($transferResult['error_code'] ?? 'BRIDGE_TRANSFER_FAILED'),
                 'balance' => $available,
                 'amount' => $amount,

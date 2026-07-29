@@ -271,7 +271,7 @@ export function CryptoDepositPanel({ isSandbox = false, variant = 'deposit' }: C
     const subtitle =
         variant === 'receive'
             ? 'Share your address or QR code to receive stablecoins into your wallet.'
-            : 'Send stablecoins on-chain — Bridge converts and credits your wallet balance.';
+            : 'Send stablecoins on-chain — Believe Cash converts and credits your wallet balance.';
 
     return (
         <div className="space-y-5">
@@ -459,7 +459,7 @@ export function CryptoDepositPanel({ isSandbox = false, variant = 'deposit' }: C
                                         After you send
                                     </p>
                                     <p className="mt-1 text-xs leading-relaxed text-green-800/90 dark:text-green-200/90">
-                                        Bridge confirms on-chain, converts, and credits your wallet balance.
+                                        Believe Cash confirms on-chain, converts, and credits your wallet balance.
                                     </p>
                                 </div>
                             </div>

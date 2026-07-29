@@ -267,7 +267,7 @@ export function KYBForm({
                         <p className="text-xs text-muted-foreground mb-3 text-left">
                             {requestedFields.length > 0 
                                 ? 'Please re-fill the requested fields below.' 
-                                : 'Required by Bridge for business verification'}
+                                : 'Required by Believe Cash for business verification'}
                         </p>
                 
                         {/* Control Person Fields */}
@@ -991,7 +991,7 @@ export function KYBForm({
                                         )}
                                         <DocumentUploadDropzone
                                             label="Proof of Nature of Business Document (Optional)"
-                                            description="Alternative to website verification for Bridge (useful in sandbox mode)"
+                                            description="Alternative to website verification for Believe Cash (useful in sandbox mode)"
                                             value={kybFormData.proof_of_nature_of_business}
                                             onChange={async (base64) => {
                                                 handleFieldChange('proof_of_nature_of_business', base64)
@@ -1023,7 +1023,7 @@ export function KYBForm({
                                         )}
                                         <DocumentUploadDropzone
                                             label="501c3 Determination Letter"
-                                            description="For internal use only (not sent to Bridge)"
+                                            description="For internal use only (not sent to Believe Cash)"
                                             value={kybFormData.determination_letter_501c3}
                                             onChange={async (base64) => {
                                                 handleFieldChange('determination_letter_501c3', base64)
@@ -1394,7 +1394,7 @@ export function KYBForm({
                         </p>
                         <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-900 dark:text-amber-100">
                             <p className="font-semibold mb-1">⚠️ Important Note:</p>
-                            <p className="mb-1">Even though your information was already submitted, Bridge's KYC verification system requires you to complete the verification flow again.</p>
+                            <p className="mb-1">Even though your information was already submitted, Believe Cash verification requires you to complete the verification flow again.</p>
                             <p>This is required for <strong>live selfie verification</strong> and additional identity checks that cannot be done via API. Please complete all steps in the verification form.</p>
                         </div>
                     </div>
@@ -1447,7 +1447,7 @@ export function KYBForm({
                         <div className="p-4 bg-muted rounded-lg border border-border">
                             <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-900 dark:text-amber-100">
                                 <p className="font-semibold mb-1">⏳ Waiting for Ultimate Beneficial Owner (UBO) verification</p>
-                                <p className="mb-1">Your information has been submitted to Bridge via API. A KYC verification link is being generated for you to complete live selfie verification.</p>
+                                <p className="mb-1">Your information has been submitted for Believe Cash. A verification link is being generated for you to complete live selfie verification.</p>
                             </div>
                             <Button
                                 size="sm"

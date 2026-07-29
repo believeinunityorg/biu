@@ -94,8 +94,8 @@ export function WalletScreen({
                     <p className="text-xs text-amber-900 dark:text-amber-100 leading-relaxed">
                         {usAchNotice
                             || (sepaAvailable
-                                ? 'US bank transfers (ACH/wire) are not available in your region per Bridge. You can still use SEPA and crypto.'
-                                : 'US bank transfers (ACH/wire) are not available in your region per Bridge. Crypto deposits may still be available.')}
+                                ? 'US bank transfers (ACH/wire) are not available in your region. You can still use SEPA and crypto with Believe Cash.'
+                                : 'US bank transfers (ACH/wire) are not available in your region. Crypto deposits may still be available with Believe Cash.')}
                     </p>
                 </div>
             )}

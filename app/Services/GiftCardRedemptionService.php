@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Support\BrpParticipationModule;
 use App\Support\PhazeGiftCardPayload;
+use App\Support\UnifiedLedgerBpModule;
 use App\Support\UnifiedLedgerBpStatus;
 use App\Support\UnifiedLedgerType;
 use App\Services\ParticipationActivityService;
@@ -169,7 +170,7 @@ class GiftCardRedemptionService
                     'fulfillment_status' => GiftCardStatus::PendingFulfillment->value,
                     'gift_card_sales' => $faceValue,
                     'from_type' => 'module',
-                    'from_name' => 'General Module',
+                    'from_name' => UnifiedLedgerBpModule::generalLabel(),
                     'to_type' => 'module',
                     'to_name' => 'Gift Card Module',
                 ]),
@@ -203,7 +204,7 @@ class GiftCardRedemptionService
     }
 
     /**
-     * Open-loop (Visa/MC): charge BIU Wallet → platform reserve, then delayed Phaze fulfillment.
+     * Open-loop (Visa/MC): charge Believe Cash → platform reserve, then delayed Phaze fulfillment.
      *
      * @param  array<string, mixed>  $validated
      * @param  array<string, mixed>|null  $selectedBrand
@@ -231,7 +232,7 @@ class GiftCardRedemptionService
         }
 
         if (! GiftCardGiftedPointsPolicy::requiresBridgeWallet($finalBrandName)) {
-            throw new \RuntimeException('This gift card is paid with Believe Points, not BIU Wallet.');
+            throw new \RuntimeException('This gift card is paid with Believe Points, not Believe Cash.');
         }
 
         $charge = $this->bridgePaymentService->chargeToPlatformReserve(
@@ -242,7 +243,7 @@ class GiftCardRedemptionService
 
         if (! ($charge['success'] ?? false)) {
             throw new \RuntimeException(
-                (string) ($charge['message'] ?? 'Could not charge BIU Wallet.'),
+                (string) ($charge['message'] ?? 'Could not charge Believe Cash.'),
             );
         }
 
@@ -329,10 +330,10 @@ class GiftCardRedemptionService
                 'meta' => array_merge($feeMeta, [
                     'gift_card_id' => $giftCard->id,
                     'ledger_type' => UnifiedLedgerType::MONEY,
-                    'event_name' => 'Gift Card Purchase (BIU Wallet)',
+                    'event_name' => 'Gift Card Purchase (Believe Cash)',
                     'description' => trim((string) ($validated['brand_name'] ?? '')) !== ''
-                        ? 'Purchased '.trim((string) $validated['brand_name']).' Gift Card via BIU Wallet'
-                        : 'Gift Card Purchase via BIU Wallet',
+                        ? 'Purchased '.trim((string) $validated['brand_name']).' Gift Card via Believe Cash'
+                        : 'Gift Card Purchase via Believe Cash',
                     'bridge_transfer_id' => $charge['transfer_id'] ?? null,
                     'bridge_wallet_id' => $charge['bridge_wallet_id'] ?? null,
                     'phaze_order_id' => $orderId,
@@ -340,7 +341,7 @@ class GiftCardRedemptionService
                     'fulfillment_status' => GiftCardStatus::PendingFulfillment->value,
                     'gift_card_sales' => $faceValue,
                     'from_type' => 'module',
-                    'from_name' => 'BIU Wallet',
+                    'from_name' => 'Believe Cash',
                     'to_type' => 'module',
                     'to_name' => 'Gift Card Module',
                 ]),
@@ -356,7 +357,7 @@ class GiftCardRedemptionService
             return $giftCard;
         });
 
-        Log::info('Gift card BIU Wallet redemption submitted for delayed fulfillment', [
+        Log::info('Gift card Believe Cash redemption submitted for delayed fulfillment', [
             'gift_card_id' => $giftCard->id,
             'user_id' => $user->id,
             'amount' => $faceValue,
@@ -709,7 +710,7 @@ class GiftCardRedemptionService
         }
 
         if (! in_array($giftCard->payment_method, ['believe_points', 'bridge_wallet'], true)) {
-            throw new \InvalidArgumentException('Only Believe Points or BIU Wallet redemptions support delayed fulfillment retry.');
+            throw new \InvalidArgumentException('Only Believe Points or Believe Cash redemptions support delayed fulfillment retry.');
         }
 
         $giftCard->update([
@@ -736,7 +737,7 @@ class GiftCardRedemptionService
     public function queueAdminForceFulfill(GiftCard $giftCard, User $admin): GiftCard
     {
         if (! in_array($giftCard->payment_method, ['believe_points', 'bridge_wallet'], true)) {
-            throw new \InvalidArgumentException('Only Believe Points or BIU Wallet redemptions support forced fulfillment.');
+            throw new \InvalidArgumentException('Only Believe Points or Believe Cash redemptions support forced fulfillment.');
         }
 
         if (! GiftCardStatus::isForceFulfillEligible($giftCard->status)) {

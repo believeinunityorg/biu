@@ -86,7 +86,7 @@ final class UnifiedLedgerModule
         $module = self::normalize($module);
 
         return match ($module) {
-            self::GENERAL => 'General',
+            self::GENERAL => 'BP Wallet',
             self::DONATION => 'Donation',
             self::CAMPAIGN => 'Campaign',
             self::FUNDME => 'Support a Project',

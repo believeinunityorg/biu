@@ -471,7 +471,7 @@ export default function ShowPage({
         const methodConfig = {
             stripe: { color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200', label: 'Card/Stripe' },
             believe_points: { color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200', label: 'Believe Points' },
-            bridge_wallet: { color: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200', label: 'BIU Wallet' },
+            bridge_wallet: { color: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200', label: 'Believe Cash' },
         }
 
         const config = methodConfig[paymentMethod as keyof typeof methodConfig] || { color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300', label: paymentMethod }
@@ -540,7 +540,7 @@ export default function ShowPage({
                                                 <p className="text-sm">
                                                     {giftCard.failure_reason ||
                                                         (giftCard.payment_method === 'bridge_wallet'
-                                                            ? 'We could not issue this gift card from the provider. Your BIU Wallet charge remains recorded on this redemption — contact support or wait for an admin retry.'
+                                                            ? 'We could not issue this gift card from the provider. Your Believe Cash charge remains recorded on this redemption — contact support or wait for an admin retry.'
                                                             : 'We could not issue this gift card from the provider. Your Believe Points remain recorded on this redemption — contact support or wait for an admin retry.')}
                                                 </p>
                                             </div>

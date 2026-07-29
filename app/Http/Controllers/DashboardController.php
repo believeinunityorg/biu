@@ -74,8 +74,12 @@ class DashboardController extends Controller
                     ];
                 });
 
-            // Recent Organizations
-            $recentOrganizations = Organization::with('user')
+            // Recent Organizations — approved + registered (linked user) only; no pending
+            $recentOrganizations = Organization::query()
+                ->where('registration_status', 'approved')
+                ->whereNotNull('user_id')
+                ->excludingCareAllianceHubs()
+                ->with('user')
                 ->latest()
                 ->limit(5)
                 ->get()
@@ -83,7 +87,6 @@ class DashboardController extends Controller
                     return [
                         'id' => $org->id,
                         'name' => $org->name,
-                        'registration_status' => $org->registration_status,
                         'created_at' => $org->created_at->toIso8601String(),
                     ];
                 });

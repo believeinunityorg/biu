@@ -547,6 +547,10 @@ Route::get('/join/{token}', [LivestreamController::class, 'guestJoinByToken'])->
 // Viewer page: /live/{slug} — view-only with Mute + Volume (public, when stream is live)
 Route::get('/live/{slug}', [LiveViewController::class, 'show'])->name('live.show')->where('slug', '[a-zA-Z0-9_-]+');
 
+// VDO.Ninja camera-off avatar (CORS-safe; replaces ui-avatars.com)
+Route::match(['GET', 'OPTIONS'], '/meet/vdo-avatar', \App\Http\Controllers\VdoMeetingAvatarController::class)
+    ->name('meet.vdo-avatar');
+
 Route::get('/jobs', [JobsController::class, 'index'])->name('jobs.index');
 Route::get('/volunteer-opportunities', [JobsController::class, 'volunteerOpportunities'])->name('volunteer-opportunities.index');
 Route::post('/volunteer-opportunities/volunteer-interests', [JobsController::class, 'saveVolunteerInterestStatement'])

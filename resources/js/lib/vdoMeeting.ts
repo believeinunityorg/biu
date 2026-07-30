@@ -1,10 +1,12 @@
 /**
  * Placeholder image for VDO.Ninja `&avatar=` (tile when camera is off).
- * Must be a full URL; VDO loads it in the meeting UI.
+ * Must be an absolute URL on our domain — VDO loads it cross-origin from vdo.ninja.
+ * Do not use ui-avatars.com (duplicate CORS * headers break Chromium).
  */
 export function vdoUiAvatarUrl(displayName: string): string {
   const name = displayName.trim() || "Guest"
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=256&length=2`
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  return `${origin}/meet/vdo-avatar?name=${encodeURIComponent(name)}&size=256`
 }
 
 /** VDO preset: name overlay on each video tile (see Ninja docs → &showlabels). */
@@ -48,6 +50,25 @@ export function applyVdoMinimalHostUi(url: URL): void {
   url.searchParams.set("nohangupbutton", "")
   if (!url.searchParams.has("noheader")) {
     url.searchParams.set("noheader", "")
+  }
+  applyVdoHostScreenShareForYoutube(url)
+}
+
+/**
+ * Keep screen share on the same MediaMTX/WHIP path the AWS worker pulls.
+ * Without this, VDO defaults to a second path (push_s) and YouTube goes blank
+ * when the host stops camera and shares screen.
+ */
+export function applyVdoHostScreenShareForYoutube(url: URL): void {
+  const push = url.searchParams.get("push")
+  if (!push) {
+    return
+  }
+  url.searchParams.set("screensharetype", "2")
+  url.searchParams.set("screenshareid", push)
+  url.searchParams.set("smallshare", "")
+  if (!url.searchParams.has("ssb")) {
+    url.searchParams.set("ssb", "")
   }
 }
 

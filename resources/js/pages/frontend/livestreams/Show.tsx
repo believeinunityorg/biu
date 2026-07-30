@@ -60,6 +60,7 @@ import {
   PhoneOff,
 } from "lucide-react"
 import { Link } from "@inertiajs/react"
+import { toast } from "react-hot-toast"
 import { useEmailCreditsState } from "@/hooks/use-email-credits-state"
 import BuyEmailCreditsDialog, { type EmailPackageOption } from "@/components/meeting/BuyEmailCreditsDialog"
 import EmailCreditsMeetingActions from "@/components/meeting/EmailCreditsMeetingActions"
@@ -432,12 +433,36 @@ export default function SupporterShowLivestream({
   }
 
   const goUnityLive = () => {
-    if (!showUnityLiveButton || liveActionDisabled) {
+    if (!livestream.wantsUnityLive) {
+      toast.error('Turn on “Show on Unity Live” first.')
+      return
+    }
+    if (!livestream.canSetUnityLive) {
+      toast.error(`Cannot publish on Unity Live while status is “${livestream.status}”.`)
+      return
+    }
+    if (liveActionDisabled) {
       return
     }
     setIsUpdatingStatus(true)
     router.post(`/livestreams/supporter/${livestream.id}/set-live`, {}, {
       preserveScroll: true,
+      onSuccess: (page) => {
+        const err = (page.props as { errors?: { error?: string | string[] } }).errors?.error
+        if (err) {
+          toast.error(Array.isArray(err) ? err[0] : err)
+          return
+        }
+        toast.success("You're live on Unity Live.")
+      },
+      onError: (errors) => {
+        const message = typeof errors.error === "string"
+          ? errors.error
+          : Array.isArray(errors.error)
+            ? errors.error[0]
+            : "Could not go live on Unity Live. Try again."
+        toast.error(message)
+      },
       onFinish: () => setIsUpdatingStatus(false),
     })
   }
@@ -1482,6 +1507,9 @@ export default function SupporterShowLivestream({
               )}
               {queueStreamErrorText && (
                 <Alert variant="destructive"><AlertDescription>{queueStreamErrorText}</AlertDescription></Alert>
+              )}
+              {endStreamErrorText && (
+                <Alert variant="destructive"><AlertDescription>{endStreamErrorText}</AlertDescription></Alert>
               )}
               {showUnityLiveButton && (
                 <Button

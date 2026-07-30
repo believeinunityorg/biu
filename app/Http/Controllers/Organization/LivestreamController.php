@@ -656,7 +656,15 @@ class LivestreamController extends Controller
         ]);
 
         $livestream->refresh();
-        \App\Support\UnityLiveBroadcast::notifyLive($livestream);
+
+        try {
+            \App\Support\UnityLiveBroadcast::notifyLive($livestream);
+        } catch (\Throwable $e) {
+            Log::warning('Go Unity Live (org): status saved but broadcast failed', [
+                'livestream_id' => $livestream->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         $message = $livestream->is_public
             ? 'Stream is now live. It will appear on the Unity Live page.'
@@ -835,6 +843,8 @@ class LivestreamController extends Controller
         }
 
         $livestream->update(['status' => 'meeting_live']);
+
+        \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream->fresh(), 'streaming_queued');
 
         return redirect()->back()->with(
             'success',

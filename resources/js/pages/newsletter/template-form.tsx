@@ -191,16 +191,19 @@ export default function NewsletterTemplateForm({
     const aiTokensUsedAuth = Number(authUser.ai_tokens_used ?? 0)
     const aiTokensIncludedAuth = Number(authUser.ai_tokens_included ?? 0)
 
-    const displayTokensUsed =
+    const displayTokensUsedRaw =
         templateAiResult && templateAiResult.ok ? templateAiResult.ai_tokens_used : aiTokensUsedAuth
     const displayTokensIncluded =
         templateAiResult && templateAiResult.ok ? templateAiResult.ai_tokens_included : aiTokensIncludedAuth
+    const displayTokensUsed =
+        displayTokensIncluded > 0
+            ? Math.min(displayTokensUsedRaw, displayTokensIncluded)
+            : displayTokensUsedRaw
 
     const hasAiTokensLeft = displayTokensIncluded === 0 || displayTokensUsed < displayTokensIncluded
     const aiTokensRemaining =
         displayTokensIncluded === 0 ? null : Math.max(0, displayTokensIncluded - displayTokensUsed)
-    const aiTokensOverBy =
-        displayTokensIncluded === 0 ? 0 : Math.max(0, displayTokensUsed - displayTokensIncluded)
+    const aiTokensOverBy = 0
 
     const [aiModalOpen, setAiModalOpen] = useState(false)
     const [sendVia, setSendVia] = useState<"email" | "sms" | "both">("email")

@@ -1701,7 +1701,7 @@ TXT;
                 }
             }
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             $user->refresh();
 
@@ -1976,7 +1976,7 @@ TXT;
                 }
             }
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             $user->refresh();
 

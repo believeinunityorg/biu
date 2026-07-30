@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -1195,6 +1196,70 @@ class User extends Authenticatable implements MustVerifyEmail
         ProcessBelievePointsAutoReplenishJob::dispatch($this->id)->afterResponse();
 
         return true;
+    }
+
+    /**
+     * Cap displayed/used AI tokens at the included allowance (never show or store overage).
+     * When ai_tokens_included is 0 there is no cap.
+     */
+    public function clampAiTokensUsed(): void
+    {
+        $included = (int) ($this->ai_tokens_included ?? 0);
+        $used = (int) ($this->ai_tokens_used ?? 0);
+
+        if ($included <= 0 || $used <= $included) {
+            return;
+        }
+
+        $this->forceFill([
+            'ai_tokens_used' => $included,
+        ])->saveQuietly();
+    }
+
+    /**
+     * Deduct AI token usage without exceeding the included allowance.
+     * Returns the number of tokens actually charged (may be less than requested).
+     * When ai_tokens_included is 0 there is no cap and the full amount is charged.
+     */
+    public function consumeAiTokens(int $tokens): int
+    {
+        $tokens = max(0, $tokens);
+        if ($tokens === 0) {
+            return 0;
+        }
+
+        return (int) DB::transaction(function () use ($tokens) {
+            /** @var self $user */
+            $user = static::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            $included = (int) ($user->ai_tokens_included ?? 0);
+            $used = (int) ($user->ai_tokens_used ?? 0);
+
+            if ($included <= 0) {
+                $user->increment('ai_tokens_used', $tokens);
+                $this->ai_tokens_used = $used + $tokens;
+
+                return $tokens;
+            }
+
+            if ($used > $included) {
+                $user->forceFill(['ai_tokens_used' => $included])->saveQuietly();
+                $used = $included;
+            }
+
+            $remaining = max(0, $included - $used);
+            $toConsume = min($tokens, $remaining);
+
+            if ($toConsume > 0) {
+                $user->increment('ai_tokens_used', $toConsume);
+                $this->ai_tokens_used = $used + $toConsume;
+            } else {
+                $this->ai_tokens_used = $used;
+            }
+
+            $this->ai_tokens_included = $included;
+
+            return $toConsume;
+        });
     }
 
     /**

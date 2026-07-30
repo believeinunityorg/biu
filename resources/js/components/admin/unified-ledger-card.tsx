@@ -79,6 +79,8 @@ export interface UnifiedLedgerRow {
   supplier_cost_amount?: number | null
   /** Signed change to supporter total BP (ending − beginning). Null for money-only rows. */
   wallet_amount?: number | null
+  /** BP Wallet (available + processing) after this row. Null for non-BP lines. */
+  bp_wallet_balance_after?: number | null
   /** Unified ledger classification (Money / BP / BRP). */
   ledger_type?: string
   ledger_type_label?: string
@@ -342,8 +344,8 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
             </Badge>
             <span className="text-muted-foreground max-sm:hidden">·</span>
             <span className="min-w-0 font-medium text-foreground">
-              {data.sub_type_label ||
-                data.event_name ||
+              {data.event_name ||
+                data.sub_type_label ||
                 (data.transaction_type?.startsWith("bp_gift")
                   ? data.transaction_type
                       .replace(/^bp_/, "")
@@ -618,6 +620,24 @@ export function UnifiedLedgerCard({ data, variant = "full", className }: { data:
                 value={ledgerAmountNode(false, data.wallet_amount, cur, false, true, "brp")}
                 emphasis
                 hint="Signed change to supporter BRP balance for this row."
+              />
+            ) : null}
+            {usePoints && !isBrpLedger && data.bp_wallet_balance_after != null && Number.isFinite(Number(data.bp_wallet_balance_after)) ? (
+              <Amount
+                label="Balance"
+                value={
+                  <span className="inline-flex items-center gap-1.5 tabular-nums">
+                    <Coins className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" aria-hidden />
+                    {Number(data.bp_wallet_balance_after).toLocaleString(undefined, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-purple-600/90 dark:text-purple-400/90">
+                      BP
+                    </span>
+                  </span>
+                }
+                hint="BP Wallet (available + processing) after this transaction."
               />
             ) : null}
             <Amount

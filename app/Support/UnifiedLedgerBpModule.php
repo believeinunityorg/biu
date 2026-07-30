@@ -3,7 +3,7 @@
 namespace App\Support;
 
 /**
- * Client-facing BP movement model: General Module (wallet) → destination module on spend.
+ * Client-facing BP movement model: BP Wallet → destination module on spend.
  * Presentation only — does not create separate per-module balances.
  */
 final class UnifiedLedgerBpModule
@@ -26,7 +26,7 @@ final class UnifiedLedgerBpModule
 
     public static function generalLabel(): string
     {
-        return 'General Module';
+        return 'BP Wallet';
     }
 
     public static function destinationLabel(string $destination): string
@@ -36,7 +36,7 @@ final class UnifiedLedgerBpModule
             self::MARKETPLACE => 'Marketplace Module',
             self::LEARNING_HUB => 'Connection Hub',
             self::EVENTS => 'Events',
-            self::BRIDGE_WALLET => 'BIU Wallet',
+            self::BRIDGE_WALLET => 'Believe Cash',
             self::SERVICE_HUB => 'Service Hub Module',
             self::RAFFLE => 'Raffle Module',
             self::GENERAL => self::generalLabel(),
@@ -52,18 +52,18 @@ final class UnifiedLedgerBpModule
             self::MARKETPLACE => 'Marketplace',
             self::LEARNING_HUB => 'Connection Hub',
             self::EVENTS => 'Events',
-            self::BRIDGE_WALLET => 'BIU Wallet',
+            self::BRIDGE_WALLET => 'Believe Cash',
             self::SERVICE_HUB => 'Service Hub',
             self::RAFFLE => 'Raffle',
-            self::GENERAL => 'General',
-            default => 'General',
+            self::GENERAL => 'BP Wallet',
+            default => 'BP Wallet',
         };
     }
 
     public static function transferEventName(string $destination): string
     {
         return match ($destination) {
-            self::BRIDGE_WALLET => 'Transfer to BIU Wallet',
+            self::BRIDGE_WALLET => 'Transfer to Believe Cash',
             self::LEARNING_HUB => 'Transfer BP to Connection Hub',
             self::EVENTS => 'Transfer BP to Events',
             default => 'Transfer BP to '.self::destinationLabel($destination),

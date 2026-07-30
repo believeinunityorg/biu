@@ -96,7 +96,7 @@ export function BalanceCard({
                     </motion.div>
 
                     {isHero && (
-                        <p className="text-xs text-muted-foreground">USD · Believe In Unity Wallet</p>
+                        <p className="text-xs text-muted-foreground">USD · Believe Cash</p>
                     )}
                 </div>
             </div>

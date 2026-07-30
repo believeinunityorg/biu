@@ -117,12 +117,12 @@ export default function MyCardsPage({ giftCards, user }: MyCardsProps) {
 
             <div className="space-y-6">
                 {/* Primary actions */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <Link
                         href={route('gift-cards.index')}
-                        className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-violet-400/50 hover:shadow-md dark:border-white/10 dark:bg-slate-900/60 dark:hover:border-violet-500/40"
+                        className="group flex items-center gap-4 rounded-2xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.06] to-blue-600/[0.06] p-4 shadow-sm transition hover:border-purple-500/40 hover:shadow-md dark:from-purple-500/10 dark:to-blue-500/10"
                     >
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/25">
                             <Gift className="h-6 w-6" />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -131,17 +131,33 @@ export default function MyCardsPage({ giftCards, user }: MyCardsProps) {
                                 Explore and purchase from hundreds of top brands.
                             </p>
                         </div>
-                        <ArrowRight className="h-5 w-5 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-violet-600" />
+                        <ArrowRight className="h-5 w-5 shrink-0 text-purple-600 transition group-hover:translate-x-0.5" />
                     </Link>
+
+                    <a
+                        href="#my-cards-list"
+                        className="group flex items-center gap-4 rounded-2xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.06] to-blue-600/[0.06] p-4 shadow-sm transition hover:border-purple-500/40 hover:shadow-md dark:from-purple-500/10 dark:to-blue-500/10"
+                    >
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/25">
+                            <CreditCard className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-900 dark:text-white">My Cards</p>
+                            <p className="mt-0.5 text-sm text-muted-foreground">
+                                View card numbers, PINs, and receipts for cards you own.
+                            </p>
+                        </div>
+                        <ArrowRight className="h-5 w-5 shrink-0 text-purple-600 transition group-hover:translate-x-0.5" />
+                    </a>
 
                     <Link
                         href="/gift-bp"
-                        className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-violet-400/40 bg-gradient-to-br from-violet-50 to-blue-50 p-4 shadow-sm transition hover:border-violet-500 hover:shadow-md dark:from-violet-950/50 dark:to-blue-950/40 dark:border-violet-500/40"
+                        className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.06] to-blue-600/[0.06] p-4 shadow-sm transition hover:border-purple-500/40 hover:shadow-md dark:from-purple-500/10 dark:to-blue-500/10"
                     >
-                        <Badge className="absolute right-3 top-3 bg-violet-600 text-white hover:bg-violet-600">
+                        <Badge className="absolute right-3 top-3 border-0 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-600 hover:to-blue-600">
                             New
                         </Badge>
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600 to-blue-600 text-white shadow-md shadow-purple-600/25">
                             <Gift className="h-6 w-6" />
                         </div>
                         <div className="min-w-0 flex-1 pr-8">
@@ -150,7 +166,7 @@ export default function MyCardsPage({ giftCards, user }: MyCardsProps) {
                                 Send Believe Points to anyone. They can choose any gift card they want.
                             </p>
                         </div>
-                        <ArrowRight className="h-5 w-5 shrink-0 text-violet-600 transition group-hover:translate-x-0.5" />
+                        <ArrowRight className="h-5 w-5 shrink-0 text-purple-600 transition group-hover:translate-x-0.5" />
                     </Link>
                 </div>
 
@@ -209,7 +225,7 @@ export default function MyCardsPage({ giftCards, user }: MyCardsProps) {
                 </div>
 
                 {/* Gift Cards List */}
-                <Card>
+                <Card id="my-cards-list" className="scroll-mt-24">
                     <CardHeader>
                         <CardTitle>All Gift Cards ({giftCards.total})</CardTitle>
                         <CardDescription>

@@ -10,7 +10,7 @@ class ProcessDueGiftCardFulfillmentsCommand extends Command
 {
     protected $signature = 'gift-cards:fulfill-due {--limit=100 : Maximum redemptions to queue per run}';
 
-    protected $description = 'Queue gift card redemptions (Believe Points / BIU Wallet) that are due for Phaze fulfillment';
+    protected $description = 'Queue gift card redemptions (Believe Points / Believe Cash) that are due for Phaze fulfillment';
 
     public function handle(): int
     {

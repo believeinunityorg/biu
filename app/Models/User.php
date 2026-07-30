@@ -1253,7 +1253,7 @@ class User extends Authenticatable implements MustVerifyEmail
      * Deduct BP for the Gift Card module.
      *
      * Closed-loop: full Available (Purchased + Gift); Gift reporting decreases by min(Gift, amount).
-     * Open-loop Visa/MC: not sold with BP — pay with BIU Wallet (this path should not run for open-loop).
+     * Open-loop Visa/MC: not sold with BP — pay with Believe Cash (this path should not run for open-loop).
      *
      * @return array{from_gifted: float}|null Null if insufficient eligible BP.
      */

@@ -6,12 +6,15 @@ import { useEffect, useState } from 'react'
 interface ConnectWalletProps {
     isLoading: boolean
     organizationName?: string
+    /** Organization / Care Alliance accounts use org info; supporters use personal info. */
+    isOrganizationAccount?: boolean
     onConnect: () => void
 }
 
 export function ConnectWallet({
     isLoading,
     organizationName,
+    isOrganizationAccount = false,
     onConnect
 }: ConnectWalletProps) {
     const [particles, setParticles] = useState<Array<{ id: number; x: number; y: number; delay: number }>>([])
@@ -152,7 +155,7 @@ export function ConnectWallet({
                         Connect Your Wallet
                     </h3>
                     <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                        Connect to Bridge to manage funds and transactions.
+                        Connect Believe Cash to manage funds and transactions.
                     </p>
                 </motion.div>
 
@@ -245,7 +248,9 @@ export function ConnectWallet({
                     </Button>
                     
                     <p className="text-[10px] text-muted-foreground">
-                        Your organization information will be used to create your Bridge account
+                        {isOrganizationAccount
+                            ? 'Your organization information will be used to create your Believe Cash account'
+                            : 'Your personal information will be used to create your Believe Cash account'}
                     </p>
                 </motion.div>
             </motion.div>

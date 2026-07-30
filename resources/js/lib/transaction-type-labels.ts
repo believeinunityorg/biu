@@ -41,9 +41,9 @@ export const TRANSACTION_TYPE_LABELS: Record<string, string> = {
   // Believe Points
   believe_points_purchase: "BP Purchase",
   brp_participation_reward: "BRP Participation Reward",
-  believe_points_wallet_transfer: "Transfer to Bridge Wallet",
-  bp_redemption: "Transfer to Bridge Wallet",
-  bridge_wallet_transfer: "Bridge Wallet Transfer",
+  believe_points_wallet_transfer: "Transfer to Believe Cash",
+  bp_redemption: "Transfer to Believe Cash",
+  bridge_wallet_transfer: "Believe Cash Transfer",
   bp_settlement: "BP Settlement",
   bp_gift: "BP Gift",
   bp_gift_sent: "Gift Sent",

@@ -14,6 +14,8 @@ final class UnifiedLedgerMajorType
 
     public const TRANSFER = 'transfer';
 
+    public const SETTLEMENT = 'settlement';
+
     public const REWARD = 'reward';
 
     public const ENROLLMENT = 'enrollment';
@@ -37,6 +39,7 @@ final class UnifiedLedgerMajorType
             self::PURCHASE,
             self::SUBSCRIPTION,
             self::TRANSFER,
+            self::SETTLEMENT,
             self::REWARD,
             self::ENROLLMENT,
             self::DONATION,
@@ -53,6 +56,7 @@ final class UnifiedLedgerMajorType
             self::PURCHASE => 'Purchase',
             self::SUBSCRIPTION => 'Subscription',
             self::TRANSFER => 'Transfer',
+            self::SETTLEMENT => 'Settlement',
             self::REWARD => 'Reward',
             self::ENROLLMENT => 'Enrollment',
             self::DONATION => 'Donation',
@@ -211,9 +215,9 @@ final class UnifiedLedgerMajorType
     {
         return match ($transactionType) {
             'believe_points_purchase' => [self::PURCHASE, 'bp_purchase', 'BP Purchase'],
-            'bp_settlement' => [self::TRANSFER, 'bp_settlement', 'BP Settlement'],
-            'bp_redemption', 'believe_points_wallet_transfer' => [self::TRANSFER, 'bp_redemption', 'Transfer to BIU Wallet'],
-            'bridge_wallet_transfer' => [self::TRANSFER, 'bridge_wallet_transfer', 'BIU Wallet Transfer'],
+            'bp_settlement' => [self::SETTLEMENT, 'bp_settlement', 'BP Settlement'],
+            'bp_redemption', 'believe_points_wallet_transfer' => [self::TRANSFER, 'bp_redemption', 'Transfer to Believe Cash'],
+            'bridge_wallet_transfer' => [self::TRANSFER, 'bridge_wallet_transfer', 'Believe Cash Transfer'],
             'bp_gift_sent' => [self::TRANSFER, 'bp_gift_sent', 'BP Gift Sent'],
             'bp_gift_claimed' => [self::TRANSFER, 'bp_gift_claimed', 'BP Gift Claimed'],
             'bp_gift_cancelled' => [self::TRANSFER, 'bp_gift_cancelled', 'BP Gift Cancelled'],
@@ -308,9 +312,9 @@ final class UnifiedLedgerMajorType
             'bp_gift_expired' => 'BP Gift Expired',
             'bp_gift_refunded' => 'BP Gift Refunded',
             'bp_settlement' => 'BP Settlement',
-            'bp_redemption' => 'Transfer to BIU Wallet',
-            'believe_points_wallet_transfer' => 'Transfer to BIU Wallet',
-            'bridge_wallet_transfer' => 'BIU Wallet Transfer',
+            'bp_redemption' => 'Transfer to Believe Cash',
+            'believe_points_wallet_transfer' => 'Transfer to Believe Cash',
+            'bridge_wallet_transfer' => 'Believe Cash Transfer',
             'deposit' => 'Deposit',
             'withdrawal' => 'Withdrawal',
             'transfer_in' => 'Transfer In',

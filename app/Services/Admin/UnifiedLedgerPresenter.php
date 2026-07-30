@@ -76,8 +76,12 @@ class UnifiedLedgerPresenter
             $transactionType,
             $this->effectiveWalletProductType($t),
         );
-        // Event always matches Sub Type for consistent reporting (detail lives in related/campaign columns).
+        // Event matches Sub Type, except BP Settlement (status change Processing → Available).
         $eventName = $taxonomy['sub_type_label'];
+        if ($transactionType === 'bp_settlement' || $t->type === 'bp_settlement'
+            || (($meta['source'] ?? '') === 'bp_settlement')) {
+            $eventName = 'BP Available';
+        }
 
         return [
             'txn_id' => $t->id,
@@ -1047,7 +1051,7 @@ class UnifiedLedgerPresenter
                 : ($isBridgeMoneyTransfer
                     ? [
                         'to_type' => 'wallet',
-                        'to_name' => 'BIU Wallet',
+                        'to_name' => 'Believe Cash',
                         'to_email' => $walletUser->email,
                         'to_id' => (int) $walletUser->id,
                     ]
@@ -1198,7 +1202,8 @@ class UnifiedLedgerPresenter
         }
 
         return match (strtolower($trimmed)) {
-            'bridge wallet', 'believe bridge wallet' => 'BIU Wallet',
+            'bridge wallet', 'believe bridge wallet', 'biu wallet' => 'Believe Cash',
+            'general module' => UnifiedLedgerBpModule::generalLabel(),
             'org sub', 'organization sub' => 'Organization Subscription',
             'supporter sub' => 'Supporter Subscription',
             'merchant sub' => 'Merchant Subscription',
@@ -1644,7 +1649,7 @@ class UnifiedLedgerPresenter
             ];
         }
 
-        // Settlement is a status change inside General Module — not a buy/sell.
+        // Settlement is a status change inside BP Wallet — not a buy/sell.
         $metaSource = (string) ($meta['source'] ?? '');
         if ($t->type === 'bp_settlement' || $metaSource === 'bp_settlement') {
             return [
@@ -1823,18 +1828,18 @@ class UnifiedLedgerPresenter
         }
         if ($sourceType === 'bp_redemption' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'Transfer to BIU Wallet refund #'.$t->related_id
-                : 'Transfer to BIU Wallet #'.$t->related_id;
+                ? 'Transfer to Believe Cash refund #'.$t->related_id
+                : 'Transfer to Believe Cash #'.$t->related_id;
         }
         if ($sourceType === 'bridge_wallet_transfer' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'BIU Wallet Transfer refund #'.$t->related_id
-                : 'BIU Wallet Transfer #'.$t->related_id;
+                ? 'Believe Cash Transfer refund #'.$t->related_id
+                : 'Believe Cash Transfer #'.$t->related_id;
         }
         if ($sourceType === 'believe_points_wallet_transfer' && $t->related_id) {
             return $t->status === Transaction::STATUS_REFUND
-                ? 'Transfer to BIU Wallet refund #'.$t->related_id
-                : 'Transfer to BIU Wallet #'.$t->related_id;
+                ? 'Transfer to Believe Cash refund #'.$t->related_id
+                : 'Transfer to Believe Cash #'.$t->related_id;
         }
 
         $label = trim((string) ($related['related_label'] ?? ''));
@@ -1852,7 +1857,7 @@ class UnifiedLedgerPresenter
     }
 
     /**
-     * BP spends: From General Module → destination module (presentation audit trail).
+     * BP spends: From BP Wallet → destination module (presentation audit trail).
      *
      * @param  array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}  $parties
      * @return array{from_type: string, from_name: string|null, from_email: string|null, from_id: int|null, to_type: string, to_name: string|null, to_email: string|null, to_id: int|null}
@@ -1865,15 +1870,15 @@ class UnifiedLedgerPresenter
     ): array {
         $destination = $this->resolveBpSpendDestination($t, $module, $connectionHubType);
         if ($destination === null) {
-            // Settlement stays inside General Module.
+            // Settlement is a BP status change, not a module transfer.
             if ($t->type === 'bp_settlement' || (($t->meta['source'] ?? '') === 'bp_settlement')) {
                 return [
-                    'from_type' => 'module',
-                    'from_name' => UnifiedLedgerBpModule::generalLabel(),
+                    'from_type' => 'bp_status',
+                    'from_name' => 'Processing',
                     'from_email' => null,
                     'from_id' => null,
-                    'to_type' => 'module',
-                    'to_name' => UnifiedLedgerBpModule::generalLabel(),
+                    'to_type' => 'bp_status',
+                    'to_name' => 'Available',
                     'to_email' => null,
                     'to_id' => null,
                 ];
@@ -1912,7 +1917,7 @@ class UnifiedLedgerPresenter
         }
 
         if ($t->type === 'bp_settlement' || ($meta['source'] ?? '') === 'bp_settlement') {
-            return 'BP Settlement';
+            return 'BP Available';
         }
 
         $destination = $this->resolveBpSpendDestination($t, $module, $connectionHubType);
@@ -1956,7 +1961,7 @@ class UnifiedLedgerPresenter
         }
 
         if ($source === 'bridge_wallet_transfer' || $type === 'bridge_wallet_transfer') {
-            // Money-side Bridge row — not a BP General Module spend.
+            // Money-side Bridge row — not a BP Wallet spend.
             return null;
         }
 

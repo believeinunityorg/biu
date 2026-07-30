@@ -65,9 +65,9 @@ export function AddMoney({
         : 'Bank (ACH / Wire)'
     const bankEmptyCopy = regionBlocksUsAch || sepaAvailable
         ? (sepaAvailable
-            ? 'Create a EUR Virtual Account (IBAN) for SEPA deposits. Bridge converts EUR to USDC automatically.'
+            ? 'Create a EUR Virtual Account (IBAN) for SEPA deposits. Believe Cash converts EUR to USDC automatically.'
             : 'US ACH/wire is not available in your region. Use crypto deposit instead.')
-        : 'Create a Bridge deposit bank account to receive ACH and wire transfers.'
+        : 'Create a Believe Cash deposit bank account to receive ACH and wire transfers.'
     const depositTitle = isEurSepa
         ? 'SEPA Deposit Details (EUR IBAN)'
         : selectedPaymentMethod === 'ach'
@@ -88,8 +88,8 @@ export function AddMoney({
                     <p className="text-xs text-amber-900 dark:text-amber-100 leading-relaxed">
                         {usAchNotice
                             || (sepaAvailable
-                                ? 'US bank transfers (ACH/wire) are not available in your region per Bridge. SEPA and crypto still work.'
-                                : 'US bank transfers (ACH/wire) are not available in your region per Bridge. Prefer crypto deposit.')}
+                                ? 'US bank transfers (ACH/wire) are not available in your region. SEPA and crypto still work with Believe Cash.'
+                                : 'US bank transfers (ACH/wire) are not available in your region. Prefer crypto deposit with Believe Cash.')}
                     </p>
                 </div>
             )}

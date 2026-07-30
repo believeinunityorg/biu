@@ -45,7 +45,7 @@ export function BridgePersonaVerificationPanel({
                 kycStatus={kybStatus}
                 compact
                 title="KYB Verification Pending"
-                description="Your business verification has been submitted and is being reviewed by Bridge."
+                description="Your business verification has been submitted and is being reviewed for Believe Cash."
                 onRefresh={onRefresh}
                 isRefreshing={isLoading}
             />
@@ -56,7 +56,7 @@ export function BridgePersonaVerificationPanel({
         <div className="space-y-3">
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-center">
                 <p className="text-xs text-muted-foreground">
-                    Complete verification in the secure Bridge window (Persona). Have your ID ready and allow
+                    Complete verification in the secure Believe Cash window (Persona). Have your ID ready and allow
                     camera access when prompted.
                 </p>
             </div>

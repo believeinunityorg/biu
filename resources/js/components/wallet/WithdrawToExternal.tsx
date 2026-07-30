@@ -56,8 +56,8 @@ export function WithdrawToExternal({
                             </p>
                             <p className="text-xs text-amber-800 dark:text-amber-200">
                                 {isSandbox
-                                    ? 'Sandbox wallets use virtual accounts for deposits only. Bridge bank offramps require a production Bridge wallet.'
-                                    : 'Complete wallet verification and create a Bridge wallet before withdrawing to a linked bank account.'}
+                                    ? 'Sandbox wallets use virtual accounts for deposits only. Bank withdrawals require a production Believe Cash wallet.'
+                                    : 'Complete wallet verification and create a Believe Cash wallet before withdrawing to a linked bank account.'}
                             </p>
                         </div>
                     </div>

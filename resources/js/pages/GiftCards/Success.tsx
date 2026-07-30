@@ -510,7 +510,7 @@ export default function SuccessPage({
                                                     {paymentMethod === 'believe_points'
                                                         ? 'Believe Points'
                                                         : paymentMethod === 'bridge_wallet'
-                                                            ? 'BIU Wallet'
+                                                            ? 'Believe Cash'
                                                             : 'USD'}
                                                 </p>
                                             </div>

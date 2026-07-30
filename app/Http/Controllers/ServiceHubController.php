@@ -15,9 +15,12 @@ use App\Models\ServiceChatMessage;
 use App\Models\ServiceOrder;
 use App\Models\ServiceReview;
 use App\Models\ServiceSellerProfile;
+use App\Models\Transaction;
 use App\Services\ServiceHubFeeService;
 use App\Services\StripeConfigService;
 use App\Support\StripeCustomerChargeAmount;
+use App\Support\UnifiedLedgerBpStatus;
+use App\Support\UnifiedLedgerType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -864,6 +867,37 @@ class ServiceHubController extends Controller
                 'status' => 'pending',
                 'payment_status' => $paymentMethod === 'believe_points' ? 'paid' : 'pending',
             ]);
+
+            if ($paymentMethod === 'believe_points') {
+                Transaction::record([
+                    'user_id' => $user->id,
+                    'related_id' => $order->id,
+                    'related_type' => ServiceOrder::class,
+                    'type' => 'purchase',
+                    'ledger_type' => UnifiedLedgerType::BP,
+                    'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
+                    'status' => Transaction::STATUS_COMPLETED,
+                    'amount' => $pointsRequired,
+                    'fee' => 0,
+                    'currency' => 'BP',
+                    'payment_method' => 'believe_points',
+                    'transaction_id' => 'bp_service_order:'.$order->id,
+                    'meta' => [
+                        'source' => 'service_hub_bp',
+                        'ledger_type' => UnifiedLedgerType::BP,
+                        'event_name' => 'Service Order',
+                        'description' => 'Service Hub order paid with Believe Points',
+                        'gig_id' => $gig->id,
+                        'service_order_id' => $order->id,
+                        'from_type' => 'module',
+                        'from_name' => \App\Support\UnifiedLedgerBpModule::generalLabel(),
+                        'to_type' => 'module',
+                        'to_name' => 'Service Hub Module',
+                        'believe_points_used' => $pointsRequired,
+                    ],
+                    'processed_at' => now(),
+                ]);
+            }
 
             // Send email notification to seller
             try {
@@ -3494,6 +3528,33 @@ class ServiceHubController extends Controller
                 'amount' => $refundAmount,
                 'reason' => $cancellationReason,
                 'status' => 'completed',
+            ]);
+
+            Transaction::record([
+                'user_id' => $buyer->id,
+                'related_id' => $order->id,
+                'related_type' => ServiceOrder::class,
+                'type' => 'refund',
+                'ledger_type' => UnifiedLedgerType::BP,
+                'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
+                'status' => Transaction::STATUS_COMPLETED,
+                'amount' => $refundAmount,
+                'fee' => 0,
+                'currency' => 'BP',
+                'payment_method' => 'believe_points',
+                'transaction_id' => 'bp_service_order_refund:'.$order->id,
+                'meta' => [
+                    'source' => 'service_hub_bp_refund',
+                    'ledger_type' => UnifiedLedgerType::BP,
+                    'event_name' => 'Service Order Refund',
+                    'description' => $cancellationReason,
+                    'service_order_id' => $order->id,
+                    'from_type' => 'module',
+                    'from_name' => 'Service Hub Module',
+                    'to_type' => 'module',
+                    'to_name' => \App\Support\UnifiedLedgerBpModule::generalLabel(),
+                ],
+                'processed_at' => now(),
             ]);
 
             // Log the transaction

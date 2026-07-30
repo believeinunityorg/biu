@@ -196,6 +196,7 @@ export default function SupporterShowLivestream({
     livestream,
     recordingConsentDeclines,
     participantRoster,
+    patchLivestream,
   } = useUnityMeetHostRealtime({
     broadcastChannel,
     livestream: initialLivestream,
@@ -445,6 +446,16 @@ export default function SupporterShowLivestream({
       return
     }
     setIsUpdatingStatus(true)
+    // Optimistic UI — Inertia props / Reverb can lag; badge + buttons must flip immediately.
+    patchLivestream({
+      status: "live",
+      startedAt: new Date().toISOString(),
+      canSetUnityLive: false,
+      canStartMeeting: false,
+      canGoLive: Boolean(livestream.wantsYoutubeLive && livestream.canQueueYoutubeLive),
+      wantsUnityLive: true,
+      isPublic: true,
+    } as Partial<typeof livestream>)
     router.post(`/livestreams/supporter/${livestream.id}/set-live`, {}, {
       preserveScroll: true,
       onSuccess: (page) => {
@@ -453,9 +464,29 @@ export default function SupporterShowLivestream({
           toast.error(Array.isArray(err) ? err[0] : err)
           return
         }
+        const next = (page.props as { livestream?: typeof livestream }).livestream
+        if (next) {
+          patchLivestream({
+            status: next.status,
+            startedAt: next.startedAt,
+            canSetUnityLive: next.canSetUnityLive,
+            canStartMeeting: next.canStartMeeting,
+            canGoLive: next.canGoLive,
+            canQueueYoutubeLive: next.canQueueYoutubeLive,
+            wantsUnityLive: next.wantsUnityLive,
+            isPublic: next.isPublic,
+            streamingQueueStatus: next.streamingQueueStatus,
+            hasActiveStreamingJob: next.hasActiveStreamingJob,
+          } as Partial<typeof livestream>)
+        }
         toast.success("You're live on Unity Live.")
       },
       onError: (errors) => {
+        patchLivestream({
+          status: "meeting_live",
+          canSetUnityLive: true,
+          canStartMeeting: false,
+        } as Partial<typeof livestream>)
         const message = typeof errors.error === "string"
           ? errors.error
           : Array.isArray(errors.error)
@@ -499,8 +530,49 @@ export default function SupporterShowLivestream({
       return
     }
     setIsUpdatingStatus(true)
+    patchLivestream({
+      status: "meeting_live",
+      canSetUnityLive: true,
+      canGoLive: true,
+    } as Partial<typeof livestream>)
     router.post(route("livestreams.supporter.end-unity-live", livestream.id), {}, {
       preserveScroll: true,
+      onSuccess: (page) => {
+        const err = (page.props as { errors?: { error?: string | string[] } }).errors?.error
+        if (err) {
+          patchLivestream({
+            status: "live",
+            canSetUnityLive: false,
+          } as Partial<typeof livestream>)
+          toast.error(Array.isArray(err) ? err[0] : err)
+          return
+        }
+        const next = (page.props as { livestream?: typeof livestream }).livestream
+        if (next) {
+          patchLivestream({
+            status: next.status,
+            canSetUnityLive: next.canSetUnityLive,
+            canGoLive: next.canGoLive,
+            canQueueYoutubeLive: next.canQueueYoutubeLive,
+            startedAt: next.startedAt,
+            streamingQueueStatus: next.streamingQueueStatus,
+            hasActiveStreamingJob: next.hasActiveStreamingJob,
+          } as Partial<typeof livestream>)
+        }
+        toast.success("Removed from Unity Live. Meeting is still open.")
+      },
+      onError: (errors) => {
+        patchLivestream({
+          status: "live",
+          canSetUnityLive: false,
+        } as Partial<typeof livestream>)
+        const message = typeof errors.error === "string"
+          ? errors.error
+          : Array.isArray(errors.error)
+            ? errors.error[0]
+            : "Could not end Unity Live."
+        toast.error(message)
+      },
       onFinish: () => setIsUpdatingStatus(false),
     })
   }

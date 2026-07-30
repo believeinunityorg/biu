@@ -55,18 +55,21 @@ export function applyVdoMinimalHostUi(url: URL): void {
 }
 
 /**
- * Keep screen share on the same MediaMTX/WHIP path the AWS worker pulls.
- * Without this, VDO defaults to a second path (push_s) and YouTube goes blank
- * when the host stops camera and shares screen.
+ * Keep screen share on the same MediaMTX/WHIP path the AWS worker pulls for YouTube.
+ *
+ * VDO defaults to screensharetype=3 (second video track) or type=2 (new stream id / _ss path).
+ * The Fargate worker only remuxes the host `push` path → YouTube goes blank when the camera
+ * is stopped and screen is shared. Type 1 replaces the webcam track in-place on the same push.
  */
 export function applyVdoHostScreenShareForYoutube(url: URL): void {
-  const push = url.searchParams.get("push")
-  if (!push) {
+  if (!url.searchParams.has("push")) {
     return
   }
-  url.searchParams.set("screensharetype", "2")
-  url.searchParams.set("screenshareid", push)
+  // Replace webcam with screen on the same connection / same WHIP publish id.
+  url.searchParams.set("screensharetype", "1")
+  url.searchParams.delete("screenshareid")
   url.searchParams.set("smallshare", "")
+  url.searchParams.set("screensharecontenthint", "detail")
   if (!url.searchParams.has("ssb")) {
     url.searchParams.set("ssb", "")
   }

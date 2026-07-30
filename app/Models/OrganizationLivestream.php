@@ -473,10 +473,10 @@ class OrganizationLivestream extends Model
             $recordParam = '';
         }
 
-        // Screen share must publish to the SAME MediaMTX path the worker pulls (ls_{id} / _aac).
-        // Type 3 (room default) and type 1+stop-camera both left screen on ls_*_s — YouTube went blank.
-        // Type 2 + screenshareid=<push>: after camera is stopped, screen WHIP uses the same path.
-        $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&screensharetype=2&screenshareid={$effectivePush}&smallshare&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
+        // Screen share must stay on the SAME MediaMTX WHIP path the Fargate worker pulls.
+        // Type 3 adds a second track (worker keeps camera/black). Type 2 opens a new stream
+        // (often push_ss) that YouTube never sees. Type 1 replaces the webcam track in-place.
+        $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&screensharetype=1&smallshare&screensharecontenthint=detail&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
 
         // Restore the MediaMTX push so the host's webcam reaches the bridge and the AWS worker can
         // pull and forward to YouTube. (Was dropped under the assumption that getScenePushUrl

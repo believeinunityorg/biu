@@ -254,7 +254,7 @@ class OrganizationLivestream extends Model
         $room = rawurlencode($this->getVdoRoomName());
         $pass = rawurlencode((string) $password);
         $passwordParam = $pass !== '' ? '&password=' . $pass : '';
-        $avatarInitialUrl = 'https://ui-avatars.com/api/?name=' . rawurlencode('Guest') . '&size=256&length=2';
+        $avatarInitialUrl = \App\Support\VdoMeetingAvatar::url('Guest');
         $base = 'https://vdo.ninja/?room=' . $room . $passwordParam . '&label=&webcam&ssb&vdo=1&audiodevice=1&proaudio&stereo=2&norecord&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false&avatar=' . rawurlencode($avatarInitialUrl) . \App\Support\VdoMeetingVirtualBackground::querySegment() . '&autostart&noheader';
 
         // When canvas mode is enabled AND the caller allocated a seat, also publish
@@ -445,7 +445,7 @@ class OrganizationLivestream extends Model
             $avatarParam = '&avatar=' . rawurlencode($avatarUrl);
         } else {
             $hn = trim($hostName) !== '' ? trim($hostName) : 'Host';
-            $avatarImage = 'https://ui-avatars.com/api/?name=' . rawurlencode($hn) . '&size=256&length=2';
+            $avatarImage = \App\Support\VdoMeetingAvatar::url($hn);
             $avatarParam = '&avatar=' . rawurlencode($avatarImage);
         }
         // In canvas mode, the host publishes to seat 1 path so the canvas mixer
@@ -473,7 +473,10 @@ class OrganizationLivestream extends Model
             $recordParam = '';
         }
 
-        $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
+        // Screen share must publish to the SAME MediaMTX path the worker pulls (ls_{id} / _aac).
+        // Type 3 (room default) and type 1+stop-camera both left screen on ls_*_s — YouTube went blank.
+        // Type 2 + screenshareid=<push>: after camera is stopped, screen WHIP uses the same path.
+        $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&screensharetype=2&screenshareid={$effectivePush}&smallshare&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
 
         // Restore the MediaMTX push so the host's webcam reaches the bridge and the AWS worker can
         // pull and forward to YouTube. (Was dropped under the assumption that getScenePushUrl

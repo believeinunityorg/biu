@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Normal supporters (role user) must complete /profile/edit before using the rest of the app.
+ * Normal supporters (role user) must complete onboarding (then required profile fields) before using the rest of the app.
  */
 class EnsureSupporterProfileComplete
 {
@@ -19,50 +19,85 @@ class EnsureSupporterProfileComplete
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($this->shouldForceProfileEdit($request)) {
-            if ($this->wantsJsonBlock($request)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Please complete your profile to continue.',
-                    'redirect' => route('user.profile.edit'),
-                ], 403);
-            }
-
-            return redirect()
-                ->route('user.profile.edit')
-                ->with('info', 'Please complete your profile to continue.');
+        if ($redirect = $this->redirectIfIncomplete($request)) {
+            return $redirect;
         }
 
         return $this->normalizeResponse($request, $next($request));
     }
 
-    private function shouldForceProfileEdit(Request $request): bool
+    private function redirectIfIncomplete(Request $request): ?Response
     {
         if (! config('app.require_supporter_profile', true)) {
-            return false;
+            return null;
         }
 
         if (function_exists('request_is_merchant_portal') && request_is_merchant_portal()) {
-            return false;
+            return null;
         }
 
         if (function_exists('is_livestock_domain') && is_livestock_domain()) {
-            return false;
+            return null;
         }
 
         $user = $request->user();
-        if (! $user instanceof User) {
-            return false;
+        if (! $user instanceof User || ($user->role ?? null) !== 'user') {
+            return null;
         }
 
-        if (($user->role ?? null) !== 'user') {
-            return false;
+        if (SupporterProfileCompletionService::needsOnboarding($user)) {
+            if ($this->isOnboardingRoute($request)) {
+                return null;
+            }
+
+            return $this->buildRedirect($request, route('user.onboarding'), 'Let\'s personalize your Believe In Unity experience.');
         }
 
-        if (! SupporterProfileCompletionService::needsProfileSetup($user)) {
-            return false;
+        if (! SupporterProfileCompletionService::hasRequiredEditFields($user)) {
+            if ($this->isProfileEditRoute($request)) {
+                return null;
+            }
+
+            return $this->buildRedirect($request, route('user.profile.edit'), 'Please complete your profile to continue.');
         }
 
+        return null;
+    }
+
+    private function buildRedirect(Request $request, string $url, string $message): Response
+    {
+        if ($this->wantsJsonBlock($request)) {
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+                'redirect' => $url,
+            ], 403);
+        }
+
+        return redirect($url)->with('info', $message);
+    }
+
+    private function isOnboardingRoute(Request $request): bool
+    {
+        $routeName = $request->route()?->getName();
+
+        if (in_array($routeName, [
+            'user.onboarding',
+            'user.onboarding.step',
+            'user.onboarding.finish',
+        ], true)) {
+            return true;
+        }
+
+        return $request->is(
+            'onboarding',
+            'onboarding/step',
+            'onboarding/finish',
+        );
+    }
+
+    private function isProfileEditRoute(Request $request): bool
+    {
         $routeName = $request->route()?->getName();
 
         $excludedRoutes = [
@@ -84,10 +119,10 @@ class EnsureSupporterProfileComplete
         ];
 
         if ($routeName !== null && in_array($routeName, $excludedRoutes, true)) {
-            return false;
+            return true;
         }
 
-        if ($request->is(
+        return $request->is(
             'profile/edit',
             'profile/update',
             'profile/primary-organization/change',
@@ -99,11 +134,7 @@ class EnsureSupporterProfileComplete
             'unity-call/*',
             'unity-calls/*',
             'broadcasting/*',
-        )) {
-            return false;
-        }
-
-        return true;
+        );
     }
 
     private function wantsJsonBlock(Request $request): bool

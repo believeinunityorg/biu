@@ -158,6 +158,30 @@ class StreamingLifecycleService
         }
 
         if ($job->status === 'live') {
+            // Fargate worker often posts only starting→live, then runs ffmpeg without
+            // periodic "heartbeat" callbacks. Prefer ECS RUNNING as liveness so we
+            // do not false-fail ("Worker heartbeat lost") while YouTube is still receiving.
+            $ecsRunning = $this->ecsMonitor->taskIsRunning($job);
+            if ($ecsRunning === true) {
+                $this->recordHeartbeat($job);
+
+                if ($this->maxDurationExceeded($job->fresh(), $now)) {
+                    return $this->stopJob($job->fresh(), 'Maximum stream duration reached');
+                }
+
+                return false;
+            }
+
+            // No task ARN / ECS unavailable: do not treat missing heartbeats as death.
+            // Max-duration still caps the job. Starting/queued timeouts still apply above.
+            if ($ecsRunning === null && empty($job->ecs_task_arn)) {
+                if ($this->maxDurationExceeded($job, $now)) {
+                    return $this->stopJob($job, 'Maximum stream duration reached');
+                }
+
+                return false;
+            }
+
             if ($this->heartbeatIsStale($job, $now)) {
                 return $this->failJob($job, 'Worker heartbeat lost (stream may have disconnected)');
             }

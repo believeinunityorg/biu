@@ -108,6 +108,23 @@ class StreamingLifecycleServiceTest extends TestCase
         $this->assertNotNull($job->last_heartbeat_at);
     }
 
+    public function test_live_job_without_ecs_arn_does_not_fail_on_silent_heartbeats(): void
+    {
+        config(['streaming.ecs.enabled' => false]);
+
+        [, $job] = $this->makeLivestreamWithJob('live', [
+            'live_at' => now()->subMinutes(10),
+            'last_heartbeat_at' => now()->subMinutes(10),
+            'ecs_task_arn' => null,
+        ]);
+
+        $changed = $this->lifecycle->reconcileJob($job->fresh());
+
+        $this->assertFalse($changed);
+        $job->refresh();
+        $this->assertSame('live', $job->status);
+    }
+
     /**
      * @param  array<string, mixed>  $jobOverrides
      * @return array{0: OrganizationLivestream, 1: StreamingJob}

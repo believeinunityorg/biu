@@ -24,7 +24,7 @@ class UnityMeetHostDashboardChanged implements ShouldBroadcastNow
         public array $payload,
     ) {}
 
-    public bool $broadcastAfterCommit = true;
+    public bool $broadcastAfterCommit = false;
 
     /**
      * @return array<int, Channel>

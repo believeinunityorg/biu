@@ -984,6 +984,10 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'role:use
 
 // Profile routes
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user'])->name('user.')->group(function () {
+    Route::get('/onboarding', [\App\Http\Controllers\SupporterOnboardingController::class, 'show'])->name('onboarding');
+    Route::post('/onboarding/step', [\App\Http\Controllers\SupporterOnboardingController::class, 'saveStep'])->name('onboarding.step');
+    Route::post('/onboarding/finish', [\App\Http\Controllers\SupporterOnboardingController::class, 'finish'])->name('onboarding.finish');
+
     Route::get('/profile', [UserProfileController::class, 'index'])->name('profile.index');
     Route::get('/profile/edit', [UserProfileController::class, 'edit'])->name('profile.edit');
     Route::post('/profile/update', [UserProfileController::class, 'update'])->name('profile.update');

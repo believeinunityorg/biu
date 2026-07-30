@@ -52,6 +52,8 @@ interface ProfileOrganizationPickerProps {
   triggerId?: string
   /** Dark modal dropdown (Change primary organization). */
   modalTrigger?: boolean
+  /** Route name for Inertia partial reload (default: user.profile.edit). */
+  reloadRoute?: string
 }
 
 /**
@@ -70,6 +72,7 @@ export function ProfileOrganizationPicker({
   actionTrigger = false,
   triggerId,
   modalTrigger = false,
+  reloadRoute = "user.profile.edit",
 }: ProfileOrganizationPickerProps) {
   const pickerTarget = variant === "primary" ? "primary" : "secondary"
   const { organizationPicker: pageOrganizationPicker } = usePage<{
@@ -128,7 +131,7 @@ export function ProfileOrganizationPicker({
         org_picker_exclude: excludeParam,
         org_picker_target: pickerTarget,
       }
-      router.get(route("user.profile.edit"), params, {
+      router.get(route(reloadRoute), params, {
         only: ["organizationPicker"],
         preserveScroll: true,
         preserveState: true,
@@ -167,7 +170,7 @@ export function ProfileOrganizationPicker({
         },
       })
     },
-    [applyPickerPayload, excludeParam, pickerTarget],
+    [applyPickerPayload, excludeParam, pickerTarget, reloadRoute],
   )
 
   useEffect(() => {

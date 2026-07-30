@@ -143,6 +143,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'auto_share_youtube_imports_to_feed',
         'enrollment_notifications_via',
         'enrollment_reminders_via',
+        'onboarding_purpose',
+        'onboarding_step',
+        'onboarding_completed_at',
+        'notification_preferences',
     ];
 
     /**
@@ -202,6 +206,9 @@ class User extends Authenticatable implements MustVerifyEmail
             'secondary_organization_ids' => 'array',
             'auto_share_youtube_imports_to_feed' => 'boolean',
             'proximity_notifications_enabled' => 'boolean',
+            'onboarding_completed_at' => 'datetime',
+            'notification_preferences' => 'array',
+            'onboarding_step' => 'integer',
             'primary_organization_locked' => 'boolean',
             'last_latitude' => 'float',
             'last_longitude' => 'float',

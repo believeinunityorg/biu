@@ -31,6 +31,10 @@ class AuthRedirectHelper
         $role = $user->role ?? (method_exists($user, 'getRoleNames') ? $user->getRoleNames()->first() : null);
 
         if ($role === 'user') {
+            if ($user instanceof User && SupporterProfileCompletionService::needsOnboarding($user)) {
+                return Route::has('user.onboarding') ? route('user.onboarding') : '/onboarding';
+            }
+
             if ($user instanceof User && SupporterProfileCompletionService::needsProfileSetup($user)) {
                 return Route::has('user.profile.edit') ? route('user.profile.edit') : '/profile/edit';
             }

@@ -21,16 +21,28 @@ final class SupporterProfileCompletionService
 
         return filled($user->city)
             && filled($user->state)
-            && filled($user->zipcode)
             && filled($user->dob);
     }
 
     /**
-     * True when a normal supporter still needs to finish /profile/edit.
+     * True when a normal supporter still needs to finish onboarding or required profile fields.
      */
     public static function needsProfileSetup(User $user): bool
     {
-        return ($user->role ?? null) === 'user' && ! self::hasRequiredEditFields($user);
+        if (($user->role ?? null) !== 'user') {
+            return false;
+        }
+
+        if ($user->onboarding_completed_at === null) {
+            return true;
+        }
+
+        return ! self::hasRequiredEditFields($user);
+    }
+
+    public static function needsOnboarding(User $user): bool
+    {
+        return ($user->role ?? null) === 'user' && $user->onboarding_completed_at === null;
     }
 
     public static function isComplete(User $user): bool

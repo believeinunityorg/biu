@@ -112,7 +112,7 @@ export default function MyCardsPage({ giftCards, user }: MyCardsProps) {
     }
 
     return (
-        <ProfileLayout title="My Gift Cards" description="View and manage all your gift cards">
+        <ProfileLayout title="My Gift Cards" description="View and manage your gift cards.">
             <Head title="My Gift Cards" />
 
             <div className="space-y-6">

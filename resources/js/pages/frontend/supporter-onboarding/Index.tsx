@@ -474,7 +474,7 @@ export default function SupporterOnboardingIndex() {
       1: {
         title: "Welcome to Believe In Unity!",
         subtitle:
-          "We're excited you're here! Let's personalize your experience so we can connect you with organizations, events, and opportunities that matter to you. This will only take about a minute.",
+          "Let's personalize your experience so you can get the most out of Believe In Unity. We'll ask a few quick questions to help connect you with organizations, events, and opportunities that matter most to you. This will only take about a minute.",
         icon: <Sparkles className="h-6 w-6" />,
       },
       2: {
@@ -595,7 +595,7 @@ export default function SupporterOnboardingIndex() {
                         <Sparkles className="h-10 w-10 text-purple-600 dark:text-purple-300" />
                       </div>
                       <p className="max-w-md text-gray-600 dark:text-gray-300">
-                        Hi {user.name?.split(" ")[0] || "there"} — we'll walk you through a few quick questions to build your supporter profile.
+                        Hi {user.name?.split(" ")[0] || "there"}!
                       </p>
                     </div>
                   )}

@@ -21,8 +21,10 @@ class BelievePointGiftInviteMail extends Mailable
 
     public function envelope(): Envelope
     {
+        $senderName = $this->invite->sender?->name ?? 'Someone';
+
         return new Envelope(
-            subject: "🎁 You've Received a Believe Points Gift!",
+            subject: "🎁 {$senderName} sent you a GiftBP gift!",
         );
     }
 

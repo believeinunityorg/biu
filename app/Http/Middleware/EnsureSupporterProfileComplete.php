@@ -50,7 +50,7 @@ class EnsureSupporterProfileComplete
                 return null;
             }
 
-            return $this->buildRedirect($request, route('user.onboarding'), 'Let\'s personalize your Believe In Unity experience.');
+            return $this->buildRedirect($request, route('user.onboarding'), 'Welcome to Believe In Unity! Let\'s personalize your experience.');
         }
 
         if (! SupporterProfileCompletionService::hasRequiredEditFields($user)) {

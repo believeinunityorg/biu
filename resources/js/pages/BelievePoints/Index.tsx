@@ -1743,7 +1743,7 @@ export default function BelievePointsIndex({
     return (
       <>
         <Head title="Believe Points" />
-        <ProfileLayout title="Believe Points" description="Purchase platform credits and manage auto top-up.">
+        <ProfileLayout title="BP Wallet" description="Purchase platform credits and manage auto top-up.">
           {content}
         </ProfileLayout>
       </>

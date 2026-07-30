@@ -69,6 +69,11 @@ it('credits an existing supporter immediately into available and gift reporting'
         'recipient_id' => $recipient->id,
         'amount' => 40.00,
     ]);
+
+    Mail::assertSent(\App\Mail\BelievePointGiftReceivedMail::class, function ($mail) use ($sender, $recipient) {
+        return $mail->hasTo($recipient->email)
+            && $mail->envelope()->subject === "🎁 {$sender->name} sent you a GiftBP gift!";
+    });
 });
 
 it('moves holding into available and gift reporting when a registered recipient claims', function () {
@@ -145,6 +150,11 @@ it('holds believe points and creates an invite for an unregistered email', funct
         'amount' => 25.00,
         'status' => 'pending',
     ]);
+
+    Mail::assertSent(\App\Mail\BelievePointGiftInviteMail::class, function ($mail) use ($sender) {
+        return $mail->hasTo('new.friend@example.com')
+            && $mail->envelope()->subject === "🎁 {$sender->name} sent you a GiftBP gift!";
+    });
 });
 
 it('claims holding into available and gift reporting when the invitee registers', function () {

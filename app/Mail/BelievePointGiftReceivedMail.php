@@ -24,7 +24,7 @@ class BelievePointGiftReceivedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "{$this->sender->name} sent you Believe Points",
+            subject: "🎁 {$this->sender->name} sent you a GiftBP gift!",
         );
     }
 
@@ -38,7 +38,7 @@ class BelievePointGiftReceivedMail extends Mailable
                 'amountLabel' => BelievePointGiftInviteService::formatAmount((float) $this->gift->amount),
                 'occasion' => $this->gift->occasion,
                 'messageText' => $this->gift->message,
-                'bpUrl' => route('believe-points.index', [], true),
+                'giftUrl' => route('believe-points.index', [], true),
             ],
         );
     }

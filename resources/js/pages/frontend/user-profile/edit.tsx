@@ -725,7 +725,7 @@ export default function ProfileEdit() {
 
   return (
     <ProfileLayout
-      title="Profile Settings"
+      title="Settings"
       description="Manage your personal information and account settings."
     >
       {!profileReady ? (

@@ -96,6 +96,8 @@ class FavoriteMenuService
 
     public function ensureDefaults(User $user): void
     {
+        $this->ensureMenuCatalog();
+
         if ($this->mobileNavRoleKey($user) === null) {
             return;
         }
@@ -108,38 +110,38 @@ class FavoriteMenuService
         $this->seedDefaults($user);
     }
 
+    /**
+     * Ensure menu catalog rows exist (migrations create the table; seeding fills it).
+     */
+    public function ensureMenuCatalog(): void
+    {
+        if (MenuItem::query()->exists()) {
+            return;
+        }
+
+        (new \Database\Seeders\MenuItemSeeder)->run();
+    }
+
     public function seedDefaults(User $user): void
     {
+        $this->ensureMenuCatalog();
+
         $quickKeys = $this->defaultQuickKeysForUser($user);
         $bottomSlots = $this->defaultBottomNavSlotsForUser($user);
 
         DB::transaction(function () use ($user, $quickKeys, $bottomSlots) {
             foreach ($quickKeys as $index => $menuKey) {
-                if (! MenuItem::query()->where('menu_key', $menuKey)->exists()) {
-                    continue;
-                }
-
-                UserFavoriteMenu::query()->create([
-                    'user_id' => $user->id,
-                    'menu_key' => $menuKey,
+                $this->createFavorite($user, $menuKey, [
                     'sort_order' => $index + 1,
                     'placement' => UserFavoriteMenu::PLACEMENT_QUICK,
-                    'is_active' => true,
                 ]);
             }
 
             foreach ($bottomSlots as $slot => $menuKey) {
-                if (! MenuItem::query()->where('menu_key', $menuKey)->exists()) {
-                    continue;
-                }
-
-                UserFavoriteMenu::query()->create([
-                    'user_id' => $user->id,
-                    'menu_key' => $menuKey,
+                $this->createFavorite($user, $menuKey, [
                     'sort_order' => $slot,
                     'placement' => UserFavoriteMenu::PLACEMENT_BOTTOM_NAV,
                     'bottom_nav_slot' => $slot,
-                    'is_active' => true,
                 ]);
             }
         });
@@ -150,6 +152,8 @@ class FavoriteMenuService
      */
     public function seedFromInterests(User $user, array $interests): void
     {
+        $this->ensureMenuCatalog();
+
         $interests = array_values(array_intersect($interests, self::INTEREST_TAG_OPTIONS));
         if ($interests === []) {
             $this->seedDefaults($user);
@@ -164,28 +168,27 @@ class FavoriteMenuService
             ->get()
             ->filter(function (MenuItem $item) use ($interests) {
                 $tags = $item->interest_tags ?? [];
+
                 return count(array_intersect($interests, $tags)) > 0;
             })
             ->sortBy('sort_order')
             ->pluck('menu_key')
             ->unique()
-            ->values();
+            ->values()
+            ->filter(fn (string $menuKey) => $this->menuKeyExists($menuKey));
 
         $quickKeys = $matchedKeys->take(self::MAX_QUICK_FAVORITES);
         if ($quickKeys->isEmpty()) {
-            $quickKeys = collect(self::DEFAULT_QUICK_KEYS);
+            $quickKeys = collect(self::DEFAULT_QUICK_KEYS)->filter(fn (string $key) => $this->menuKeyExists($key));
         }
 
         DB::transaction(function () use ($user, $quickKeys) {
             UserFavoriteMenu::query()->where('user_id', $user->id)->delete();
 
             foreach ($quickKeys->values() as $index => $menuKey) {
-                UserFavoriteMenu::query()->create([
-                    'user_id' => $user->id,
-                    'menu_key' => $menuKey,
+                $this->createFavorite($user, $menuKey, [
                     'sort_order' => $index + 1,
                     'placement' => UserFavoriteMenu::PLACEMENT_QUICK,
-                    'is_active' => true,
                 ]);
             }
 
@@ -199,13 +202,10 @@ class FavoriteMenuService
             }
 
             foreach ($bottomDefaults as $slot => $menuKey) {
-                UserFavoriteMenu::query()->create([
-                    'user_id' => $user->id,
-                    'menu_key' => $menuKey,
+                $this->createFavorite($user, $menuKey, [
                     'sort_order' => $slot,
                     'placement' => UserFavoriteMenu::PLACEMENT_BOTTOM_NAV,
                     'bottom_nav_slot' => $slot,
-                    'is_active' => true,
                 ]);
             }
 
@@ -229,12 +229,9 @@ class FavoriteMenuService
                 ->delete();
 
             foreach ($menuKeys as $index => $menuKey) {
-                UserFavoriteMenu::query()->create([
-                    'user_id' => $user->id,
-                    'menu_key' => $menuKey,
+                $this->createFavorite($user, $menuKey, [
                     'sort_order' => $index + 1,
                     'placement' => UserFavoriteMenu::PLACEMENT_QUICK,
-                    'is_active' => true,
                 ]);
             }
         });
@@ -256,22 +253,15 @@ class FavoriteMenuService
                 ->delete();
 
             foreach ($allowedSlots as $slot) {
-                $menuKey = $slots[$slot] ?? $defaultSlots[$slot] ?? 'home';
-                if ($menuKey === 'wallet' && ! $this->walletVisibleForUser($user)) {
-                    $menuKey = $defaultSlots[$slot] ?? 'chat';
-                }
-                $item = $catalog->get($menuKey);
-                if (! $item || ! $item->bottom_nav_eligible) {
-                    $menuKey = $defaultSlots[$slot] ?? 'home';
+                $menuKey = $this->resolveBottomNavMenuKey($user, $slot, $slots, $catalog, $defaultSlots);
+                if ($menuKey === null) {
+                    continue;
                 }
 
-                UserFavoriteMenu::query()->create([
-                    'user_id' => $user->id,
-                    'menu_key' => $menuKey,
+                $this->createFavorite($user, $menuKey, [
                     'sort_order' => $slot,
                     'placement' => UserFavoriteMenu::PLACEMENT_BOTTOM_NAV,
                     'bottom_nav_slot' => $slot,
-                    'is_active' => true,
                 ]);
             }
         });
@@ -313,6 +303,66 @@ class FavoriteMenuService
         ]);
 
         return true;
+    }
+
+    private function menuKeyExists(string $menuKey): bool
+    {
+        return MenuItem::query()->where('menu_key', $menuKey)->exists();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createFavorite(User $user, string $menuKey, array $attributes): bool
+    {
+        if (! $this->menuKeyExists($menuKey)) {
+            return false;
+        }
+
+        UserFavoriteMenu::query()->create(array_merge([
+            'user_id' => $user->id,
+            'menu_key' => $menuKey,
+            'is_active' => true,
+        ], $attributes));
+
+        return true;
+    }
+
+    /**
+     * @param  array<int, string>  $slots
+     * @param  Collection<string, MenuItem>  $catalog
+     * @param  array<int, string>  $defaultSlots
+     */
+    private function resolveBottomNavMenuKey(
+        User $user,
+        int $slot,
+        array $slots,
+        Collection $catalog,
+        array $defaultSlots,
+    ): ?string {
+        $candidates = array_values(array_unique(array_filter([
+            $slots[$slot] ?? null,
+            $defaultSlots[$slot] ?? null,
+            'home',
+            'chat',
+            'organizations',
+        ])));
+
+        foreach ($candidates as $menuKey) {
+            if ($menuKey === 'wallet' && ! $this->walletVisibleForUser($user)) {
+                continue;
+            }
+
+            $item = $catalog->get($menuKey);
+            if ($item && $item->bottom_nav_eligible && $this->menuKeyExists($menuKey)) {
+                return $menuKey;
+            }
+        }
+
+        return $catalog
+            ->filter(fn (MenuItem $item) => $item->bottom_nav_eligible && $this->menuKeyExists($item->menu_key))
+            ->first()
+            ?->menu_key;
     }
 
     /**

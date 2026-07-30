@@ -40,6 +40,8 @@ import {
   Gavel,
   Video,
   ChevronsUpDown,
+  ArrowLeft,
+  Menu,
 } from "lucide-react"
 import { Button } from "@/components/frontend/ui/button"
 import { Card, CardContent } from "@/components/frontend/ui/card"
@@ -140,8 +142,8 @@ const navigationItems = [
     color: "from-green-500 to-emerald-600",
   },
   {
-    name: "Add Points",
-    href: "/believe-points#add-believe-points",
+    name: "BP Wallet",
+    href: "/believe-points",
     icon: Coins,
     description: "Fund your Believe Points wallet",
     color: "from-blue-500 to-purple-600",
@@ -280,6 +282,13 @@ const navigationItems = [
     color: "from-red-500 to-red-600",
   },
   {
+    name: "Settings",
+    href: "/profile/edit",
+    icon: Settings,
+    description: "Profile and account settings",
+    color: "from-slate-500 to-gray-600",
+  },
+  {
     name: "Security",
     href: "/profile/change-password",
     icon: Shield,
@@ -294,6 +303,202 @@ function isProfileNavActive(href: string, currentPath: string): boolean {
   }
 
   return currentPath === href || currentPath.startsWith(`${href}/`)
+}
+
+function ProfileHeroHeader({
+  user,
+  planBadge,
+  PlanBadgeIcon,
+  isImpersonating,
+  showEditProfile,
+}: {
+  user: PageProps["auth"]["user"]
+  planBadge: ReturnType<typeof getSupporterPlanBadge>
+  PlanBadgeIcon: ReturnType<typeof getSupporterPlanBadge>["Icon"]
+  isImpersonating?: boolean
+  showEditProfile: boolean
+}) {
+  return (
+    <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 to-blue-600">
+      <div className="absolute inset-0 bg-black/10" />
+
+      <div className="absolute top-0 left-0 h-full w-full overflow-hidden">
+        <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-white/10 blur-xl" />
+        <div className="absolute top-20 -left-10 h-32 w-32 rounded-full bg-white/5 blur-xl" />
+        <div className="absolute bottom-10 right-20 h-24 w-24 rounded-full bg-white/10 blur-xl" />
+      </div>
+
+      <div className="relative container mx-auto px-3 py-8 sm:px-4 sm:py-12">
+        {isImpersonating && (
+          <div className="absolute top-4 right-4 z-10">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                router.post(route("users.stop-impersonate"), {}, {
+                  onSuccess: () => {
+                    showSuccessToast("Impersonation stopped. You are now logged in as yourself.")
+                  },
+                  onError: (errors) => {
+                    console.error("Error stopping impersonation:", errors)
+                  },
+                })
+              }}
+              className="flex items-center gap-2"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Exit Impersonation</span>
+              <span className="sm:hidden">Exit</span>
+            </Button>
+          </div>
+        )}
+
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="flex flex-col items-center gap-6 lg:flex-row lg:gap-8"
+        >
+          <div className="flex w-full min-w-0 flex-1 flex-col items-center gap-6 sm:flex-row sm:items-center">
+            <div className="relative">
+              <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-white/30 to-white/10 blur-sm" />
+              <Avatar className="relative h-24 w-24 border-4 border-white/20 shadow-2xl sm:h-28 sm:w-28">
+                <AvatarImage
+                  src={resolveStorageUrl(user.image, "/placeholder.svg?height=112&width=112")}
+                  alt="Profile"
+                />
+                <AvatarFallback className="bg-gradient-to-br from-white/20 to-white/10 text-2xl font-bold text-white backdrop-blur-sm">
+                  {user.name?.split(" ")[0]?.[0] || "J"}
+                  {user.name?.split(" ")[1]?.[0] || "D"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute -bottom-2 -right-2 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-green-500">
+                <Check className="h-4 w-4 text-white" />
+              </div>
+            </div>
+
+            <div className="min-w-0 w-full text-center sm:text-left">
+              <div className="mb-3 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
+                <h1 className="max-w-full break-words text-2xl font-bold text-white sm:text-3xl lg:text-4xl">
+                  {user.name}
+                </h1>
+                <Badge className={cn("mx-auto w-fit sm:mx-0", planBadge.className)}>
+                  <PlanBadgeIcon className="mr-1 h-3 w-3" />
+                  {planBadge.label}
+                </Badge>
+              </div>
+              <p className="mb-4 break-all text-base text-white/90 sm:text-lg">{user.email}</p>
+              <div className="flex items-center justify-center gap-2 text-white/80 sm:justify-start">
+                <Calendar className="h-4 w-4" />
+                <span>Member since {user.joined}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
+            {showEditProfile ? (
+              <Link href="/profile/edit" className="w-full sm:w-auto">
+                <Button className="w-full border-white/30 bg-white/20 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/30 sm:w-auto">
+                  <Edit3 className="mr-2 h-4 w-4" />
+                  Edit Profile
+                </Button>
+              </Link>
+            ) : null}
+            {user?.slug || user?.id ? (
+              <Link href={route("users.show", user.slug || user.id)} className="w-full sm:w-auto">
+                <Button className="w-full border-white/30 bg-white/20 text-white backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:bg-white/30 sm:w-auto">
+                  <Globe className="mr-2 h-4 w-4" />
+                  Public View
+                </Button>
+              </Link>
+            ) : null}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  )
+}
+
+function ProfileSubPageHeader({
+  title,
+  description,
+  isImpersonating,
+  onOpenMenu,
+  showMenuButton = false,
+  sticky = false,
+}: {
+  title: string
+  description?: string
+  isImpersonating?: boolean
+  onOpenMenu?: () => void
+  showMenuButton?: boolean
+  sticky?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        "border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900",
+        sticky && "sticky top-0 z-20 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/95 dark:supports-[backdrop-filter]:bg-gray-900/95",
+      )}
+    >
+      <div className="container mx-auto px-3 py-3 sm:px-4 sm:py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <Link
+              href="/profile"
+              preserveScroll
+              preserveState
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 transition-colors hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0" />
+              Back
+            </Link>
+            <h1 className="mt-2 break-words text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
+              {title}
+            </h1>
+            {description ? (
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 sm:text-base">{description}</p>
+            ) : null}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            {isImpersonating && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  router.post(route("users.stop-impersonate"), {}, {
+                    onSuccess: () => {
+                      showSuccessToast("Impersonation stopped. You are now logged in as yourself.")
+                    },
+                    onError: (errors) => {
+                      console.error("Error stopping impersonation:", errors)
+                    },
+                  })
+                }}
+                className="flex items-center gap-1.5 px-2 sm:gap-2 sm:px-3"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="sr-only sm:not-sr-only sm:inline">Exit</span>
+              </Button>
+            )}
+            {showMenuButton && onOpenMenu ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={onOpenMenu}
+                aria-label="Open profile menu"
+                className="h-9 w-9 shrink-0 border-gray-200 dark:border-gray-700"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function ProfileNavLinks({
@@ -463,6 +668,7 @@ export default function ProfileLayout({ children, title, description }: ProfileL
   const activeNavItem =
     navigationItems.find((item) => isProfileNavActive(item.href, currentPath)) ?? navigationItems[0]
   const ActiveNavIcon = activeNavItem.icon
+  const isProfileHome = currentPath === "/profile"
 
   const handleCopy = () => {
     navigator.clipboard.writeText(user?.referral_link || "")
@@ -481,153 +687,55 @@ export default function ProfileLayout({ children, title, description }: ProfileL
   return (
     <FrontendLayout>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-        {/* Hero Section */}
-        <div className="relative bg-gradient-to-r from-purple-600 to-blue-600 overflow-hidden">
-          <div className="absolute inset-0 bg-black/10"></div>
-
-          {/* Decorative elements */}
-          <div className="absolute top-0 left-0 w-full h-full overflow-hidden">
-            <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-xl"></div>
-            <div className="absolute top-20 -left-10 w-32 h-32 bg-white/5 rounded-full blur-xl"></div>
-            <div className="absolute bottom-10 right-20 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+        {isProfileHome ? (
+          <ProfileHeroHeader
+            user={user}
+            planBadge={planBadge}
+            PlanBadgeIcon={PlanBadgeIcon}
+            isImpersonating={isImpersonating}
+            showEditProfile={currentPath !== "/profile/edit"}
+          />
+        ) : (
+          <div className="lg:hidden">
+            <ProfileSubPageHeader
+              title={title}
+              description={description}
+              isImpersonating={isImpersonating}
+              showMenuButton
+              sticky
+              onOpenMenu={() => setMobileNavOpen(true)}
+            />
           </div>
+        )}
 
-          <div className="relative container mx-auto px-3 py-8 sm:px-4 sm:py-12">
-            {/* Exit Impersonation Button */}
-            {isImpersonating && (
-              <div className="absolute top-4 right-4 z-10">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    router.post(route('users.stop-impersonate'), {}, {
-                      onSuccess: () => {
-                        showSuccessToast('Impersonation stopped. You are now logged in as yourself.');
-                      },
-                      onError: (errors) => {
-                        console.error('Error stopping impersonation:', errors);
-                      },
-                    });
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">Exit Impersonation</span>
-                  <span className="sm:hidden">Exit</span>
-                </Button>
-              </div>
-            )}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-              className="flex flex-col items-center gap-6 lg:flex-row lg:gap-8"
-            >
-              {/* Profile Info */}
-              <div className="flex w-full min-w-0 flex-col items-center gap-6 sm:flex-row sm:items-center flex-1">
-                <div className="relative">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-white/30 to-white/10 rounded-full blur-sm"></div>
-                  <Avatar className="relative w-24 h-24 sm:w-28 sm:h-28 border-4 border-white/20 shadow-2xl">
-                    <AvatarImage
-                      src={resolveStorageUrl(user.image, "/placeholder.svg?height=112&width=112")}
-                      alt="Profile"
-                    />
-                    <AvatarFallback className="bg-gradient-to-br from-white/20 to-white/10 text-white text-2xl font-bold backdrop-blur-sm">
-                      {auth.user.name?.split(" ")[0]?.[0] || "J"}
-                      {auth.user.name?.split(" ")[1]?.[0] || "D"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="absolute -bottom-2 -right-2 bg-green-500 w-8 h-8 rounded-full border-4 border-white flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
-                  </div>
-                </div>
-
-                <div className="min-w-0 w-full text-center sm:text-left">
-                  <div className="mb-3 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
-                    <h1 className="max-w-full break-words text-2xl font-bold text-white sm:text-3xl lg:text-4xl">{user.name}</h1>
-                    <Badge className={cn("w-fit mx-auto sm:mx-0", planBadge.className)}>
-                      <PlanBadgeIcon className="w-3 h-3 mr-1" />
-                      {planBadge.label}
-                    </Badge>
-                  </div>
-                  <p className="mb-4 break-all text-base text-white/90 sm:text-lg">{user.email}</p>
-                  <div className="flex items-center justify-center sm:justify-start gap-2 text-white/80">
-                    <Calendar className="w-4 h-4" />
-                    <span>Member since {user.joined}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
-                {currentPath !== "/profile/edit" ? (
-                  <Link href="/profile/edit" className="w-full sm:w-auto">
-                    <Button className="w-full bg-white/20 text-white border-white/30 backdrop-blur-sm transition-all duration-300 hover:bg-white/30 hover:scale-105 sm:w-auto">
-                      <Edit3 className="mr-2 h-4 w-4" />
-                      Edit Profile
-                    </Button>
-                  </Link>
-                ) : null}
-                {user?.slug || user?.id ? (
-                  <Link href={route('users.show', user.slug || user.id)} className="w-full sm:w-auto">
-                    <Button className="w-full bg-white/20 text-white border-white/30 backdrop-blur-sm transition-all duration-300 hover:bg-white/30 hover:scale-105 sm:w-auto">
-                      <Globe className="mr-2 h-4 w-4" />
-                      Public View
-                    </Button>
-                  </Link>
-                ) : null}
-                {/* <Button
-                  variant="outline"
-                  className="bg-transparent border-white/30 text-white hover:bg-white/10 backdrop-blur-sm transition-all duration-300 hover:scale-105"
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Settings
-                </Button> */}
-              </div>
-            </motion.div>
-          </div>
-        </div>
-
-        <div className="relative z-10 container mx-auto -mt-6 px-3 sm:-mt-8 sm:px-4">
+        <div
+          className={cn(
+            "relative z-10 container mx-auto px-3 sm:px-4",
+            isProfileHome ? "-mt-6 sm:-mt-8" : "pt-4 sm:pt-6",
+          )}
+        >
           <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
-            {/* Mobile: one compact row — opens full vertical nav in a drawer */}
-            <div className="lg:hidden">
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(true)}
-                aria-expanded={mobileNavOpen}
-                aria-controls="profile-mobile-nav"
-                className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-purple-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-purple-500/40"
-              >
-                <div className={`shrink-0 rounded-lg bg-gradient-to-br p-2 shadow-sm ${activeNavItem.color}`}>
-                  <ActiveNavIcon className="h-4 w-4 text-white" aria-hidden />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Profile menu</p>
-                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{activeNavItem.name}</p>
-                </div>
-                <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
-              </button>
-
-              <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-                <SheetContent
-                  id="profile-mobile-nav"
-                  side="left"
-                  className="flex w-[min(100vw-1rem,20rem)] max-w-xs flex-col gap-0 p-0 sm:max-w-sm"
+            {/* Mobile profile menu — home only (sub-pages use header menu button) */}
+            {isProfileHome ? (
+              <div className="lg:hidden">
+                <button
+                  type="button"
+                  onClick={() => setMobileNavOpen(true)}
+                  aria-expanded={mobileNavOpen}
+                  aria-controls="profile-mobile-nav"
+                  className="flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left shadow-sm transition-colors hover:border-purple-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-purple-500/40"
                 >
-                  <SheetHeader className="border-b border-gray-200 px-4 py-4 text-left dark:border-gray-700">
-                    <SheetTitle className="text-base font-semibold text-gray-900 dark:text-white">Profile sections</SheetTitle>
-                  </SheetHeader>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
-                    <ProfileNavLinks
-                      currentPath={currentPath}
-                      animate={false}
-                      onNavigate={() => setMobileNavOpen(false)}
-                    />
+                  <div className={`shrink-0 rounded-lg bg-gradient-to-br p-2 shadow-sm ${activeNavItem.color}`}>
+                    <ActiveNavIcon className="h-4 w-4 text-white" aria-hidden />
                   </div>
-                </SheetContent>
-              </Sheet>
-            </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Profile menu</p>
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{activeNavItem.name}</p>
+                  </div>
+                  <ChevronsUpDown className="h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+                </button>
+              </div>
+            ) : null}
 
             {/* Desktop: sticky sidebar */}
             <motion.div
@@ -646,7 +754,7 @@ export default function ProfileLayout({ children, title, description }: ProfileL
             {/* Main Content Area */}
             <div className="min-w-0 w-full flex-1">
               {/* Stats Cards - Only show on overview page */}
-              {currentPath === "/profile" && (
+              {isProfileHome && (
                 <>
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -877,14 +985,45 @@ export default function ProfileLayout({ children, title, description }: ProfileL
                 transition={{ duration: 0.6, delay: 0.4 }}
                 className="pb-6 sm:pb-8"
               >
-                <Card className="overflow-hidden border-0 bg-white shadow-xl dark:bg-gray-800">
+                <Card
+                  className={cn(
+                    "overflow-hidden border-0 bg-white dark:bg-gray-800",
+                    isProfileHome ? "shadow-xl" : "shadow-none lg:shadow-xl",
+                  )}
+                >
                   <CardContent className="p-3 sm:p-6">
-                    <div className="mb-4 sm:mb-6">
-                      <h2 className="mb-2 break-words text-xl font-bold text-gray-900 dark:text-white sm:mb-3 sm:text-2xl lg:text-3xl">{title}</h2>
-                      {description ? (
-                        <p className="text-sm text-gray-600 dark:text-gray-300 sm:text-base lg:text-lg">{description}</p>
-                      ) : null}
-                    </div>
+                    {isProfileHome ? (
+                      <div className="mb-4 sm:mb-6">
+                        <h2 className="mb-2 break-words text-xl font-bold text-gray-900 dark:text-white sm:mb-3 sm:text-2xl lg:text-3xl">
+                          {title}
+                        </h2>
+                        {description ? (
+                          <p className="text-sm text-gray-600 dark:text-gray-300 sm:text-base lg:text-lg">
+                            {description}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="mb-4 hidden sm:mb-6 lg:block">
+                        <Link
+                          href="/profile"
+                          preserveScroll
+                          preserveState
+                          className="inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 transition-colors hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300"
+                        >
+                          <ArrowLeft className="h-4 w-4 shrink-0" />
+                          Back
+                        </Link>
+                        <h2 className="mt-2 break-words text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">
+                          {title}
+                        </h2>
+                        {description ? (
+                          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 sm:text-base">
+                            {description}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
                     <div className="min-w-0">{children}</div>
                   </CardContent>
                 </Card>
@@ -1005,6 +1144,27 @@ export default function ProfileLayout({ children, title, description }: ProfileL
             )}
           </DialogContent>
         </Dialog>
+
+        <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+          <SheetContent
+            id="profile-mobile-nav"
+            side="left"
+            className="flex w-[min(100vw-1rem,20rem)] max-w-xs flex-col gap-0 p-0 sm:max-w-sm"
+          >
+            <SheetHeader className="border-b border-gray-200 px-4 py-4 text-left dark:border-gray-700">
+              <SheetTitle className="text-base font-semibold text-gray-900 dark:text-white">
+                Profile sections
+              </SheetTitle>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              <ProfileNavLinks
+                currentPath={currentPath}
+                animate={false}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </FrontendLayout>
   )

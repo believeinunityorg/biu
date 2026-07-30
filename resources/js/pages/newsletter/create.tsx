@@ -415,7 +415,7 @@ export default function NewsletterCreate({
     const credits = Number(authUser?.credits ?? 0)
     const aiTokensUsedAuth = Number(authUser?.ai_tokens_used ?? 0)
     const aiTokensIncludedAuth = Number(authUser?.ai_tokens_included ?? 0)
-    const displayTokensUsed =
+    const displayTokensUsedRaw =
         newsletterCreateAiResult && newsletterCreateAiResult.ok
             ? Number(newsletterCreateAiResult.ai_tokens_used ?? aiTokensUsedAuth)
             : aiTokensUsedAuth
@@ -423,11 +423,14 @@ export default function NewsletterCreate({
         newsletterCreateAiResult && newsletterCreateAiResult.ok
             ? Number(newsletterCreateAiResult.ai_tokens_included ?? aiTokensIncludedAuth)
             : aiTokensIncludedAuth
+    const displayTokensUsed =
+        displayTokensIncluded > 0
+            ? Math.min(displayTokensUsedRaw, displayTokensIncluded)
+            : displayTokensUsedRaw
     const hasAiTokensLeft = displayTokensIncluded === 0 || displayTokensUsed < displayTokensIncluded
     const aiTokensRemaining =
         displayTokensIncluded === 0 ? null : Math.max(0, displayTokensIncluded - displayTokensUsed)
-    const aiTokensOverBy =
-        displayTokensIncluded === 0 ? 0 : Math.max(0, displayTokensUsed - displayTokensIncluded)
+    const aiTokensOverBy = 0
 
     const [communicationKind, setCommunicationKind] = useState<CommunicationKind>("newsletter")
     const [aiBrief, setAiBrief] = useState("")

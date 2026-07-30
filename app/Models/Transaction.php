@@ -42,6 +42,8 @@ class Transaction extends Model
     public const STATUS_REFUND    = 'refund';
     public const STATUS_DEPOSIT   = 'deposit';
     public const STATUS_REJECTED  = 'rejected';
+    public const STATUS_ADJUSTED  = 'adjusted';
+    public const STATUS_REVERSED  = 'reversed';
 
     public static function statuses(): array
     {
@@ -54,6 +56,8 @@ class Transaction extends Model
             self::STATUS_REFUND,
             self::STATUS_DEPOSIT,
             self::STATUS_REJECTED,
+            self::STATUS_ADJUSTED,
+            self::STATUS_REVERSED,
         ];
     }
 

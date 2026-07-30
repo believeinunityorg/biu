@@ -39,8 +39,10 @@ interface AiCampaignsCreateProps {
 
 const AiCampaignsCreate: React.FC<AiCampaignsCreateProps> = ({ defaultChannels, users }) => {
   const { auth, flash } = usePage<SharedData & { flash?: { success?: string } }>().props
-  const aiTokensUsed = (auth.user as { ai_tokens_used?: number }).ai_tokens_used ?? 0
   const aiTokensIncluded = (auth.user as { ai_tokens_included?: number }).ai_tokens_included ?? 0
+  const aiTokensUsedRaw = (auth.user as { ai_tokens_used?: number }).ai_tokens_used ?? 0
+  const aiTokensUsed =
+    aiTokensIncluded > 0 ? Math.min(aiTokensUsedRaw, aiTokensIncluded) : aiTokensUsedRaw
   const hasAiTokensLeft = aiTokensIncluded === 0 || aiTokensUsed < aiTokensIncluded
   const percentTokensUsed =
     aiTokensIncluded > 0

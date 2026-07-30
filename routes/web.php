@@ -1237,6 +1237,7 @@ Route::prefix('admin/transactions')
         Route::get('/ledger', [TransactionLedgerController::class, 'index'])->name('ledger');
         Route::get('/ledger/export', [TransactionLedgerController::class, 'exportFlatFile'])->name('ledger.export');
         Route::get('/{transaction}', [TransactionLedgerController::class, 'show'])->name('show');
+        Route::post('/{transaction}/adjustments', [TransactionLedgerController::class, 'storeAdjustment'])->name('adjustments.store');
         Route::delete('/{transaction}', [TransactionLedgerController::class, 'destroy'])->name('destroy');
     });
 

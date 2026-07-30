@@ -160,8 +160,10 @@ const AiChatIndex: React.FC<AiChatIndexProps> = ({
 }) => {
   const { auth, flash } = usePage<SharedData & { flash?: { success?: string } }>().props
   const currentCredits = auth.user.credits ?? 0
-  const aiTokensUsed = (auth.user as { ai_tokens_used?: number }).ai_tokens_used ?? 0
   const aiTokensIncluded = (auth.user as { ai_tokens_included?: number }).ai_tokens_included ?? 0
+  const aiTokensUsedRaw = (auth.user as { ai_tokens_used?: number }).ai_tokens_used ?? 0
+  const aiTokensUsed =
+    aiTokensIncluded > 0 ? Math.min(aiTokensUsedRaw, aiTokensIncluded) : aiTokensUsedRaw
   // AI chat is token-based: allow send when no limit (ai_tokens_included === 0) or when used < included
   const hasAiTokensLeft = aiTokensIncluded === 0 || aiTokensUsed < aiTokensIncluded
 

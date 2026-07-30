@@ -79,7 +79,7 @@ class AiCampaignController extends Controller
             $generatedContent = $result['items'] ?? $result;
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
 
             Log::info('Content generated successfully', [

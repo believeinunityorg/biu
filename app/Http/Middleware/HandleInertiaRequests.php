@@ -223,6 +223,13 @@ class HandleInertiaRequests extends Middleware
                         ->where('status', 'active')
                         ->first(['id', 'slug', 'name']);
 
+                    $user->clampAiTokensUsed();
+                    $aiTokensIncluded = (int) ($user->ai_tokens_included ?? 0);
+                    $aiTokensUsed = (int) ($user->ai_tokens_used ?? 0);
+                    if ($aiTokensIncluded > 0) {
+                        $aiTokensUsed = min($aiTokensUsed, $aiTokensIncluded);
+                    }
+
                     $userData = [
                         'id' => $user->id,
                         'slug' => $user->slug ?? null,
@@ -256,8 +263,8 @@ class HandleInertiaRequests extends Middleware
                         'believe_points_total' => $user->totalBelievePointsBalance(),
                         'credits' => $user->credits ?? 0,
                         'ai_media_studio_credits' => round((float) ($user->ai_media_studio_credits ?? 0), 2),
-                        'ai_tokens_used' => $user->ai_tokens_used ?? 0,
-                        'ai_tokens_included' => $user->ai_tokens_included ?? 0,
+                        'ai_tokens_used' => $aiTokensUsed,
+                        'ai_tokens_included' => $aiTokensIncluded,
                         'current_plan_id' => $user->current_plan_id ?? null,
                         'current_plan_details' => $user->current_plan_details ?? null,
                         'image' => $user->role !== 'organization' ? ($user->image ? '/storage/'.$user->image : null) : ($user->organization?->user?->image ? '/storage/'.$user->organization?->user?->image : null),

@@ -64,6 +64,9 @@ final class PayAsYouGoServices
 
         $aiIncluded = (int) ($user->ai_tokens_included ?? 0);
         $aiUsed = (int) ($user->ai_tokens_used ?? 0);
+        if ($aiIncluded > 0) {
+            $aiUsed = min($aiUsed, $aiIncluded);
+        }
         $aiLeft = $aiIncluded > 0 ? max(0, $aiIncluded - $aiUsed) : 0;
 
         $aiPackages = self::aiPackages();

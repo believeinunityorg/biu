@@ -28,6 +28,9 @@ export function AiChatUsageCard({
   const isOrg = userRole === "organization"
 
   if (isOrg && aiTokensIncluded > 0) {
+    const used = Math.min(aiTokensUsed, aiTokensIncluded)
+    const percent = Math.min(100, Math.max(0, percentTokensUsed))
+
     return (
       <div
         className={cn(
@@ -40,7 +43,7 @@ export function AiChatUsageCard({
           <p className="text-xs leading-tight">
             <span className="text-muted-foreground dark:text-white/85">AI Usage: </span>
             <span className="font-bold tabular-nums text-foreground dark:text-white">
-              {aiTokensUsed.toLocaleString()} / {aiTokensIncluded.toLocaleString()}
+              {used.toLocaleString()} / {aiTokensIncluded.toLocaleString()}
             </span>
             <span className="text-muted-foreground dark:text-white/85"> tokens</span>
           </p>
@@ -49,16 +52,16 @@ export function AiChatUsageCard({
             <div className="h-2 min-h-0 flex-1 overflow-hidden rounded-full bg-muted dark:bg-zinc-800">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-purple-600 via-violet-500 to-blue-400 transition-[width] duration-500 ease-out"
-                style={{ width: `${percentTokensUsed}%` }}
+                style={{ width: `${percent}%` }}
                 role="progressbar"
-                aria-valuenow={percentTokensUsed}
+                aria-valuenow={percent}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label="AI tokens used"
               />
             </div>
             <span className="shrink-0 text-[11px] font-semibold tabular-nums text-foreground dark:text-white">
-              {percentTokensUsed}% used
+              {percent}% used
             </span>
           </div>
         </div>

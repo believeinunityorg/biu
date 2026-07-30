@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Head, Link, router } from "@inertiajs/react"
-import { ConfirmationModal } from "@/components/admin/confirmation-modal"
 import type { UnifiedLedgerRow } from "@/components/admin/unified-ledger-card"
 import { transactionTypeBadgeClass, transactionTypeDisplayLabel } from "@/lib/transaction-type-labels"
 import { connectionHubTypeLabel } from "@/lib/connection-hub-type"
@@ -36,7 +35,6 @@ import {
   Wallet,
   XCircle,
   Eye,
-  Trash2,
   Heart,
   Building2,
   Package,
@@ -466,6 +464,11 @@ function statusClass(status: string) {
     case "cancelled":
     case "expired":
       return "border-muted-foreground/25 bg-muted/60 text-muted-foreground"
+    case "adjusted":
+    case "reversed":
+    case "withdrawal":
+    case "refund":
+      return "border-sky-500/40 bg-sky-500/[0.12] text-sky-900 shadow-sm shadow-sky-500/10 dark:text-sky-100"
     default:
       return "border-primary/35 bg-primary/10 text-primary shadow-sm shadow-primary/10"
   }
@@ -906,12 +909,6 @@ export default function TransactionLedger({
   const [connectionHubType, setConnectionHubType] = useState(filters.connection_hub_type ?? "all")
   const [quick, setQuick] = useState(filters.quick ?? "all")
   const skipSearchDebounceOnce = useRef(true)
-  const [deleteModal, setDeleteModal] = useState<{ open: boolean; id: number | null; ref: string }>({
-    open: false,
-    id: null,
-    ref: "",
-  })
-  const [isDeleting, setIsDeleting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
   const filterSelectClass =
@@ -1063,18 +1060,6 @@ export default function TransactionLedger({
     return links.filter((link) => {
       const label = link.label.replace(/&laquo;|&raquo;/g, "").trim()
       return !isNaN(Number(label)) && label !== "Previous" && label !== "Next"
-    })
-  }
-
-  const confirmDelete = () => {
-    if (deleteModal.id == null) return
-    setIsDeleting(true)
-    router.delete(route("admin.transactions.destroy", deleteModal.id), {
-      preserveScroll: true,
-      onSuccess: () => {
-        setDeleteModal({ open: false, id: null, ref: "" })
-      },
-      onFinish: () => setIsDeleting(false),
     })
   }
 
@@ -1910,22 +1895,13 @@ export default function TransactionLedger({
                                   idx % 2 === 1 ? "bg-muted" : "bg-card",
                                 )}
                               >
-                                <div className="inline-flex flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:justify-end sm:gap-2">
+                                <div className="inline-flex items-center justify-end">
                                   <Link href={route("admin.transactions.show", row.id)}>
                                     <Button type="button" size="default" variant="secondary" className="h-9 gap-1.5 px-3 text-sm">
                                       <Eye className="h-4 w-4" />
                                       View
                                     </Button>
                                   </Link>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="default"
-                                    className="h-9 border-destructive/30 px-3 text-sm text-destructive hover:bg-destructive/10"
-                                    onClick={() => setDeleteModal({ open: true, id: row.id, ref: row.transaction_id })}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
                                 </div>
                               </td>
                             </tr>
@@ -1986,16 +1962,6 @@ export default function TransactionLedger({
           </div>
         </motion.div>
       </div>
-
-      <ConfirmationModal
-        isOpen={deleteModal.open}
-        onChange={(open) => !open && setDeleteModal({ open: false, id: null, ref: "" })}
-        title="Delete this transaction?"
-        description={`This will permanently remove ${deleteModal.ref || "this record"} from the ledger. This does not reverse charges in Stripe or PayPal.`}
-        confirmLabel={isDeleting ? "Deleting…" : "Delete"}
-        onConfirm={confirmDelete}
-        isLoading={isDeleting}
-      />
     </AppLayout>
   )
 }

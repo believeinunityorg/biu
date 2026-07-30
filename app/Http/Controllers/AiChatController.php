@@ -501,7 +501,7 @@ class AiChatController extends Controller
             // Track actual token usage from OpenAI response (real deduction)
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             $user->refresh();
 
@@ -997,7 +997,7 @@ PROMPT;
             $suggestions = $result['content'] ?? '';
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
 
             // Format the response professionally
@@ -2759,7 +2759,7 @@ PROMPT;
             $title = trim($result['content'] ?? '');
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0 && $user) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             $title = trim($title, ' "\'');
         
@@ -2801,7 +2801,7 @@ PROMPT;
         $result = $this->openAiService->chatCompletion($messages);
         $totalTokens = (int) ($result['total_tokens'] ?? 0);
         if ($totalTokens > 0 && $user) {
-            $user->increment('ai_tokens_used', $totalTokens);
+            $user->consumeAiTokens($totalTokens);
         }
         return $result['content'] ?? '';
     }
@@ -2834,7 +2834,7 @@ PROMPT;
         $result = $this->openAiService->chatCompletion($messages);
         $totalTokens = (int) ($result['total_tokens'] ?? 0);
         if ($totalTokens > 0 && $user) {
-            $user->increment('ai_tokens_used', $totalTokens);
+            $user->consumeAiTokens($totalTokens);
         }
         return trim($result['content'] ?? '');
     }
@@ -2970,7 +2970,7 @@ PROMPT;
             $responseContent = $result['content'] ?? '';
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             
             // Parse JSON from response
@@ -3942,7 +3942,7 @@ PROMPT;
             $title = trim(is_array($result) ? ($result['content'] ?? '') : $result);
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             
             // Clean up any quotes or extra text
@@ -4283,7 +4283,7 @@ PROMPT;
             $responseContent = $result['content'] ?? '';
             $totalTokens = (int) ($result['total_tokens'] ?? 0);
             if ($totalTokens > 0) {
-                $user->increment('ai_tokens_used', $totalTokens);
+                $user->consumeAiTokens($totalTokens);
             }
             
             // Parse JSON from response

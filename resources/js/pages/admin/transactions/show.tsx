@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import type { ComponentType } from "react"
-import { Head, Link, router } from "@inertiajs/react"
+import { Head, Link, useForm, usePage } from "@inertiajs/react"
 import { motion } from "framer-motion"
 import AppLayout from "@/layouts/app-layout"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +11,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { ConfirmationModal } from "@/components/admin/confirmation-modal"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { UnifiedLedgerCard, type UnifiedLedgerRow } from "@/components/admin/unified-ledger-card"
 import { transactionTypeBadgeClass, transactionTypeDisplayLabel } from "@/lib/transaction-type-labels"
 import {
@@ -23,7 +33,6 @@ import {
   Info,
   Link2,
   ScrollText,
-  Trash2,
   User,
   XCircle,
   Ban,
@@ -33,6 +42,7 @@ import {
   Building2,
   Network,
   ChevronDown,
+  FilePenLine,
 } from "lucide-react"
 import type { BreadcrumbItem } from "@/types"
 import { cn } from "@/lib/utils"
@@ -186,10 +196,47 @@ interface TransactionDetail {
   /** BIU unified ledger row (workbook + client export shape) — admin only */
   unified_ledger?: UnifiedLedgerRow | null
   stripe: StripeSnapshot
+  is_ledger_adjustment?: boolean
+  can_create_adjustment?: boolean
+  ledger_adjustments?: LedgerAdjustmentSummary[]
+  adjustment_of?: {
+    id: number
+    transaction_id: string
+    type: string | null
+    status: string | null
+    amount: number | null
+    currency: string | null
+    created_at: string | null
+  } | null
+  ledger_adjustment_detail?: LedgerAdjustmentSummary | null
+}
+
+interface LedgerAdjustmentSummary {
+  id: number
+  transaction_id: string
+  adjustment_type: string
+  amount_adjusted: number
+  previous_value: number | null
+  new_value: number | null
+  reason: string
+  notes?: string | null
+  supporting_reference?: string | null
+  original_transaction_id: number
+  original_transaction_number: string
+  adjusted_by_admin_id: number | null
+  adjusted_by_admin_name: string
+  adjusted_by_admin_email: string
+  adjusted_at: string
+  currency: string
+  created_at?: string | null
 }
 
 interface Props {
   transaction: TransactionDetail
+}
+
+interface FlashProps {
+  flash?: { success?: string | null; error?: string | null }
 }
 
 function formatMoney(n: number, currency: string) {
@@ -274,6 +321,8 @@ function statusBadgeClass(status: string): string {
       return "border-muted-foreground/40 bg-muted/50 text-muted-foreground"
     case "withdrawal":
     case "refund":
+    case "adjusted":
+    case "reversed":
       return "border-sky-500/40 bg-sky-500/[0.1] text-sky-900 dark:text-sky-100"
     default:
       return "border-border/60 bg-muted/40 text-foreground"
@@ -381,8 +430,8 @@ function stripePanelOpen(s: TransactionDetail["stripe"]): boolean {
 }
 
 export default function TransactionShow({ transaction: t }: Props) {
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [adjustOpen, setAdjustOpen] = useState(false)
+  const { flash } = usePage().props as FlashProps
 
   const breadcrumbs: BreadcrumbItem[] = [
     { title: "Dashboard", href: "/dashboard" },
@@ -401,14 +450,58 @@ export default function TransactionShow({ transaction: t }: Props) {
   const ActorHeaderIcon = actorCtx ? ledgerActorContextIcon(actorCtx.kind) : User
   const donationStripeLedgerHint = stripeDonationLedgerExplanation(t.donation)
 
-  const handleDelete = () => {
-    setDeleting(true)
-    router.delete(route("admin.transactions.destroy", t.id), {
-      preserveScroll: false,
-      onFinish: () => {
-        setDeleting(false)
-        setDeleteOpen(false)
-      },
+  const adjustForm = useForm({
+    adjustment_type: "adjustment",
+    amount_adjusted: String((-Number(t.amount) || 0).toFixed(2)),
+    previous_value: String(Number(t.amount).toFixed(2)),
+    new_value: "0.00",
+    reason: "",
+    notes: "",
+    supporting_reference: "",
+    original_status: "adjusted",
+  })
+
+  const openAdjustmentDialog = () => {
+    adjustForm.setData({
+      adjustment_type: "adjustment",
+      amount_adjusted: String((-Number(t.amount) || 0).toFixed(2)),
+      previous_value: String(Number(t.amount).toFixed(2)),
+      new_value: "0.00",
+      reason: "",
+      notes: "",
+      supporting_reference: "",
+      original_status: "adjusted",
+    })
+    adjustForm.clearErrors()
+    setAdjustOpen(true)
+  }
+
+  const onAdjustmentTypeChange = (next: string) => {
+    if (next === "reversal") {
+      adjustForm.setData({
+        adjustment_type: next,
+        amount_adjusted: String((-Number(t.amount) || 0).toFixed(2)),
+        previous_value: String(Number(t.amount).toFixed(2)),
+        new_value: "0.00",
+        reason: adjustForm.data.reason,
+        notes: adjustForm.data.notes,
+        supporting_reference: adjustForm.data.supporting_reference,
+        original_status: "reversed",
+      })
+      return
+    }
+    adjustForm.setData({
+      ...adjustForm.data,
+      adjustment_type: next,
+      original_status: next === "correction" ? "adjusted" : adjustForm.data.original_status,
+    })
+  }
+
+  const submitAdjustment = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    adjustForm.post(route("admin.transactions.adjustments.store", t.id), {
+      preserveScroll: true,
+      onSuccess: () => setAdjustOpen(false),
     })
   }
 
@@ -498,16 +591,135 @@ export default function TransactionShow({ transaction: t }: Props) {
             <Button variant="outline" className="rounded-full border-border/55 bg-background/60 hover:bg-muted/40" asChild>
               <Link href={route("admin.transactions.ledger")}>Close</Link>
             </Button>
-            <Button
-              variant="destructive"
-              className="rounded-full gap-2"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete record
-            </Button>
+            {t.can_create_adjustment !== false && (
+              <Button
+                variant="default"
+                className="rounded-full gap-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-600/90 hover:to-blue-600/90"
+                onClick={openAdjustmentDialog}
+              >
+                <FilePenLine className="h-4 w-4" />
+                Create adjustment
+              </Button>
+            )}
           </div>
         </motion.div>
+
+        {(flash?.success || flash?.error) && (
+          <Alert
+            className={cn(
+              flash.error
+                ? "border-red-500/30 bg-red-500/[0.08]"
+                : "border-emerald-500/30 bg-emerald-500/[0.08]",
+            )}
+          >
+            <Info className="h-4 w-4" />
+            <AlertTitle>{flash.error ? "Could not save" : "Saved"}</AlertTitle>
+            <AlertDescription>{flash.error || flash.success}</AlertDescription>
+          </Alert>
+        )}
+
+        {t.adjustment_of && t.adjustment_of.id > 0 && (
+          <Card className="border-sky-500/25 bg-sky-500/[0.05]">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Link2 className="h-4 w-4 text-sky-700 dark:text-sky-300" />
+                Linked original transaction
+              </CardTitle>
+              <CardDescription>
+                This row is an Adjustment / Reversal / Correction. The original accounting record remains unchanged in the ledger.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-3 text-sm">
+              <Link
+                href={route("admin.transactions.show", t.adjustment_of.id)}
+                className="font-mono font-semibold text-primary hover:underline"
+              >
+                {t.adjustment_of.transaction_id || `#${t.adjustment_of.id}`}
+              </Link>
+              {t.ledger_adjustment_detail && (
+                <span className="text-muted-foreground">
+                  {t.ledger_adjustment_detail.adjustment_type} · by{" "}
+                  {t.ledger_adjustment_detail.adjusted_by_admin_name || "admin"} ·{" "}
+                  {t.ledger_adjustment_detail.adjusted_at
+                    ? new Date(t.ledger_adjustment_detail.adjusted_at).toLocaleString()
+                    : "—"}
+                </span>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {t.ledger_adjustments && t.ledger_adjustments.length > 0 && (
+          <Card className="border-border/70">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FilePenLine className="h-4 w-4 text-primary/80" />
+                Adjustment history
+              </CardTitle>
+              <CardDescription>
+                Linked corrections remain visible with the original transaction for a complete audit trail.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full min-w-[48rem] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border/60 text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-2 py-2 font-medium">Adjustment #</th>
+                    <th className="px-2 py-2 font-medium">Type</th>
+                    <th className="px-2 py-2 font-medium text-right">Amount</th>
+                    <th className="px-2 py-2 font-medium text-right">Previous</th>
+                    <th className="px-2 py-2 font-medium text-right">New</th>
+                    <th className="px-2 py-2 font-medium">Reason</th>
+                    <th className="px-2 py-2 font-medium">Admin</th>
+                    <th className="px-2 py-2 font-medium">When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {t.ledger_adjustments.map((row) => (
+                    <tr key={row.id} className="border-b border-border/40">
+                      <td className="px-2 py-2.5">
+                        <Link
+                          href={route("admin.transactions.show", row.id)}
+                          className="font-mono font-semibold text-primary hover:underline"
+                        >
+                          {row.transaction_id}
+                        </Link>
+                      </td>
+                      <td className="px-2 py-2.5 capitalize">{row.adjustment_type}</td>
+                      <td className="px-2 py-2.5 text-right tabular-nums">
+                        {formatMoney(row.amount_adjusted, row.currency || t.currency || "USD")}
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+                        {row.previous_value != null
+                          ? formatMoney(row.previous_value, row.currency || t.currency || "USD")
+                          : "—"}
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+                        {row.new_value != null
+                          ? formatMoney(row.new_value, row.currency || t.currency || "USD")
+                          : "—"}
+                      </td>
+                      <td className="max-w-[14rem] truncate px-2 py-2.5" title={row.reason}>
+                        {row.reason || "—"}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className="leading-tight">
+                          <p className="font-medium">{row.adjusted_by_admin_name || "—"}</p>
+                          {row.adjusted_by_admin_email && (
+                            <p className="text-xs text-muted-foreground">{row.adjusted_by_admin_email}</p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-2.5 text-muted-foreground">
+                        {row.adjusted_at ? new Date(row.adjusted_at).toLocaleString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        )}
 
         {t.unified_ledger && (
           <motion.div
@@ -1064,25 +1276,145 @@ export default function TransactionShow({ transaction: t }: Props) {
           </motion.div>
         )}
 
-        <Alert className="border-amber-500/30 bg-amber-500/[0.09] dark:border-amber-400/25 dark:bg-amber-500/[0.08]">
-          <Info className="h-4 w-4 text-amber-700/90 dark:text-amber-300/95" />
-          <AlertTitle className="text-amber-950/95 dark:text-amber-50/95">Before you delete</AlertTitle>
-          <AlertDescription className="text-amber-950/85 dark:text-amber-50/85">
-            Deleting removes this ledger row only. It does not automatically reverse money in Stripe or PayPal. Use refunds or
-            payout tools in those systems if you need to move funds back.
+        <Alert className="border-sky-500/30 bg-sky-500/[0.07] dark:border-sky-400/25 dark:bg-sky-500/[0.07]">
+          <Info className="h-4 w-4 text-sky-700/90 dark:text-sky-300/95" />
+          <AlertTitle className="text-sky-950/95 dark:text-sky-50/95">Permanent accounting records</AlertTitle>
+          <AlertDescription className="text-sky-950/85 dark:text-sky-50/85">
+            Ledger rows are never deleted. If a transaction was entered incorrectly or needs to be corrected, create an{" "}
+            <span className="font-medium text-foreground">Adjustment</span>,{" "}
+            <span className="font-medium text-foreground">Reversal</span>, or{" "}
+            <span className="font-medium text-foreground">Correction</span>. The original record stays visible and linked.
+            Gateway refunds (Stripe / PayPal) still require the usual payment tools when money must move.
           </AlertDescription>
         </Alert>
       </div>
 
-      <ConfirmationModal
-        isOpen={deleteOpen}
-        onChange={setDeleteOpen}
-        title="Delete this transaction?"
-        description={`This will permanently remove ${t.transaction_id} from the ledger. This action cannot be undone.`}
-        confirmLabel={deleting ? "Deleting…" : "Delete"}
-        onConfirm={handleDelete}
-        isLoading={deleting}
-      />
+      <Dialog open={adjustOpen} onOpenChange={setAdjustOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create ledger adjustment</DialogTitle>
+            <DialogDescription>
+              The original transaction <span className="font-mono font-medium text-foreground">{t.transaction_id}</span> stays
+              unchanged. A new linked record will be added to Transaction History.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitAdjustment} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="adjustment_type">Adjustment type</Label>
+              <select
+                id="adjustment_type"
+                value={adjustForm.data.adjustment_type}
+                onChange={(e) => onAdjustmentTypeChange(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-border/60 bg-background px-3 text-sm"
+              >
+                <option value="adjustment">Adjustment</option>
+                <option value="reversal">Reversal</option>
+                <option value="correction">Correction</option>
+              </select>
+              {adjustForm.errors.adjustment_type && (
+                <p className="text-xs text-destructive">{adjustForm.errors.adjustment_type}</p>
+              )}
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="previous_value">Previous value</Label>
+                <Input
+                  id="previous_value"
+                  type="number"
+                  step="0.01"
+                  value={adjustForm.data.previous_value}
+                  onChange={(e) => adjustForm.setData("previous_value", e.target.value)}
+                />
+                {adjustForm.errors.previous_value && (
+                  <p className="text-xs text-destructive">{adjustForm.errors.previous_value}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="new_value">New value</Label>
+                <Input
+                  id="new_value"
+                  type="number"
+                  step="0.01"
+                  value={adjustForm.data.new_value}
+                  onChange={(e) => adjustForm.setData("new_value", e.target.value)}
+                />
+                {adjustForm.errors.new_value && (
+                  <p className="text-xs text-destructive">{adjustForm.errors.new_value}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="amount_adjusted">Amount adjusted</Label>
+                <Input
+                  id="amount_adjusted"
+                  type="number"
+                  step="0.01"
+                  value={adjustForm.data.amount_adjusted}
+                  onChange={(e) => adjustForm.setData("amount_adjusted", e.target.value)}
+                />
+                {adjustForm.errors.amount_adjusted && (
+                  <p className="text-xs text-destructive">{adjustForm.errors.amount_adjusted}</p>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="reason">Reason for adjustment</Label>
+              <Textarea
+                id="reason"
+                rows={3}
+                value={adjustForm.data.reason}
+                onChange={(e) => adjustForm.setData("reason", e.target.value)}
+                placeholder="Why this correction is required…"
+                required
+              />
+              {adjustForm.errors.reason && (
+                <p className="text-xs text-destructive">{adjustForm.errors.reason}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                rows={2}
+                value={adjustForm.data.notes}
+                onChange={(e) => adjustForm.setData("notes", e.target.value)}
+                placeholder="Optional supporting notes"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="supporting_reference">Supporting reference</Label>
+              <Input
+                id="supporting_reference"
+                value={adjustForm.data.supporting_reference}
+                onChange={(e) => adjustForm.setData("supporting_reference", e.target.value)}
+                placeholder="Ticket #, email, Stripe refund id…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="original_status">Mark original status as</Label>
+              <select
+                id="original_status"
+                value={adjustForm.data.original_status}
+                onChange={(e) => adjustForm.setData("original_status", e.target.value)}
+                className="flex h-10 w-full rounded-md border border-border/60 bg-background px-3 text-sm"
+              >
+                <option value="adjusted">Adjusted</option>
+                <option value="reversed">Reversed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="refunded">Refunded</option>
+                <option value="unchanged">Leave status unchanged</option>
+              </select>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setAdjustOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={adjustForm.processing}>
+                {adjustForm.processing ? "Saving…" : "Save adjustment"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   )
 }

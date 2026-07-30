@@ -22,6 +22,7 @@ use App\Models\Raffle;
 use App\Models\ServiceOrder;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Admin\LedgerAdjustmentService;
 use App\Services\Admin\LedgerListFilters;
 use App\Services\Admin\UnifiedLedgerBpWalletBalanceAfterService;
 use App\Services\Admin\UnifiedLedgerFlatFileMapper;
@@ -210,6 +211,8 @@ class TransactionLedgerController extends Controller
                 'refund',
                 'deposit',
                 'rejected',
+                'adjusted',
+                'reversed',
             ],
         ]);
     }
@@ -536,12 +539,41 @@ class TransactionLedgerController extends Controller
 
     public function destroy(Transaction $transaction): RedirectResponse
     {
-        $ref = $transaction->transaction_id;
-        $transaction->delete();
+        return redirect()
+            ->route('admin.transactions.show', $transaction)
+            ->with('error', 'Ledger records cannot be deleted. Create an Adjustment or Reversal instead.');
+    }
+
+    public function storeAdjustment(Request $request, Transaction $transaction, LedgerAdjustmentService $adjustments): RedirectResponse
+    {
+        $validated = $request->validate([
+            'adjustment_type' => 'required|in:adjustment,reversal,correction',
+            'amount_adjusted' => 'required|numeric',
+            'previous_value' => 'required|numeric',
+            'new_value' => 'required|numeric',
+            'reason' => 'required|string|max:2000',
+            'notes' => 'nullable|string|max:5000',
+            'supporting_reference' => 'nullable|string|max:255',
+            'original_status' => 'nullable|in:unchanged,adjusted,reversed,cancelled,refunded',
+        ]);
+
+        $admin = $request->user();
+        if (! $admin instanceof \App\Models\User) {
+            abort(403);
+        }
+
+        $meta = is_array($transaction->meta) ? $transaction->meta : [];
+        if (($meta['source'] ?? null) === LedgerAdjustmentService::SOURCE) {
+            return redirect()
+                ->route('admin.transactions.show', $transaction)
+                ->with('error', 'Create adjustments against the original ledger row, not against another adjustment.');
+        }
+
+        $created = $adjustments->create($transaction, $admin, $validated);
 
         return redirect()
-            ->route('admin.transactions.ledger')
-            ->with('success', 'Transaction '.$ref.' was removed from the ledger.');
+            ->route('admin.transactions.show', $created)
+            ->with('success', 'Adjustment '.$created->transaction_id.' recorded. The original transaction remains in the ledger.');
     }
 
     /**
@@ -572,6 +604,19 @@ class TransactionLedgerController extends Controller
         );
         $balances = UnifiedLedgerBpWalletBalanceAfterService::forPage([$t]);
         $unified['bp_wallet_balance_after'] = $balances[$t->id] ?? null;
+
+        $adjustmentService = app(LedgerAdjustmentService::class);
+        $meta = is_array($t->meta) ? $t->meta : [];
+        $isAdjustmentRow = ($meta['source'] ?? null) === LedgerAdjustmentService::SOURCE
+            || ($t->type === 'adjustment' && ! empty($meta['original_transaction_id']));
+
+        $originalTransaction = null;
+        if ($isAdjustmentRow) {
+            $originalId = (int) ($meta['original_transaction_id'] ?? $t->related_id ?? 0);
+            if ($originalId > 0) {
+                $originalTransaction = Transaction::query()->find($originalId);
+            }
+        }
 
         return [
             'id' => $t->id,
@@ -606,6 +651,23 @@ class TransactionLedgerController extends Controller
             'ledger_actor_context' => $this->resolveLedgerActorContext($t, $donationLedger),
             'ledger_report' => $ledgerReportRow,
             'unified_ledger' => $unified,
+            'is_ledger_adjustment' => $isAdjustmentRow,
+            'can_create_adjustment' => ! $isAdjustmentRow,
+            'ledger_adjustments' => $isAdjustmentRow ? [] : $adjustmentService->adjustmentsFor($t),
+            'adjustment_of' => $isAdjustmentRow
+                ? ($adjustmentService->originalSummary($originalTransaction) ?? [
+                    'id' => (int) ($meta['original_transaction_id'] ?? 0),
+                    'transaction_id' => (string) ($meta['original_transaction_number'] ?? ''),
+                    'type' => null,
+                    'status' => null,
+                    'amount' => null,
+                    'currency' => $t->currency,
+                    'created_at' => null,
+                ])
+                : null,
+            'ledger_adjustment_detail' => $isAdjustmentRow
+                ? $adjustmentService->serializeAdjustmentRow($t)
+                : null,
         ];
     }
 
@@ -2664,6 +2726,9 @@ class TransactionLedgerController extends Controller
             'MerchantHubReferralReward' => 'Referral reward #'.$model->id,
             'Raffle' => ($model->title ?? null) ? (string) $model->title : 'Raffle #'.$model->id,
             'Donation' => $this->donationRelatedDisplayName($model),
+            'Transaction' => $model->transaction_id
+                ? 'Original '.$model->transaction_id
+                : 'Original transaction #'.$model->id,
             default => $basename.' #'.$model->id,
         };
     }
@@ -2771,6 +2836,10 @@ class TransactionLedgerController extends Controller
             BelievePointPurchase::class => [
                 'kind' => 'Believe Points purchase',
                 'purpose' => 'Stripe card or ACH purchase of Believe Points wallet balance; links to gross checkout, fees, and points credited.',
+            ],
+            Transaction::class => [
+                'kind' => 'Original ledger transaction',
+                'purpose' => 'This row is an Adjustment, Reversal, or Correction linked to a permanent original ledger record. Both rows remain in Transaction History.',
             ],
             default => [
                 'kind' => class_basename($class),

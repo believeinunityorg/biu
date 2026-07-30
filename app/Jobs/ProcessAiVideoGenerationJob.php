@@ -85,7 +85,8 @@ class ProcessAiVideoGenerationJob implements ShouldQueue
 
             $tokens = (int) ($package['total_tokens'] ?? 0);
             if ($tokens > 0) {
-                User::query()->whereKey($video->user_id)->increment('ai_tokens_used', $tokens);
+                $owner = User::query()->whereKey($video->user_id)->first();
+                $owner?->consumeAiTokens($tokens);
             }
 
             $falVideoPrompt = (string) ($package['fal_video_prompt'] ?? '');

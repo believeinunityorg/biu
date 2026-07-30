@@ -186,13 +186,14 @@ export function isYoutubeStreamSessionActive(input: {
   })
 }
 
-/** Unity Live listing is published (Go Unity Live), not merely YouTube relay using status=live. */
+/** Unity Live listing is published when status is live and Show on Unity Live is on. */
 export function isUnityLivePublished(input: {
   wantsUnityLive?: boolean
   livestreamStatus: string
+  /** @deprecated Ignored — YouTube relay no longer hides Unity Live published UI. */
   youtubeStreamActive?: boolean
 }): boolean {
-  if (!input.wantsUnityLive || input.youtubeStreamActive) {
+  if (!input.wantsUnityLive) {
     return false
   }
 
@@ -213,11 +214,13 @@ export function resolveUnityLiveDisplayStatus(input: {
   const ls = (input.livestreamStatus ?? "").trim().toLowerCase()
   const isPublic = Boolean(input.isPublic)
 
-  if (ls === "live" && !input.youtubeStreamActive) {
+  if (ls === "live") {
     if (isPublic) {
       return {
         label: "Live",
-        description: "Listed on Unity Live — viewers can watch from your share link.",
+        description: input.youtubeStreamActive
+          ? "Listed on Unity Live — YouTube relay is also active."
+          : "Listed on Unity Live — viewers can watch from your share link.",
         tone: "success",
       }
     }
@@ -226,14 +229,6 @@ export function resolveUnityLiveDisplayStatus(input: {
       label: "Live (private)",
       description: "Meeting is live for viewers with your private link (not on Unity Live directory).",
       tone: "success",
-    }
-  }
-
-  if (ls === "live" && input.youtubeStreamActive) {
-    return {
-      label: "Not live",
-      description: "Click Go Unity Live when you want this meeting on Unity Live.",
-      tone: "neutral",
     }
   }
 

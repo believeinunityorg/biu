@@ -32,7 +32,6 @@
                 Claim My Gift
             </a>
         </p>
-
         <div style="background:#fff;border:1px solid #e2e8f0;padding:16px;margin:20px 0;border-radius:8px;">
             <p style="margin:0 0 8px;font-size:14px;color:#64748b;">This gift has been reserved for:</p>
             <p style="margin:0 0 12px;font-size:16px;font-weight:bold;color:#1e293b;">{{ $invite->recipient_email }}</p>

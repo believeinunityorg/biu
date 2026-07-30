@@ -188,7 +188,11 @@ export default function ShowLivestream({
       {},
       {
         preserveScroll: true,
-        onFinish: () => setIsUpdatingStatus(false),
+        onFinish: () => {
+          setIsUpdatingStatus(false)
+          // Local stop finishes in the same request; clear "Stopping…" immediately.
+          setIsEndingStreamPending(false)
+        },
       }
     )
   }

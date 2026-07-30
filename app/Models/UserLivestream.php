@@ -390,9 +390,9 @@ class UserLivestream extends Model
             $recordParam = '';
         }
 
-        // Screen share must stay on the SAME MediaMTX WHIP path the Fargate worker pulls.
-        // Type 3 adds a second track (worker keeps camera/black). Type 2 opens a new stream
-        // (often push_ss) that YouTube never sees. Type 1 replaces the webcam track in-place.
+        // Type 1: screen replaces webcam on the same stream — one local recording,
+        // same MediaMTX WHIP path. Type 3 + autorecordlocal starts a second
+        // "Stop Screen Record" capture whenever screen share begins.
         $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&screensharetype=1&smallshare&screensharecontenthint=detail&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
 
         // Restore the MediaMTX push so the host's webcam reaches the bridge and the AWS worker can

@@ -523,11 +523,22 @@ class LivestreamController extends Controller
         $livestream = OrganizationLivestream::where('organization_id', $organization->id)
             ->findOrFail($id);
 
+        if (in_array($livestream->status, ['meeting_live', 'live', 'starting'], true)) {
+            return redirect()->back()->with('success', 'Meeting is already in progress.');
+        }
+
         if (! $livestream->canStartMeeting()) {
             return redirect()->back()->withErrors(['error' => 'Meeting cannot be started in current state.']);
         }
 
-        $livestream->update(['status' => 'meeting_live']);
+        $settings = is_array($livestream->settings) ? $livestream->settings : [];
+        $settings['meeting_session'] = (int) ($settings['meeting_session'] ?? 0) + 1;
+        unset($settings['stream_stop_requested'], $settings['host_abandoned_at']);
+
+        $livestream->update([
+            'status' => 'meeting_live',
+            'settings' => $settings !== [] ? $settings : null,
+        ]);
 
         $livestream->refresh();
         \App\Support\UnityLiveBroadcast::notifyMeetingStarted($livestream);
@@ -656,15 +667,7 @@ class LivestreamController extends Controller
         ]);
 
         $livestream->refresh();
-
-        try {
-            \App\Support\UnityLiveBroadcast::notifyLive($livestream);
-        } catch (\Throwable $e) {
-            Log::warning('Go Unity Live (org): status saved but broadcast failed', [
-                'livestream_id' => $livestream->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        \App\Support\UnityLiveBroadcast::notifyLive($livestream);
 
         $message = $livestream->is_public
             ? 'Stream is now live. It will appear on the Unity Live page.'
@@ -843,8 +846,8 @@ class LivestreamController extends Controller
         }
 
         $livestream->update(['status' => 'meeting_live']);
-
-        \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream->fresh(), 'streaming_queued');
+        $livestream->refresh();
+        \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream, 'streaming_queued');
 
         return redirect()->back()->with(
             'success',
@@ -853,9 +856,8 @@ class LivestreamController extends Controller
     }
 
     /**
-     * End stream: tell YouTube to complete the broadcast (and optional local OBS via frontend).
-     * Livestream status returns to draft when the AWS worker reports completed/stopped; a new YouTube
-     * broadcast is provisioned then so this meeting can go live again.
+     * End YouTube / cloud relay only. The Unity Meet room stays open (meeting_live).
+     * Use End Meeting to close the room. A new YouTube broadcast is provisioned after stop.
      */
     public function endStream(Request $request, $id, StreamingQueueService $streamingQueue)
     {
@@ -876,10 +878,8 @@ class LivestreamController extends Controller
             return redirect()->back()->withErrors(['error' => 'Stream is not active.']);
         }
 
-        // Mark stop intent BEFORE the YouTube calls. The AWS worker polls the
-        // callback endpoint every ~10s and shuts itself down once it sees this.
-        // Without it, "End Stream" never reached the worker (Laravel has no way
-        // to signal the task) so the relay ran until the browser tab closed.
+        // Mark stop intent BEFORE teardown. The AWS worker polls the callback
+        // endpoint every ~10s and shuts itself down once it sees this.
         $settings = $livestream->settings ?? [];
         $settings['stream_stop_requested'] = now()->toIso8601String();
         $livestream->update(['settings' => $settings]);
@@ -892,64 +892,45 @@ class LivestreamController extends Controller
 
         $youtubeService = app(YouTubeService::class);
         $accessToken = $youtubeService->getValidAccessToken($organization);
+        $oldBroadcastId = $livestream->youtube_broadcast_id;
 
-        // Stop the current broadcast on YouTube (OBS is stopped on frontend via stopOBSStream).
-        // Meeting status returns to draft when the AWS worker callback reports completed/stopped
-        // (or immediately in STREAMING_SIMULATE_WORKER mode). A fresh YouTube broadcast is created then.
-        if (! empty($livestream->youtube_broadcast_id) && $accessToken) {
-            try {
-                $endedOnYoutube = $youtubeService->updateBroadcastStatus(
-                    $accessToken,
-                    $livestream->youtube_broadcast_id,
-                    'complete'
-                );
-                if (! $endedOnYoutube) {
-                    return redirect()->back()->withErrors([
-                        'error' => 'YouTube did not confirm the broadcast ended. Try again or end it from YouTube Studio.',
-                    ]);
-                }
-            } catch (\Throwable $e) {
-                Log::warning('End stream: YouTube complete failed', ['livestream_id' => $id, 'error' => $e->getMessage()]);
+        // Stop the relay locally first (DB + ECS StopTask) so the UI unblocks quickly.
+        // YouTube "complete" is deferred after the response (Google API is slow).
+        $settledLocally = $streamingQueue->finalizeAfterHostEndStream('organization', $livestream->id);
 
-                return redirect()->back()->withErrors([
-                    'error' => 'Could not end the YouTube broadcast. Try again from YouTube Studio, or wait and refresh.',
-                ]);
-            }
-
-            $settledLocally = $streamingQueue->finalizeAfterHostEndStream('organization', $livestream->id);
-
-            // Reset locally too. The worker (if running) stops within ~10s via
-            // the stop_requested heartbeat and its 'stopped' callback re-confirms
-            // draft (idempotent). If the stream had already failed and no worker
-            // is running, this is the only thing that frees the user from a
-            // stuck meeting_live/live state.
-            $livestream->update([
-                'status' => 'draft',
-                'ended_at' => $livestream->ended_at ?? now(),
-            ]);
-
-            $livestream->refresh();
-            \App\Support\UnityLiveBroadcast::notifyStreamEnded($livestream);
-
-            return redirect()->back()->with(
-                'success',
-                $settledLocally
-                    ? 'YouTube live ended. The meeting is ready — you can go live again when you want.'
-                    : 'Ending stream — YouTube was told to stop and the relay is shutting down (usually within ~10s).'
-            );
-        }
-
-        $streamingQueue->finalizeAfterHostEndStream('organization', $livestream->id);
-
+        // Keep the Unity Meet room open — End YouTube Live must not End Meeting.
+        $settings = is_array($livestream->settings) ? $livestream->settings : [];
+        unset($settings['stream_stop_requested'], $settings['host_abandoned_at']);
         $livestream->update([
-            'status' => 'draft',
-            'ended_at' => $livestream->ended_at ?? now(),
+            'status' => 'meeting_live',
+            'settings' => $settings !== [] ? $settings : null,
         ]);
-
         $livestream->refresh();
         \App\Support\UnityLiveBroadcast::notifyStreamEnded($livestream);
 
-        return redirect()->back()->with('success', 'Stream stopped. You can go live again from the same link when ready.');
+        if (! empty($oldBroadcastId) && $accessToken) {
+            dispatch(function () use ($accessToken, $oldBroadcastId, $id): void {
+                try {
+                    app(YouTubeService::class)->updateBroadcastStatus(
+                        $accessToken,
+                        $oldBroadcastId,
+                        'complete'
+                    );
+                } catch (\Throwable $e) {
+                    Log::warning('End stream: deferred YouTube complete failed', [
+                        'livestream_id' => $id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            })->afterResponse();
+        }
+
+        return redirect()->back()->with(
+            'success',
+            $settledLocally
+                ? 'YouTube live ended. Your meeting is still open — you can go live again anytime.'
+                : 'Stream ended. Your meeting is still open — you can go live again when ready.'
+        );
     }
 
     /**

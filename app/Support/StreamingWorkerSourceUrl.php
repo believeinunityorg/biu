@@ -19,7 +19,7 @@ final class StreamingWorkerSourceUrl
 
         $rtmpBase = self::workerRtmpPullBase();
         if ($rtmpBase !== '') {
-            return rtrim($rtmpBase, '/').'/'.self::streamPath($livestream);
+            return rtrim($rtmpBase, '/').'/'.self::workerPullPath($livestream);
         }
 
         // Backward-compatible fallback (not FFmpeg readable).
@@ -36,6 +36,15 @@ final class StreamingWorkerSourceUrl
     public static function streamPath(UserLivestream|OrganizationLivestream $livestream): string
     {
         return 'ls_'.$livestream->id;
+    }
+
+    /**
+     * RTMP path the Fargate worker should pull. MediaMTX runOnReady remuxes
+     * WHIP (Opus/VP8|H264) to `{path}_aac` (H264+AAC) for YouTube-compatible ingest.
+     */
+    public static function workerPullPath(UserLivestream|OrganizationLivestream $livestream): string
+    {
+        return self::streamPath($livestream).'_aac';
     }
 
     public static function bridgeMediaMtxHost(): ?string
@@ -129,7 +138,7 @@ final class StreamingWorkerSourceUrl
             '{room}' => $room,
             '{room_slug}' => self::slug($room),
             '{livestream_id}' => (string) $livestream->id,
-            '{mediamtx_path}' => self::streamPath($livestream),
+            '{mediamtx_path}' => self::workerPullPath($livestream),
         ];
 
         if ($livestream instanceof UserLivestream) {

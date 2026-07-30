@@ -211,18 +211,25 @@ class StreamingLifecycleService
         unset($settings['stream_stop_requested']);
 
         if (in_array($latest->status, ['completed', 'stopped'], true)) {
-            $livestream->update([
-                'status' => 'draft',
-                'ended_at' => $livestream->ended_at ?? now(),
-                'settings' => $settings ?: null,
-            ]);
+            // Keep the meeting open after the YouTube/cloud relay ends.
+            // meeting_live already means "room open, not on air" — only clear flags.
+            if (in_array($livestream->status, ['live', 'starting'], true)) {
+                $livestream->update([
+                    'status' => 'meeting_live',
+                    'settings' => $settings ?: null,
+                ]);
 
-            Log::notice('Livestream reset after terminal job with no active worker', [
-                'livestream_kind' => $kind,
-                'livestream_id' => $livestream->id,
-                'streaming_job_id' => $latest->id,
-                'job_status' => $latest->status,
-            ]);
+                Log::notice('Livestream returned to meeting_live after terminal relay job', [
+                    'livestream_kind' => $kind,
+                    'livestream_id' => $livestream->id,
+                    'streaming_job_id' => $latest->id,
+                    'job_status' => $latest->status,
+                ]);
+            } else {
+                $livestream->update([
+                    'settings' => $settings ?: null,
+                ]);
+            }
 
             return;
         }

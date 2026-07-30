@@ -58,9 +58,9 @@ import {
   Send,
   Play,
   PhoneOff,
+  Settings2,
 } from "lucide-react"
 import { Link } from "@inertiajs/react"
-import { toast } from "react-hot-toast"
 import { useEmailCreditsState } from "@/hooks/use-email-credits-state"
 import BuyEmailCreditsDialog, { type EmailPackageOption } from "@/components/meeting/BuyEmailCreditsDialog"
 import EmailCreditsMeetingActions from "@/components/meeting/EmailCreditsMeetingActions"
@@ -196,7 +196,6 @@ export default function SupporterShowLivestream({
     livestream,
     recordingConsentDeclines,
     participantRoster,
-    patchLivestream,
   } = useUnityMeetHostRealtime({
     broadcastChannel,
     livestream: initialLivestream,
@@ -434,66 +433,12 @@ export default function SupporterShowLivestream({
   }
 
   const goUnityLive = () => {
-    if (!livestream.wantsUnityLive) {
-      toast.error('Turn on “Show on Unity Live” first.')
-      return
-    }
-    if (!livestream.canSetUnityLive) {
-      toast.error(`Cannot publish on Unity Live while status is “${livestream.status}”.`)
-      return
-    }
-    if (liveActionDisabled) {
+    if (!showUnityLiveButton || liveActionDisabled) {
       return
     }
     setIsUpdatingStatus(true)
-    // Optimistic UI — Inertia props / Reverb can lag; badge + buttons must flip immediately.
-    patchLivestream({
-      status: "live",
-      startedAt: new Date().toISOString(),
-      canSetUnityLive: false,
-      canStartMeeting: false,
-      canGoLive: Boolean(livestream.wantsYoutubeLive && livestream.canQueueYoutubeLive),
-      wantsUnityLive: true,
-      isPublic: true,
-    } as Partial<typeof livestream>)
     router.post(`/livestreams/supporter/${livestream.id}/set-live`, {}, {
       preserveScroll: true,
-      onSuccess: (page) => {
-        const err = (page.props as { errors?: { error?: string | string[] } }).errors?.error
-        if (err) {
-          toast.error(Array.isArray(err) ? err[0] : err)
-          return
-        }
-        const next = (page.props as { livestream?: typeof livestream }).livestream
-        if (next) {
-          patchLivestream({
-            status: next.status,
-            startedAt: next.startedAt,
-            canSetUnityLive: next.canSetUnityLive,
-            canStartMeeting: next.canStartMeeting,
-            canGoLive: next.canGoLive,
-            canQueueYoutubeLive: next.canQueueYoutubeLive,
-            wantsUnityLive: next.wantsUnityLive,
-            isPublic: next.isPublic,
-            streamingQueueStatus: next.streamingQueueStatus,
-            hasActiveStreamingJob: next.hasActiveStreamingJob,
-          } as Partial<typeof livestream>)
-        }
-        toast.success("You're live on Unity Live.")
-      },
-      onError: (errors) => {
-        patchLivestream({
-          status: "meeting_live",
-          canSetUnityLive: true,
-          canStartMeeting: false,
-        } as Partial<typeof livestream>)
-        const message = typeof errors.error === "string"
-          ? errors.error
-          : Array.isArray(errors.error)
-            ? errors.error[0]
-            : "Could not go live on Unity Live. Try again."
-        toast.error(message)
-      },
       onFinish: () => setIsUpdatingStatus(false),
     })
   }
@@ -530,49 +475,8 @@ export default function SupporterShowLivestream({
       return
     }
     setIsUpdatingStatus(true)
-    patchLivestream({
-      status: "meeting_live",
-      canSetUnityLive: true,
-      canGoLive: true,
-    } as Partial<typeof livestream>)
     router.post(route("livestreams.supporter.end-unity-live", livestream.id), {}, {
       preserveScroll: true,
-      onSuccess: (page) => {
-        const err = (page.props as { errors?: { error?: string | string[] } }).errors?.error
-        if (err) {
-          patchLivestream({
-            status: "live",
-            canSetUnityLive: false,
-          } as Partial<typeof livestream>)
-          toast.error(Array.isArray(err) ? err[0] : err)
-          return
-        }
-        const next = (page.props as { livestream?: typeof livestream }).livestream
-        if (next) {
-          patchLivestream({
-            status: next.status,
-            canSetUnityLive: next.canSetUnityLive,
-            canGoLive: next.canGoLive,
-            canQueueYoutubeLive: next.canQueueYoutubeLive,
-            startedAt: next.startedAt,
-            streamingQueueStatus: next.streamingQueueStatus,
-            hasActiveStreamingJob: next.hasActiveStreamingJob,
-          } as Partial<typeof livestream>)
-        }
-        toast.success("Removed from Unity Live. Meeting is still open.")
-      },
-      onError: (errors) => {
-        patchLivestream({
-          status: "live",
-          canSetUnityLive: false,
-        } as Partial<typeof livestream>)
-        const message = typeof errors.error === "string"
-          ? errors.error
-          : Array.isArray(errors.error)
-            ? errors.error[0]
-            : "Could not end Unity Live."
-        toast.error(message)
-      },
       onFinish: () => setIsUpdatingStatus(false),
     })
   }
@@ -601,7 +505,12 @@ export default function SupporterShowLivestream({
     setIsEndingStreamPending(true)
     router.post(`/livestreams/supporter/${livestream.id}/end-stream`, {}, {
       preserveScroll: true,
-      onFinish: () => setIsUpdatingStatus(false),
+      onFinish: () => {
+        setIsUpdatingStatus(false)
+        // Local stop finishes in the same request; clear "Ending…" immediately.
+        // Props may still catch up via the ending poll below.
+        setIsEndingStreamPending(false)
+      },
     })
   }
 
@@ -610,6 +519,7 @@ export default function SupporterShowLivestream({
       return
     }
     setIsStartingMeeting(true)
+    setVdoVideoActive(true)
     router.post(route("livestreams.supporter.start-meeting", livestream.id), {}, {
       preserveScroll: true,
       onFinish: () => setIsStartingMeeting(false),
@@ -1269,51 +1179,105 @@ export default function SupporterShowLivestream({
                     </SheetContent>
                   </Sheet>
                 ) : null}
+              </div>
+              <div className="flex items-center gap-0.5 sm:gap-1.5">
                 {showUnityLiveButton && (
                   <Button
-                    variant="default"
-                    size="icon"
-                    className="h-8 w-8 rounded-md bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 touch-manipulation"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-md bg-gradient-to-r from-purple-600 to-blue-600 p-0 text-white hover:from-purple-700 hover:to-blue-700 touch-manipulation md:w-auto md:min-w-[8.5rem] md:px-3"
                     onClick={goUnityLive}
                     disabled={liveActionDisabled}
                     aria-label="Go Unity Live"
+                    title="Go Unity Live"
                   >
-                    <Globe className="h-4 w-4" />
+                    <Globe className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">Go Unity Live</span>
                   </Button>
                 )}
                 {showYoutubeLiveButton && showYoutubeLiveButtonInTopBar && (
                   <Button
-                    variant="default"
-                    size="icon"
-                    className="h-8 w-8 rounded-md bg-red-600 hover:bg-red-700 touch-manipulation"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-md bg-red-600 p-0 hover:bg-red-700 touch-manipulation md:w-auto md:min-w-[9.5rem] md:px-3"
                     onClick={handleGoLiveClick}
                     disabled={liveActionDisabled}
                     aria-label="Go YouTube Live"
+                    title="Go YouTube Live"
                   >
-                    <Youtube className="h-4 w-4" />
+                    <Youtube className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">Go YouTube Live</span>
                   </Button>
                 )}
                 {showStreamOptionsButton ? (
-                  <Button variant="outline" size="sm" className="h-8 px-2.5 rounded-md md:hidden" onClick={() => setGoLiveOpen(true)}>
-                    Stream options
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-md p-0 touch-manipulation md:w-auto md:px-3"
+                    onClick={() => setGoLiveOpen(true)}
+                    aria-label="Stream options"
+                    title="Stream options"
+                  >
+                    <Settings2 className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">Stream options</span>
                   </Button>
                 ) : null}
+                {canStartMeeting && (
+                  <Button
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-md bg-gradient-to-r from-purple-600 to-blue-600 p-0 text-white hover:from-purple-700 hover:to-blue-700 touch-manipulation md:w-auto md:min-w-[8.5rem] md:px-3"
+                    onClick={handleStartMeeting}
+                    disabled={liveActionDisabled}
+                    aria-label={isStartingMeeting ? "Starting meeting" : "Start meeting"}
+                    title={isStartingMeeting ? "Starting…" : "Start meeting"}
+                  >
+                    <Play className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">{isStartingMeeting ? "Starting…" : "Start meeting"}</span>
+                  </Button>
+                )}
                 {showEndMeetingButton && (
                   <Button
                     variant="destructive"
                     size="sm"
-                    className="h-8 shrink-0 px-2.5 touch-manipulation md:hidden"
+                    className="h-8 w-8 shrink-0 rounded-md p-0 touch-manipulation md:w-auto md:px-3"
                     onClick={handleEndMeeting}
                     disabled={liveActionDisabled}
-                    aria-label="End meeting"
+                    aria-label={isEndingMeeting ? "Ending meeting" : "End meeting"}
+                    title={isEndingMeeting ? "Ending…" : "End meeting"}
                   >
-                    <PhoneOff className="h-4 w-4 shrink-0" />
-                    <span className="ml-1.5">{isEndingMeeting ? "Ending…" : "End"}</span>
+                    <PhoneOff className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">{isEndingMeeting ? "Ending…" : "End meeting"}</span>
+                  </Button>
+                )}
+                {showEndYoutubeLiveButton && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-md p-0 touch-manipulation md:w-auto md:px-3"
+                    onClick={handleEndStream}
+                    disabled={liveActionDisabled}
+                    aria-label={isEndingStreamPending ? "Ending YouTube Live" : "End YouTube Live"}
+                    title={isEndingStreamPending ? "Ending…" : "End YouTube Live"}
+                  >
+                    <Square className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">{isEndingStreamPending ? "Ending…" : "End YouTube Live"}</span>
+                  </Button>
+                )}
+                {showEndUnityLiveButton && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 rounded-md p-0 touch-manipulation md:w-auto md:px-3"
+                    onClick={handleEndUnityLive}
+                    disabled={liveActionDisabled}
+                    aria-label={isUpdatingStatus ? "Ending Unity Live" : "End Unity Live"}
+                    title={isUpdatingStatus ? "Ending…" : "End Unity Live"}
+                  >
+                    <Square className="h-4 w-4 shrink-0 md:mr-1.5" />
+                    <span className="hidden md:inline">{isUpdatingStatus ? "Ending…" : "End Unity Live"}</span>
                   </Button>
                 )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 touch-manipulation" aria-label="More actions">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 touch-manipulation md:hidden" aria-label="More actions">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -1332,9 +1296,16 @@ export default function SupporterShowLivestream({
                     )}
                     {showStreamOptionsButton ? (
                       <DropdownMenuItem onClick={() => setGoLiveOpen(true)}>
+                        <Settings2 className="h-4 w-4 mr-2" />
                         Stream options
                       </DropdownMenuItem>
                     ) : null}
+                    {canStartMeeting && (
+                      <DropdownMenuItem onClick={handleStartMeeting} disabled={liveActionDisabled}>
+                        <Play className="h-4 w-4 mr-2" />
+                        {isStartingMeeting ? "Starting…" : "Start meeting"}
+                      </DropdownMenuItem>
+                    )}
                     {showEndYoutubeLiveButton && (
                       <DropdownMenuItem variant="destructive" onClick={handleEndStream} disabled={liveActionDisabled}>
                         <Square className="h-4 w-4 mr-2" />
@@ -1349,64 +1320,6 @@ export default function SupporterShowLivestream({
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
-              <div className="hidden md:flex items-center gap-1.5">
-                {showUnityLiveButton && (
-                  <Button
-                    size="sm"
-                    className="h-8 min-w-[8.5rem] bg-gradient-to-r from-purple-600 to-blue-600 px-3 text-white hover:from-purple-700 hover:to-blue-700"
-                    onClick={goUnityLive}
-                    disabled={liveActionDisabled}
-                  >
-                    <Globe className="h-4 w-4 mr-1.5" />
-                    Go Unity Live
-                  </Button>
-                )}
-                {showYoutubeLiveButton && showYoutubeLiveButtonInTopBar && (
-                  <Button
-                    size="sm"
-                    className="h-8 min-w-[9.5rem] bg-red-600 px-3 hover:bg-red-700"
-                    onClick={handleGoLiveClick}
-                    disabled={liveActionDisabled}
-                  >
-                    <Youtube className="h-4 w-4 mr-1.5" />
-                    Go YouTube Live
-                  </Button>
-                )}
-                {showStreamOptionsButton ? (
-                  <Button variant="outline" size="sm" className="h-8 px-3" onClick={() => setGoLiveOpen(true)}>
-                    Stream options
-                  </Button>
-                ) : null}
-                {canStartMeeting && (
-                  <Button
-                    size="sm"
-                    className="h-8 min-w-[8.5rem] bg-gradient-to-r from-purple-600 to-blue-600 px-3 text-white hover:from-purple-700 hover:to-blue-700"
-                    onClick={handleStartMeeting}
-                    disabled={liveActionDisabled}
-                  >
-                    <Play className="h-4 w-4 mr-1.5" />
-                    {isStartingMeeting ? "Starting…" : "Start meeting"}
-                  </Button>
-                )}
-                {showEndMeetingButton && (
-                  <Button variant="destructive" size="sm" className="h-8 px-3" onClick={handleEndMeeting} disabled={liveActionDisabled}>
-                    <PhoneOff className="h-4 w-4 mr-1.5" />
-                    {isEndingMeeting ? "Ending…" : "End meeting"}
-                  </Button>
-                )}
-                {showEndYoutubeLiveButton && (
-                  <Button variant="destructive" size="sm" className="h-8 px-3" onClick={handleEndStream} disabled={liveActionDisabled}>
-                    <Square className="h-4 w-4 mr-1.5" />
-                    {isEndingStreamPending ? "Ending…" : "End YouTube Live"}
-                  </Button>
-                )}
-                {showEndUnityLiveButton && (
-                  <Button variant="destructive" size="sm" className="h-8 px-3" onClick={handleEndUnityLive} disabled={liveActionDisabled}>
-                    <Square className="h-4 w-4 mr-1.5" />
-                    {isUpdatingStatus ? "Ending…" : "End Unity Live"}
-                  </Button>
-                )}
               </div>
             </div>
           </div>
@@ -1579,9 +1492,6 @@ export default function SupporterShowLivestream({
               )}
               {queueStreamErrorText && (
                 <Alert variant="destructive"><AlertDescription>{queueStreamErrorText}</AlertDescription></Alert>
-              )}
-              {endStreamErrorText && (
-                <Alert variant="destructive"><AlertDescription>{endStreamErrorText}</AlertDescription></Alert>
               )}
               {showUnityLiveButton && (
                 <Button

@@ -223,17 +223,20 @@ class StreamingQueueService
             return;
         }
 
-        if ($status === 'starting' && in_array($livestream->status, ['draft', 'scheduled'], true)) {
+        if ($status === 'starting') {
             // Fresh stream beginning — drop any stale End Stream marker so this
             // run isn't killed by the previous run's flag.
-            $settings = $livestream->settings ?? [];
-            unset($settings['stream_stop_requested']);
+            if (in_array($livestream->status, ['draft', 'scheduled'], true)) {
+                $settings = $livestream->settings ?? [];
+                unset($settings['stream_stop_requested']);
 
-            $livestream->update([
-                'status' => 'meeting_live',
-                'settings' => $settings ?: null,
-            ]);
+                $livestream->update([
+                    'status' => 'meeting_live',
+                    'settings' => $settings ?: null,
+                ]);
+            }
 
+            $livestream->refresh();
             \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream, 'streaming_starting');
 
             return;
@@ -268,21 +271,48 @@ class StreamingQueueService
             $settings = $livestream->settings ?? [];
             unset($settings['stream_stop_requested']);
 
-            $livestream->update([
-                'status' => 'draft',
-                'ended_at' => now(),
-                'settings' => $settings ?: null,
-            ]);
+            // Relay ended → drop off "live" listing but keep the Unity Meet room open.
+            // Only End Meeting / host-tab abandon should return the row to draft.
+            $wasOnAir = in_array($livestream->status, ['live', 'starting'], true);
 
-            if ($livestream instanceof OrganizationLivestream) {
-                $this->rotateYoutubeBroadcastAfterStreamEnd($livestream, 'organization');
-            } elseif ($livestream instanceof UserLivestream) {
-                $this->rotateYoutubeBroadcastAfterStreamEnd($livestream, 'user');
+            if ($wasOnAir) {
+                $livestream->update([
+                    'status' => 'meeting_live',
+                    'settings' => $settings ?: null,
+                ]);
+            } else {
+                $livestream->update([
+                    'settings' => $settings ?: null,
+                ]);
             }
+
+            $livestreamKind = $job->livestream_kind;
+            $livestreamId = $livestream->id;
+            $isOrg = $livestream instanceof OrganizationLivestream;
+
+            // Always mint a fresh YouTube broadcast after a relay ends — even if the
+            // host already clicked Start Meeting. Skipping left a completed broadcast
+            // on the row so the next Go Live pushed RTMP but YouTube rejected "live".
+            dispatch(function () use ($livestreamKind, $livestreamId, $isOrg): void {
+                $row = $isOrg
+                    ? OrganizationLivestream::find($livestreamId)
+                    : UserLivestream::find($livestreamId);
+                if (! $row) {
+                    return;
+                }
+                app(StreamingQueueService::class)->rotateYoutubeBroadcastAfterStreamEnd(
+                    $row,
+                    $livestreamKind
+                );
+            })->afterResponse();
 
             $livestream->refresh();
             $livestream->loadMissing($livestream instanceof OrganizationLivestream ? 'organization' : 'user');
-            \App\Support\UnityLiveBroadcast::notifyStreamEnded($livestream);
+            if ($wasOnAir) {
+                \App\Support\UnityLiveBroadcast::notifyStreamEnded($livestream);
+            } else {
+                \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream, 'streaming_'.$status);
+            }
 
             return;
         }
@@ -373,7 +403,7 @@ class StreamingQueueService
      *
      * @param  OrganizationLivestream|UserLivestream  $livestream
      */
-    private function rotateYoutubeBroadcastAfterStreamEnd(
+    public function rotateYoutubeBroadcastAfterStreamEnd(
         OrganizationLivestream|UserLivestream $livestream,
         string $livestreamKind,
     ): void {
@@ -516,9 +546,14 @@ class StreamingQueueService
         return $reason;
     }
 
-    public function queueStatusForUi(?StreamingJob $job, OrganizationLivestream|UserLivestream $livestream): array
-    {
-        app(StreamingLifecycleService::class)->reconcileForLivestream($livestream);
+    public function queueStatusForUi(
+        ?StreamingJob $job,
+        OrganizationLivestream|UserLivestream $livestream,
+        bool $reconcile = true,
+    ): array {
+        if ($reconcile) {
+            app(StreamingLifecycleService::class)->reconcileForLivestream($livestream);
+        }
 
         $job = StreamingJob::query()
             ->where('livestream_kind', $livestream instanceof OrganizationLivestream ? 'organization' : 'user')

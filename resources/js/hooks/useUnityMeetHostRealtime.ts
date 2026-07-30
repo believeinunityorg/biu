@@ -20,7 +20,6 @@ type LivestreamRealtimeSlice = {
   id?: number
   status?: string
   isPublic?: boolean
-  wantsUnityLive?: boolean
   startedAt?: string | null
   endedAt?: string | null
   meetingSessionKey?: number
@@ -39,12 +38,21 @@ export type UnityMeetHostDashboardPayload = {
   participantRoster?: UnityMeetParticipant[]
 }
 
+type ViewerStatusPayload = {
+  status?: string
+  isPublic?: boolean
+  reason?: string
+  meetingSessionKey?: number
+}
+
 type Options<TLivestream extends LivestreamRealtimeSlice> = {
   broadcastChannel: string | null | undefined
   livestream: TLivestream
   recordingConsentDeclines: RecordingConsentDeclineRow[]
   participantRoster?: UnityMeetParticipant[]
 }
+
+const ACTIVE_STATUSES = new Set(["meeting_live", "live", "starting"])
 
 function rosterSignature(roster: UnityMeetParticipant[]): string {
   return roster
@@ -53,22 +61,8 @@ function rosterSignature(roster: UnityMeetParticipant[]): string {
     .join("|")
 }
 
-function livestreamSyncKey(livestream: LivestreamRealtimeSlice): string {
-  return [
-    livestream.id ?? "",
-    livestream.status ?? "",
-    livestream.isPublic ? "1" : "0",
-    livestream.startedAt ?? "",
-    livestream.endedAt ?? "",
-    livestream.meetingSessionKey ?? "",
-    livestream.canStartMeeting ? "1" : "0",
-    livestream.canSetUnityLive ? "1" : "0",
-    livestream.canQueueYoutubeLive ? "1" : "0",
-    livestream.canGoLive ? "1" : "0",
-    livestream.hasActiveStreamingJob ? "1" : "0",
-    livestream.streamingQueueStatus?.status ?? "",
-    livestream.streamingQueueStatus?.updatedAt ?? "",
-  ].join("|")
+function sessionKeyOf(slice: { meetingSessionKey?: number } | null | undefined): number {
+  return typeof slice?.meetingSessionKey === "number" ? slice.meetingSessionKey : 0
 }
 
 /**
@@ -85,14 +79,12 @@ export function useUnityMeetHostRealtime<TLivestream extends LivestreamRealtimeS
   const [liveRoster, setLiveRoster] = useState(participantRoster)
   const rosterSigRef = useRef(rosterSignature(participantRoster))
   const livestreamIdRef = useRef(livestream.id)
-  const syncKeyRef = useRef(livestreamSyncKey(livestream))
+  /** Highest meeting session seen from Inertia props or accepted Echo events. */
+  const sessionKeyRef = useRef(sessionKeyOf(livestream))
 
   useEffect(() => {
-    const nextKey = livestreamSyncKey(livestream)
-    if (nextKey === syncKeyRef.current) {
-      return
-    }
-    syncKeyRef.current = nextKey
+    const key = sessionKeyOf(livestream)
+    sessionKeyRef.current = Math.max(sessionKeyRef.current, key)
     setLiveLivestream(livestream)
   }, [livestream])
 
@@ -103,6 +95,7 @@ export function useUnityMeetHostRealtime<TLivestream extends LivestreamRealtimeS
   useEffect(() => {
     if (livestream.id !== livestreamIdRef.current) {
       livestreamIdRef.current = livestream.id
+      sessionKeyRef.current = sessionKeyOf(livestream)
       rosterSigRef.current = rosterSignature(participantRoster)
       setLiveRoster(participantRoster)
     }
@@ -117,21 +110,20 @@ export function useUnityMeetHostRealtime<TLivestream extends LivestreamRealtimeS
     setLiveRoster(roster)
   }, [])
 
-  const patchLivestream = useCallback((patch: Partial<TLivestream>) => {
-    setLiveLivestream((prev) => {
-      const next = { ...prev, ...patch }
-      syncKeyRef.current = livestreamSyncKey(next)
-      return next
-    })
-  }, [])
-
   const applyDashboard = useCallback(
     (payload: UnityMeetHostDashboardPayload) => {
       if (payload.livestream) {
         setLiveLivestream((prev) => {
-          const next = { ...prev, ...payload.livestream }
-          syncKeyRef.current = livestreamSyncKey(next)
-          return next
+          const next = payload.livestream!
+          const nextSession = sessionKeyOf(next)
+
+          // Late abandon/worker echo from an older meeting session.
+          if (nextSession < sessionKeyRef.current) {
+            return prev
+          }
+
+          sessionKeyRef.current = Math.max(sessionKeyRef.current, nextSession)
+          return { ...prev, ...next }
         })
       }
       if (payload.recordingConsentDeclines) {
@@ -144,23 +136,50 @@ export function useUnityMeetHostRealtime<TLivestream extends LivestreamRealtimeS
     [applyRoster],
   )
 
-  const applyViewerStatus = useCallback((payload: { status?: string; isPublic?: boolean; reason?: string }) => {
+  const applyViewerStatus = useCallback((payload: ViewerStatusPayload) => {
     setLiveLivestream((prev) => {
-      const status = payload.status ?? prev.status
-      const isPublic = payload.isPublic ?? prev.isPublic
-      const published = status === "live"
-      const next = {
+      const nextSession =
+        typeof payload.meetingSessionKey === "number"
+          ? payload.meetingSessionKey
+          : sessionKeyOf(prev)
+
+      // Stale stream_ended after Start Meeting bumped the session via Inertia.
+      if (nextSession < sessionKeyRef.current) {
+        return prev
+      }
+
+      // Echo without session key: don't downgrade an active meeting on end reasons
+      // when Inertia already advanced the session beyond what we had at mount.
+      if (
+        typeof payload.meetingSessionKey !== "number" &&
+        ACTIVE_STATUSES.has(prev.status ?? "") &&
+        payload.status &&
+        !ACTIVE_STATUSES.has(payload.status) &&
+        (payload.reason === "stream_ended" ||
+          payload.reason === "meeting_ended" ||
+          payload.reason === "unity_live_ended") &&
+        sessionKeyOf(prev) < sessionKeyRef.current
+      ) {
+        return prev
+      }
+
+      if (typeof payload.meetingSessionKey === "number") {
+        sessionKeyRef.current = Math.max(sessionKeyRef.current, payload.meetingSessionKey)
+      }
+
+      return {
         ...prev,
         ...(payload.status !== undefined ? { status: payload.status } : {}),
         ...(payload.isPublic !== undefined ? { isPublic: payload.isPublic } : {}),
-        ...(payload.isPublic !== undefined ? { wantsUnityLive: Boolean(payload.isPublic) } : {}),
-        canSetUnityLive: published ? false : prev.canSetUnityLive,
-        canStartMeeting: ["meeting_live", "live", "starting"].includes(String(status))
-          ? false
-          : prev.canStartMeeting,
+        ...(typeof payload.meetingSessionKey === "number"
+          ? { meetingSessionKey: payload.meetingSessionKey }
+          : {}),
+        ...(payload.status === "draft" || payload.status === "scheduled"
+          ? { canStartMeeting: true }
+          : payload.status && ACTIVE_STATUSES.has(payload.status)
+            ? { canStartMeeting: false }
+            : {}),
       }
-      syncKeyRef.current = livestreamSyncKey(next)
-      return next
     })
   }, [])
 
@@ -174,7 +193,7 @@ export function useUnityMeetHostRealtime<TLivestream extends LivestreamRealtimeS
     "public",
   )
 
-  useEcho<{ status?: string; isPublic?: boolean; reason?: string }>(
+  useEcho<ViewerStatusPayload>(
     channel,
     ".viewer.status",
     applyViewerStatus,
@@ -186,6 +205,5 @@ export function useUnityMeetHostRealtime<TLivestream extends LivestreamRealtimeS
     livestream: liveLivestream,
     recordingConsentDeclines: liveDeclines,
     participantRoster: liveRoster,
-    patchLivestream,
   }
 }

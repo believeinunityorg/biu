@@ -55,17 +55,19 @@ export function applyVdoMinimalHostUi(url: URL): void {
 }
 
 /**
- * Keep screen share on the same MediaMTX/WHIP path the AWS worker pulls for YouTube.
+ * Host screen share: replace webcam on the same stream (type 1).
  *
- * VDO defaults to screensharetype=3 (second video track) or type=2 (new stream id / _ss path).
- * The Fargate worker only remuxes the host `push` path → YouTube goes blank when the camera
- * is stopped and screen is shared. Type 1 replaces the webcam track in-place on the same push.
+ * Type 3 adds a second track and, with &autorecordlocal, VDO auto-starts a
+ * separate "Stop Screen Record" capture of the screen. Type 1 keeps screen on
+ * the same MediaStream / same local recording / same MediaMTX WHIP path.
+ *
+ * Note: mute-video disables that shared track — while screen sharing, do not
+ * use stop-camera/mute to “hide” the webcam (it is already replaced).
  */
 export function applyVdoHostScreenShareForYoutube(url: URL): void {
   if (!url.searchParams.has("push")) {
     return
   }
-  // Replace webcam with screen on the same connection / same WHIP publish id.
   url.searchParams.set("screensharetype", "1")
   url.searchParams.delete("screenshareid")
   url.searchParams.set("smallshare", "")

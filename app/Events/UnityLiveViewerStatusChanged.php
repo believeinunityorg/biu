@@ -10,8 +10,6 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Immediate Reverb broadcast so Unity Live viewers see end/go-live without queue delay.
- * broadcastAfterCommit is off so Reverb failures stay inside UnityLiveBroadcast try/catch
- * and cannot 500 the host "Go Unity Live" request after status is already saved.
  */
 class UnityLiveViewerStatusChanged implements ShouldBroadcastNow
 {
@@ -29,7 +27,7 @@ class UnityLiveViewerStatusChanged implements ShouldBroadcastNow
     /**
      * Broadcast after the DB transaction commits when the host action runs in a transaction.
      */
-    public bool $broadcastAfterCommit = false;
+    public bool $broadcastAfterCommit = true;
 
     /**
      * @return array<int, Channel>

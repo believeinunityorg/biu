@@ -93,30 +93,6 @@ class StreamingEcsTaskMonitor
         return false;
     }
 
-    /**
-     * True when DescribeTasks reports the Fargate task still RUNNING.
-     * Null when ECS cannot be queried / ARN missing / monitor disabled.
-     */
-    public function taskIsRunning(StreamingJob $job): ?bool
-    {
-        $taskArn = trim((string) ($job->ecs_task_arn ?? ''));
-        if ($taskArn === '' || ! $this->isEnabled()) {
-            return null;
-        }
-
-        $task = $this->describeTask($taskArn);
-        if ($task === false) {
-            return null;
-        }
-        if ($task === null) {
-            return false;
-        }
-
-        $lastStatus = strtoupper((string) ($task['lastStatus'] ?? ''));
-
-        return $lastStatus === 'RUNNING';
-    }
-
     public function stopTask(?string $taskArn, string $reason = 'Stopped by Believe In Unity'): bool
     {
         $taskArn = trim((string) $taskArn);

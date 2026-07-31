@@ -63,12 +63,11 @@ class StreamingLifecycleServiceTest extends TestCase
         $this->assertStringContainsString('startup timed out', (string) $job->failure_reason);
     }
 
-    public function test_force_terminate_marks_job_stopped_and_keeps_meeting_open(): void
+    public function test_force_terminate_marks_job_stopped_and_livestream_draft(): void
     {
         [$livestream, $job] = $this->makeLivestreamWithJob('live', [
             'live_at' => now()->subMinutes(10),
         ]);
-        $livestream->update(['status' => 'live']);
 
         $ok = $this->lifecycle->forceTerminateActiveJob(
             'organization',
@@ -80,8 +79,7 @@ class StreamingLifecycleServiceTest extends TestCase
         $job->refresh();
         $this->assertSame('stopped', $job->status);
         $livestream->refresh();
-        $this->assertSame('meeting_live', $livestream->status);
-        $this->assertNull($livestream->ended_at);
+        $this->assertSame('draft', $livestream->status);
     }
 
     public function test_stop_requested_grace_stops_job_without_worker_callback(): void

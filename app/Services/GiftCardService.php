@@ -44,20 +44,72 @@ class GiftCardService
      * Stable JSON encoding for Phaze request bodies.
      * Signature and POST body MUST use this exact same string.
      *
+     * Floats are injected as clean decimal literals (e.g. 9.9, 0.49). PHP's
+     * json_encode of binary floats (9.90000000000000035…) breaks Phaze signatures.
+     *
      * @param  array<string, mixed>  $body
      */
     private function encodeJsonBody(array $body): string
     {
+        $numberLiterals = [];
+        $sanitized = $this->replaceFloatsWithJsonNumberTokens($body, $numberLiterals);
+
         $encoded = json_encode(
-            $body,
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION
+            $sanitized,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
         );
 
         if ($encoded === false) {
             throw new \RuntimeException('Failed to JSON-encode Phaze request body.');
         }
 
+        if ($numberLiterals !== []) {
+            $encoded = strtr($encoded, $numberLiterals);
+        }
+
         return $encoded;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<string, string>  $numberLiterals  map of JSON-encoded token string => numeric literal
+     * @return array<string, mixed>
+     */
+    private function replaceFloatsWithJsonNumberTokens(array $data, array &$numberLiterals): array
+    {
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $data[$key] = $this->replaceFloatsWithJsonNumberTokens($value, $numberLiterals);
+
+                continue;
+            }
+
+            if (! is_float($value)) {
+                continue;
+            }
+
+            $token = '__PHAZE_NUM_'.count($numberLiterals).'__';
+            $numberLiterals['"'.$token.'"'] = $this->formatPhazeJsonNumber($value);
+            $data[$key] = $token;
+        }
+
+        return $data;
+    }
+
+    /**
+     * JSON number literal with at most 2 decimal places (no binary float noise).
+     */
+    private function formatPhazeJsonNumber(int|float|string $amount): string
+    {
+        $rounded = round((float) $amount, 2);
+
+        if (abs($rounded - (int) round($rounded)) < 0.001) {
+            return (string) (int) round($rounded);
+        }
+
+        $formatted = number_format($rounded, 2, '.', '');
+
+        return rtrim(rtrim($formatted, '0'), '.') ?: '0';
     }
 
     /**
@@ -72,6 +124,7 @@ class GiftCardService
             return (int) round($rounded);
         }
 
+        // Still a float in PHP — encodeJsonBody formats the JSON literal cleanly.
         return $rounded;
     }
 

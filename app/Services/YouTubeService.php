@@ -1532,25 +1532,13 @@ class YouTubeService
             $url = $this->baseUrl . '/liveBroadcasts/transition?' . $query;
 
             $response = $this->http()
-                ->timeout(8)
                 ->withHeaders(['Authorization' => 'Bearer ' . $accessToken])
                 ->post($url);
 
             if (! $response->successful()) {
-                $body = $response->body();
-                // Already live (or already complete) — treat as success so callers don't keep retrying.
-                if ($response->status() === 403 && str_contains($body, 'redundantTransition')) {
-                    Log::info('YouTube transition redundant (already in target state)', [
-                        'broadcast_id' => $broadcastId,
-                        'broadcastStatus' => $broadcastStatus,
-                    ]);
-
-                    return true;
-                }
-
                 Log::warning('YouTube transition failed', [
                     'status' => $response->status(),
-                    'body' => $body,
+                    'body' => $response->body(),
                 ]);
             }
 

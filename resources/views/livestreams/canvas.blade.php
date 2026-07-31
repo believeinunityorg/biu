@@ -19,14 +19,14 @@
 /*
  * Unity Meet participant canvas mixer — MVP (approved scope, 2026-05-17).
  *
- * Fixed up to 6 seats. Each meeting seat publishes its camera to MediaMTX at
+ * Fixed 3x2 grid. Each meeting seat publishes its camera to MediaMTX at
  * <streamPath>_s<n> (Laravel sets &mediamtx=&push= on the participant URLs).
  * This page subscribes to all 6 seats via MediaMTX-native WHEP (same-origin
- * to the bridge — no cross-origin VDO.Ninja iframe involved), draws only live
- * seats into one canvas (full-bleed when alone; no empty "seat N" placeholders),
- * mixes their audio, and WHIP-publishes the single combined stream back to
- * MediaMTX at <streamPath> — the path the bridge -> FFmpeg worker -> YouTube
- * pipeline already pulls.
+ * to the bridge — no cross-origin VDO.Ninja iframe involved), draws them into
+ * one canvas, mixes their audio, and WHIP-publishes the single combined
+ * stream back to MediaMTX at <streamPath> — the exact path the existing
+ * bridge -> FFmpeg worker -> YouTube pipeline already pulls. No downstream
+ * changes. No active-speaker / overlays / branding (MVP scope limits).
  */
 const CFG = @json($cfg);
 // CFG = { whepBase, whipUrl, seatPaths:[6], width, height, fps }
@@ -37,8 +37,12 @@ cv.width = CFG.width; cv.height = CFG.height;
 const hud = document.getElementById('hud');
 function say(msg, cls){ hud.innerHTML = '<span class="'+(cls||'')+'">'+msg+'</span>'; }
 
-// Dynamic layout among live seats only (see layoutForCount / liveCellRect).
-const GAP = 6;
+// 3 columns x 2 rows
+const COLS = 3, ROWS = 2, GAP = 6;
+const cellW = (CFG.width  - GAP*(COLS+1)) / COLS;
+const cellH = (CFG.height - GAP*(ROWS+1)) / ROWS;
+function cellRect(i){ const r=Math.floor(i/COLS), c=i%COLS;
+  return { x: GAP + c*(cellW+GAP), y: GAP + r*(cellH+GAP), w: cellW, h: cellH }; }
 
 // One <video> per seat, fed by a WHEP subscription to MediaMTX.
 const seats = CFG.seatPaths.map((path, i) => {
@@ -102,7 +106,7 @@ function addSeatAudio(seat){
   } catch(e){}
 }
 
-// ---- Draw loop: only live seats; full-bleed when alone (no empty "seat N" tiles) ----
+// ---- Draw loop: 3x2 grid, cover-fit each seat, placeholder if empty ----
 function drawCover(v, r){
   const vw=v.videoWidth, vh=v.videoHeight; if(!vw||!vh) return false;
   const s=Math.max(r.w/vw, r.h/vh), dw=vw*s, dh=vh*s;
@@ -110,43 +114,19 @@ function drawCover(v, r){
   ctx.drawImage(v, r.x+(r.w-dw)/2, r.y+(r.h-dh)/2, dw, dh); ctx.restore();
   return true;
 }
-
-/** Grid geometry for N live tiles — fills the canvas; empty seats are omitted. */
-function layoutForCount(n){
-  if (n <= 0) return { cols: 1, rows: 1 };
-  if (n === 1) return { cols: 1, rows: 1 };
-  if (n === 2) return { cols: 2, rows: 1 };
-  if (n <= 4) return { cols: 2, rows: 2 };
-  return { cols: 3, rows: 2 };
-}
-
-function liveCellRect(index, count){
-  const { cols, rows } = layoutForCount(count);
-  const gap = count === 1 ? 0 : GAP;
-  const cellW = (CFG.width  - gap*(cols+1)) / cols;
-  const cellH = (CFG.height - gap*(rows+1)) / rows;
-  const r = Math.floor(index / cols);
-  const c = index % cols;
-  return {
-    x: gap + c * (cellW + gap),
-    y: gap + r * (cellH + gap),
-    w: cellW,
-    h: cellH,
-  };
-}
-
 let liveCount = 0;
 function frame(){
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, cv.width, cv.height);
-
-  const live = seats.filter((s) => s.live && s.video.readyState >= 2);
-  liveCount = 0;
-  for (let i = 0; i < live.length; i++) {
-    if (drawCover(live[i].video, liveCellRect(i, live.length))) {
-      liveCount++;
-    }
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+  let n=0;
+  for (const seat of seats){
+    const r = cellRect(seat.i);
+    const drawn = (seat.live && seat.video.readyState>=2) ? drawCover(seat.video, r) : false;
+    if (drawn) n++;
+    else { ctx.fillStyle='#0c0c0c'; ctx.fillRect(r.x,r.y,r.w,r.h);
+           ctx.fillStyle='#333'; ctx.font='14px system-ui'; ctx.textAlign='center';
+           ctx.fillText('seat '+(seat.i+1), r.x+r.w/2, r.y+r.h/2); }
   }
+  liveCount=n;
 }
 // setInterval — NOT requestAnimationFrame. The mixer runs in a hidden 1x1
 // off-screen iframe; Chrome throttles rAF to ~1 Hz (or 0) for hidden iframes,

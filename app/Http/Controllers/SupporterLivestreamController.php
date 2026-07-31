@@ -632,8 +632,6 @@ class SupporterLivestreamController extends Controller
                 'status' => $livestream->status,
                 'scheduledAt' => $livestream->scheduled_at?->toIso8601String(),
                 'participantEmails' => LivestreamParticipantEmails::fromSettings($settings),
-                'canStartMeeting' => $livestream->canStartMeeting(),
-                'isMeetingActive' => in_array($livestream->status, ['meeting_live', 'live', 'starting'], true),
             ],
             'emailCredits' => UserEmailCredits::stats($request->user()),
             ...$this->emailPurchaseProps(),
@@ -781,20 +779,12 @@ class SupporterLivestreamController extends Controller
     {
         $livestream = UserLivestream::where('user_id', $request->user()->id)->findOrFail($id);
 
-        // Already in a meeting (e.g. Refresh left status meeting_live, or Ready page
-        // clicked again) — open the host room instead of failing.
-        if (in_array($livestream->status, ['meeting_live', 'live', 'starting'], true)) {
-            return redirect()->route('livestreams.supporter.show', $id)
-                ->with('success', 'Meeting is already in progress.');
-        }
-
         if (! $livestream->canStartMeeting()) {
             return redirect()->back()->withErrors(['error' => 'Meeting cannot be started in current state.']);
         }
 
         $settings = is_array($livestream->settings) ? $livestream->settings : [];
         $settings['meeting_session'] = (int) ($settings['meeting_session'] ?? 0) + 1;
-        unset($settings['stream_stop_requested'], $settings['host_abandoned_at']);
 
         $livestream->update([
             'status' => 'meeting_live',
@@ -1133,11 +1123,12 @@ class SupporterLivestreamController extends Controller
             return redirect()->back()->withErrors(['error' => 'Stream is not active.']);
         }
 
-        // Mark stop intent BEFORE teardown. The AWS worker polls the callback
-        // endpoint every ~10s and shuts itself down once it sees this.
+        // Mark stop intent BEFORE the YouTube calls. The AWS worker polls the
+        // callback endpoint every ~10s and shuts itself down once it sees this.
+        // Without it, "End Stream" never reached the worker (Laravel has no way
+        // to signal the task) so the relay ran until the browser tab closed.
         $settings = $livestream->settings ?? [];
         $settings['stream_stop_requested'] = now()->toIso8601String();
-        unset($settings['host_abandoned_at']);
         $livestream->update(['settings' => $settings]);
         $livestream->refresh();
         \App\Support\UnityLiveBroadcast::notify(
@@ -1146,44 +1137,68 @@ class SupporterLivestreamController extends Controller
             'The host has ended the stream. Playback may stop in a few seconds.',
         );
 
-        // Stop the relay locally first (DB + ECS StopTask) so the UI unblocks quickly.
-        // YouTube "complete" is slow and is deferred after the response.
-        $oldBroadcastId = $livestream->youtube_broadcast_id;
         $accessToken = $this->resolveYouTubeAccessToken($request, $youtubeService);
-        $settledLocally = $streamingQueue->finalizeAfterHostEndStream('user', $livestream->id);
 
-        // Keep the Unity Meet room open — End YouTube Live must not End Meeting.
-        $settings = is_array($livestream->settings) ? $livestream->settings : [];
-        unset($settings['stream_stop_requested'], $settings['host_abandoned_at']);
+        if (! empty($livestream->youtube_broadcast_id) && $accessToken) {
+            try {
+                $endedOnYoutube = $youtubeService->updateBroadcastStatus(
+                    $accessToken,
+                    $livestream->youtube_broadcast_id,
+                    'complete'
+                );
+                if (! $endedOnYoutube) {
+                    return redirect()->back()->withErrors([
+                        'error' => 'YouTube did not confirm the broadcast ended. Try again or end it from YouTube Studio.',
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('End stream: YouTube complete failed (supporter)', [
+                    'livestream_id' => $id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return redirect()->back()->withErrors([
+                    'error' => 'Could not end the YouTube broadcast. Try again from YouTube Studio, or wait and refresh.',
+                ]);
+            }
+
+            $settledLocally = $streamingQueue->finalizeAfterHostEndStream('user', $livestream->id);
+
+            // Reset locally too. The worker (if one is running) stops within
+            // ~10s via the stop_requested heartbeat and its 'stopped' callback
+            // re-confirms draft (idempotent). If the stream had already failed
+            // and no worker is running, this is the only thing that frees the
+            // user from a stuck meeting_live/live state.
+            $livestream->update([
+                'status' => 'draft',
+                'ended_at' => $livestream->ended_at ?? now(),
+            ]);
+
+            $livestream->refresh();
+            \App\Support\UnityLiveBroadcast::notifyStreamEnded($livestream);
+
+            return redirect()->back()->with(
+                'success',
+                $settledLocally
+                    ? 'YouTube live ended. The meeting is ready — you can go live again when you want.'
+                    : 'Ending stream — YouTube was told to stop and the relay is shutting down (usually within ~10s).'
+            );
+        }
+
+        $streamingQueue->finalizeAfterHostEndStream('user', $livestream->id);
+
+        // Manual stream key / no API broadcast: there is nothing to complete on YouTube; settle locally.
         $livestream->update([
-            'status' => 'meeting_live',
-            'settings' => $settings !== [] ? $settings : null,
+            'status' => 'draft',
+            'ended_at' => $livestream->ended_at ?? now(),
         ]);
+
         $livestream->refresh();
         \App\Support\UnityLiveBroadcast::notifyStreamEnded($livestream);
 
-        if (! empty($oldBroadcastId) && $accessToken) {
-            dispatch(function () use ($accessToken, $oldBroadcastId, $id): void {
-                try {
-                    app(YouTubeService::class)->updateBroadcastStatus(
-                        $accessToken,
-                        $oldBroadcastId,
-                        'complete'
-                    );
-                } catch (\Throwable $e) {
-                    Log::warning('End stream: deferred YouTube complete failed (supporter)', [
-                        'livestream_id' => $id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            })->afterResponse();
-        }
-
         return redirect()->back()->with(
             'success',
-            $settledLocally
-                ? 'YouTube live ended. Your meeting is still open — you can go live again anytime.'
-                : 'Stream ended. Your meeting is still open — you can go live again when ready.'
+            'Stream stopped. You can go live again from the same link when ready.'
         );
     }
 
@@ -1236,34 +1251,21 @@ class SupporterLivestreamController extends Controller
 
         $title = $livestream->title ?: 'Unity Meet';
 
-        // 1. Reuse existing broadcast only if YouTube still allows going live (not complete/revoked).
+        // 1. If this meeting already has a YouTube broadcast, refresh its stream key from YouTube
+        //    (handles the case where YouTube auto-completed the broadcast and the saved key is stale).
         if (! empty($livestream->youtube_broadcast_id)) {
-            $life = strtolower((string) ($youtubeService->getBroadcastStreamStatus(
-                $accessToken,
-                $livestream->youtube_broadcast_id
-            )['life_cycle_status'] ?? ''));
-
-            if (in_array($life, ['complete', 'revoked'], true)) {
-                Log::info('YouTube broadcast already ended; creating a new one', [
-                    'livestream_id' => $livestream->id,
-                    'previous_broadcast_id' => $livestream->youtube_broadcast_id,
-                    'life_cycle_status' => $life,
-                ]);
-            } else {
-                $existing = $youtubeService->getBroadcastStreamKey($accessToken, $livestream->youtube_broadcast_id);
-                if ($existing && ! empty($existing['stream_key'])) {
-                    $this->persistYoutubeKey($livestream, $livestream->youtube_broadcast_id, $existing['stream_key'], $existing['rtmp_url'] ?? null);
-
-                    return redirect()->back()->with(
-                        'success',
-                        'YouTube live already created — existing broadcast and stream key reused.'
-                    );
-                }
-                Log::warning('YouTube broadcast missing on remote, falling back to title lookup / create', [
-                    'livestream_id' => $livestream->id,
-                    'previous_broadcast_id' => $livestream->youtube_broadcast_id,
-                ]);
+            $existing = $youtubeService->getBroadcastStreamKey($accessToken, $livestream->youtube_broadcast_id);
+            if ($existing && ! empty($existing['stream_key'])) {
+                $this->persistYoutubeKey($livestream, $livestream->youtube_broadcast_id, $existing['stream_key'], $existing['rtmp_url'] ?? null);
+                return redirect()->back()->with(
+                    'success',
+                    'YouTube live already created — existing broadcast and stream key reused.'
+                );
             }
+            Log::warning('YouTube broadcast missing on remote, falling back to title lookup / create', [
+                'livestream_id' => $livestream->id,
+                'previous_broadcast_id' => $livestream->youtube_broadcast_id,
+            ]);
         }
 
         // 2. Channel may already have a non-completed YouTube live with this exact title — reuse it
@@ -1357,24 +1359,14 @@ class SupporterLivestreamController extends Controller
         $title = $livestream->title ?: 'Unity Meet';
 
         if (! empty($livestream->youtube_broadcast_id)) {
-            $life = strtolower((string) ($youtubeService->getBroadcastStreamStatus(
-                $accessToken,
-                $livestream->youtube_broadcast_id
-            )['life_cycle_status'] ?? ''));
-
-            if (! in_array($life, ['complete', 'revoked'], true)) {
-                $existing = $youtubeService->getBroadcastStreamKey($accessToken, $livestream->youtube_broadcast_id);
-                if ($existing && ! empty($existing['stream_key'])) {
-                    $this->persistYoutubeKey($livestream, $livestream->youtube_broadcast_id, $existing['stream_key'], $existing['rtmp_url'] ?? null);
-
-                    return $existing['stream_key'];
-                }
+            $existing = $youtubeService->getBroadcastStreamKey($accessToken, $livestream->youtube_broadcast_id);
+            if ($existing && ! empty($existing['stream_key'])) {
+                $this->persistYoutubeKey($livestream, $livestream->youtube_broadcast_id, $existing['stream_key'], $existing['rtmp_url'] ?? null);
+                return $existing['stream_key'];
             }
-
-            Log::warning('YouTube broadcast not reusable at Go Live; will look up by title or create a new one', [
+            Log::warning('YouTube broadcast missing on remote at Go Live; will look up by title or create a new one', [
                 'livestream_id' => $livestream->id,
                 'previous_broadcast_id' => $livestream->youtube_broadcast_id,
-                'life_cycle_status' => $life !== '' ? $life : null,
             ]);
         }
 
@@ -1520,8 +1512,6 @@ class SupporterLivestreamController extends Controller
         $livestream->update([
             'status' => 'meeting_live',
         ]);
-        $livestream->refresh();
-        \App\Support\UnityLiveBroadcast::notifyHostDashboard($livestream, 'streaming_queued');
 
         return redirect()->back()->with(
             'success',

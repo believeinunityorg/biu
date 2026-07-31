@@ -45,6 +45,12 @@ class EnsureSupporterProfileComplete
             return null;
         }
 
+        // Unverified users must stay on /verify-email. Do not bounce them to
+        // onboarding or profile edit (those routes require a verified email → redirect loop).
+        if ($this->isEmailVerificationRoute($request)) {
+            return null;
+        }
+
         if (SupporterProfileCompletionService::needsOnboarding($user)) {
             if ($this->isOnboardingRoute($request)) {
                 return null;
@@ -75,6 +81,29 @@ class EnsureSupporterProfileComplete
         }
 
         return redirect($url)->with('info', $message);
+    }
+
+    private function isEmailVerificationRoute(Request $request): bool
+    {
+        $routeName = $request->route()?->getName();
+
+        if (in_array($routeName, [
+            'verification.notice',
+            'verification.send',
+            'verification.verify',
+            'logout',
+            'logout.main',
+        ], true)) {
+            return true;
+        }
+
+        return $request->is(
+            'verify-email',
+            'verify-email/*',
+            'email/verify/*',
+            'email/verification-notification',
+            'logout',
+        );
     }
 
     private function isOnboardingRoute(Request $request): bool

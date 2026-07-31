@@ -2,10 +2,12 @@
 
 namespace App\Http\Helpers;
 
+use App\Models\AdminSetting;
 use App\Models\CareAlliance;
 use App\Models\User;
 use App\Services\SupporterProfileCompletionService;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -17,6 +19,7 @@ class AuthRedirectHelper
     /**
      * Get the default redirect URL for the authenticated user (by role).
      *
+     * - Unverified email (when required): /verify-email first (avoids onboarding↔verify loops)
      * - Supporter (user): /profile/edit until required fields filled, then public profile
      * - Care Alliance (Spatie role care_alliance): public alliance hub (/alliances/{slug})
      * - Organization / organization_pending: public org page
@@ -26,6 +29,10 @@ class AuthRedirectHelper
     {
         if (! $user) {
             return Route::has('dashboard') ? route('dashboard') : '/';
+        }
+
+        if (self::mustVerifyEmailFirst($user)) {
+            return Route::has('verification.notice') ? route('verification.notice') : '/verify-email';
         }
 
         $role = $user->role ?? (method_exists($user, 'getRoleNames') ? $user->getRoleNames()->first() : null);
@@ -75,5 +82,18 @@ class AuthRedirectHelper
         }
 
         return Route::has('dashboard') ? route('dashboard') : '/';
+    }
+
+    private static function mustVerifyEmailFirst(Authenticatable $user): bool
+    {
+        if (! AdminSetting::get('email_verification_required', true)) {
+            return false;
+        }
+
+        if (! $user instanceof MustVerifyEmail) {
+            return false;
+        }
+
+        return ! $user->hasVerifiedEmail();
     }
 }

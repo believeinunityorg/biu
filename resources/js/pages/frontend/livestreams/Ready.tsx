@@ -31,8 +31,6 @@ interface Livestream {
   status?: string
   scheduledAt?: string | null
   participantEmails?: string[]
-  canStartMeeting?: boolean
-  isMeetingActive?: boolean
 }
 
 interface Props {
@@ -358,10 +356,6 @@ export default function SupporterReady({
               style={{ background: `linear-gradient(135deg, ${BRAND.from}, ${BRAND.to})` }}
               disabled={startingMeeting}
               onClick={() => {
-                if (livestream.isMeetingActive) {
-                  router.visit(route("livestreams.supporter.show", livestream.id))
-                  return
-                }
                 setStartingMeeting(true)
                 router.post(route("livestreams.supporter.start-meeting", livestream.id), {}, {
                   onFinish: () => setStartingMeeting(false),
@@ -369,11 +363,7 @@ export default function SupporterReady({
               }}
             >
               <Play className="mr-2 h-5 w-5" />
-              {startingMeeting
-                ? "Starting…"
-                : livestream.isMeetingActive
-                  ? "Open meeting"
-                  : "Start meeting"}
+              {startingMeeting ? "Starting…" : "Start meeting"}
             </Button>
             <Button
               type="button"

@@ -1,12 +1,10 @@
 /**
  * Placeholder image for VDO.Ninja `&avatar=` (tile when camera is off).
- * Must be an absolute URL on our domain — VDO loads it cross-origin from vdo.ninja.
- * Do not use ui-avatars.com (duplicate CORS * headers break Chromium).
+ * Must be a full URL; VDO loads it in the meeting UI.
  */
 export function vdoUiAvatarUrl(displayName: string): string {
   const name = displayName.trim() || "Guest"
-  const origin = typeof window !== "undefined" ? window.location.origin : ""
-  return `${origin}/meet/vdo-avatar?name=${encodeURIComponent(name)}&size=256`
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=256&length=2`
 }
 
 /** VDO preset: name overlay on each video tile (see Ninja docs → &showlabels). */
@@ -50,30 +48,6 @@ export function applyVdoMinimalHostUi(url: URL): void {
   url.searchParams.set("nohangupbutton", "")
   if (!url.searchParams.has("noheader")) {
     url.searchParams.set("noheader", "")
-  }
-  applyVdoHostScreenShareForYoutube(url)
-}
-
-/**
- * Host screen share: replace webcam on the same stream (type 1).
- *
- * Type 3 adds a second track and, with &autorecordlocal, VDO auto-starts a
- * separate "Stop Screen Record" capture of the screen. Type 1 keeps screen on
- * the same MediaStream / same local recording / same MediaMTX WHIP path.
- *
- * Note: mute-video disables that shared track — while screen sharing, do not
- * use stop-camera/mute to “hide” the webcam (it is already replaced).
- */
-export function applyVdoHostScreenShareForYoutube(url: URL): void {
-  if (!url.searchParams.has("push")) {
-    return
-  }
-  url.searchParams.set("screensharetype", "1")
-  url.searchParams.delete("screenshareid")
-  url.searchParams.set("smallshare", "")
-  url.searchParams.set("screensharecontenthint", "detail")
-  if (!url.searchParams.has("ssb")) {
-    url.searchParams.set("ssb", "")
   }
 }
 

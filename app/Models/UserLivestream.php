@@ -250,7 +250,7 @@ class UserLivestream extends Model
         $room = rawurlencode($this->getVdoRoomName());
         $pass = rawurlencode((string) $password);
         $passwordParam = $pass !== '' ? '&password=' . $pass : '';
-        $avatarInitialUrl = \App\Support\VdoMeetingAvatar::url('Guest');
+        $avatarInitialUrl = 'https://ui-avatars.com/api/?name=' . rawurlencode('Guest') . '&size=256&length=2';
         $base = 'https://vdo.ninja/?room=' . $room . $passwordParam . '&label=&webcam&ssb&vdo=1&audiodevice=1&proaudio&stereo=2&norecord&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false&avatar=' . rawurlencode($avatarInitialUrl) . \App\Support\VdoMeetingVirtualBackground::querySegment() . '&autostart&noheader';
 
         // Canvas mode + seat allocated -> publish this participant to MediaMTX at
@@ -368,7 +368,7 @@ class UserLivestream extends Model
         $pass = rawurlencode((string) $this->getDecryptedPassword());
         $passwordParam = $pass !== '' ? '&password=' . $pass : '';
         $hn = trim($hostName) !== '' ? trim($hostName) : 'Host';
-        $avatarImage = \App\Support\VdoMeetingAvatar::url($hn);
+        $avatarImage = 'https://ui-avatars.com/api/?name=' . rawurlencode($hn) . '&size=256&length=2';
         $avatarParam = '&avatar=' . rawurlencode($avatarImage);
         // Canvas mode: host publishes to seat 1 path so the canvas mixer can WHEP-
         // subscribe alongside guests; the mixer publishes the combined stream to
@@ -390,10 +390,7 @@ class UserLivestream extends Model
             $recordParam = '';
         }
 
-        // Type 1: screen replaces webcam on the same stream — one local recording,
-        // same MediaMTX WHIP path. Type 3 + autorecordlocal starts a second
-        // "Stop Screen Record" capture whenever screen share begins.
-        $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&screensharetype=1&smallshare&screensharecontenthint=detail&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
+        $base = "https://vdo.ninja/?room={$room}&push={$effectivePush}&label={$label}{$recordParam}&quality=0&bitrate=6000&webcam&ssb&vdo=1&audiodevice=1&proaudio&stereo=2&showlabels=zoom&showall&rows=1&fontsize=82&nocontrols&clock=false{$avatarParam}" . \App\Support\VdoMeetingVirtualBackground::querySegment() . "&autostart&noheader{$passwordParam}";
 
         // Restore the MediaMTX push so the host's webcam reaches the bridge and the AWS worker can
         // pull and forward to YouTube. (Was dropped under the assumption that getScenePushUrl
@@ -438,7 +435,7 @@ class UserLivestream extends Model
         $pass = rawurlencode((string) $this->getDecryptedPassword());
         $passwordParam = $pass !== '' ? '&password='.$pass : '';
         $label = rawurlencode($hostName);
-        $avatarImage = \App\Support\VdoMeetingAvatar::url($hostName);
+        $avatarImage = 'https://ui-avatars.com/api/?name='.rawurlencode($hostName).'&size=256&length=2';
 
         return 'https://vdo.ninja/?room='.$room.'&push=main&label='.$label.$passwordParam
             .'&audiodevice=1&proaudio&stereo=2&norecord&showlabels=zoom&showall&rows=1&fontsize=82&clock=false'
@@ -455,7 +452,7 @@ class UserLivestream extends Model
         $pass = rawurlencode((string) $this->getDecryptedPassword());
         $passwordParam = $pass !== '' ? '&password='.$pass : '';
         $label = rawurlencode(trim($displayLabel) !== '' ? trim($displayLabel) : 'Guest');
-        $avatarImage = \App\Support\VdoMeetingAvatar::url(trim($displayLabel) ?: 'Guest');
+        $avatarImage = 'https://ui-avatars.com/api/?name='.rawurlencode(trim($displayLabel) ?: 'Guest').'&size=256&length=2';
 
         return 'https://vdo.ninja/?room='.$room.'&label='.$label.$passwordParam
             .'&audiodevice=1&proaudio&stereo=2&norecord&showlabels=zoom&showall&rows=1&fontsize=82&clock=false'

@@ -50,6 +50,30 @@ class GiftCardServicePhazeSignatureTest extends TestCase
             $fromString
         );
         $this->assertStringContainsString('"price":0.49', $rawBody);
+        $this->assertStringNotContainsString('000000', $rawBody);
+    }
+
+    public function test_encode_json_body_emits_clean_decimal_prices(): void
+    {
+        $service = new GiftCardService;
+
+        $encode = new ReflectionMethod(GiftCardService::class, 'encodeJsonBody');
+        $encode->setAccessible(true);
+        $normalize = new ReflectionMethod(GiftCardService::class, 'normalizePhazePrice');
+        $normalize->setAccessible(true);
+
+        $rawBody = $encode->invoke($service, [
+            'orderId' => 'db70cc45-8fb0-47e8-88c9-85aae1383b02',
+            'productId' => 103113635416,
+            'price' => $normalize->invoke($service, 9.90),
+            'externalUserId' => '1',
+            'baseCurrency' => 'USD',
+        ]);
+
+        $this->assertSame(
+            '{"orderId":"db70cc45-8fb0-47e8-88c9-85aae1383b02","productId":103113635416,"price":9.9,"externalUserId":"1","baseCurrency":"USD"}',
+            $rawBody
+        );
     }
 
     public function test_humanize_signature_and_balance_errors(): void

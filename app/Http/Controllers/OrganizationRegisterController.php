@@ -210,19 +210,53 @@ class OrganizationRegisterController extends Controller
             if (! is_array($pacIds)) {
                 $pacIds = $pacIds !== null && $pacIds !== '' ? [$pacIds] : [];
             }
+
+            $hasEin = filter_var($request->input('has_ein', true), FILTER_VALIDATE_BOOLEAN);
+            $ein = preg_replace('/\D/', '', (string) $request->input('ein', ''));
+            if (! $hasEin || strlen($ein) !== 9) {
+                do {
+                    $ein = '9'.str_pad((string) random_int(0, 99_999_999), 8, '0', STR_PAD_LEFT);
+                } while (Organization::where('ein', $ein)->exists());
+                $hasEin = false;
+            }
+
+            $hasMembers = filter_var($request->input('has_members', false), FILTER_VALIDATE_BOOLEAN);
+            $membershipsEnabled = $hasMembers && filter_var($request->input('memberships_enabled', false), FILTER_VALIDATE_BOOLEAN);
+            $membershipType = $membershipsEnabled
+                ? (in_array($request->input('membership_type'), ['free', 'paid'], true) ? $request->input('membership_type') : 'free')
+                : null;
+
             $request->merge([
+                'ein' => $ein,
+                'has_ein' => $hasEin,
+                'has_members' => $hasMembers,
+                'memberships_enabled' => $membershipsEnabled,
+                'membership_type' => $membershipType,
                 'primary_action_category_ids' => array_values(array_unique(array_filter(array_map('intval', $pacIds)))),
+                'contact_title' => $request->filled('contact_title') ? $request->input('contact_title') : 'Administrator',
+                'phone' => $request->filled('phone') ? $request->input('phone') : '0000000000',
+                'description' => $request->filled('description') ? $request->input('description') : 'Organization profile to be completed.',
+                'mission' => $request->filled('mission') ? $request->input('mission') : 'Mission to be completed.',
+                'legal_name_confirmation' => $request->filled('legal_name_confirmation')
+                    ? $request->input('legal_name_confirmation')
+                    : $request->input('name'),
+                'agree_to_terms' => $request->boolean('agree_to_terms') ? '1' : $request->input('agree_to_terms'),
+                'attestation_officer_on_990' => $request->boolean('attestation_officer_on_990') ? '1' : '1',
             ]);
 
-            // Manual validation
+            // Manual validation — simplified 3-step registration (docs / officer ID optional)
             $validator = Validator::make($request->all(), [
                 'ein' => 'required|string|size:9|unique:organizations,ein',
+                'has_ein' => 'required|boolean',
+                'has_members' => 'required|boolean',
+                'memberships_enabled' => 'required|boolean',
+                'membership_type' => 'nullable|string|in:free,paid',
                 'name' => 'required|string|max:255',
                 'ico' => 'nullable|string|max:255',
-                'street' => 'nullable|string|max:255',
-                'city' => 'nullable|string|max:255',
-                'state' => 'nullable|string|max:255',
-                'zip' => 'nullable|string|max:255',
+                'street' => 'required|string|max:255',
+                'city' => 'required|string|max:255',
+                'state' => 'required|string|max:255',
+                'zip' => 'required|string|max:255',
                 'classification' => 'nullable|string|max:255',
                 'ruling' => 'nullable|string|max:255',
                 'deductibility' => 'nullable|string|max:255',
@@ -231,6 +265,10 @@ class OrganizationRegisterController extends Controller
                 'tax_period' => 'nullable|string|max:255',
                 'filing_req' => 'nullable|string|max:255',
                 'ntee_code' => 'nullable|string|max:255',
+                'community_organization_type' => 'nullable|string|max:64',
+                'community_organization_type_other' => 'nullable|string|max:255',
+                'legal_entity_status' => 'nullable|string|max:64',
+                'legal_entity_status_other' => 'nullable|string|max:255',
                 'email' => 'required|email|max:255|unique:users,email',
                 'phone' => 'required|string|max:255',
                 'contact_name' => 'required|string|max:255',
@@ -240,10 +278,9 @@ class OrganizationRegisterController extends Controller
                 'website' => 'nullable|url|max:255',
                 'description' => 'required|string|max:2000',
                 'mission' => 'required|string|max:2000',
-                'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max
-                'officer_id' => 'required|file|mimes:jpeg,png,jpg,pdf|max:5120', // Government ID for officer verification
-                'legal_name_confirmation' => 'required|string|max:255', // Must match organization legal name (officer knowledge)
-                // Verification documents: 6 of 7 required (all but one). 990 not needed (we have it).
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+                'officer_id' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
+                'legal_name_confirmation' => 'nullable|string|max:255',
                 'doc_501c3' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
                 'doc_articles' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
                 'doc_bylaws' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
@@ -252,9 +289,9 @@ class OrganizationRegisterController extends Controller
                 'doc_signer_resolution' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
                 'doc_bank_account' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
                 'agree_to_terms' => 'required|accepted',
-                'attestation_officer_on_990' => 'required|accepted', // "I certify I am a current officer of this organization."
-                'selected_irs_board_member_id' => 'nullable|integer|exists:irs_board_members,id', // When multiple matches, user selects one
-                'primary_action_category_ids' => ['required', 'array', 'min:1'],
+                'attestation_officer_on_990' => 'nullable|accepted',
+                'selected_irs_board_member_id' => 'nullable|integer|exists:irs_board_members,id',
+                'primary_action_category_ids' => ['nullable', 'array'],
                 'primary_action_category_ids.*' => ['integer', 'distinct', Rule::exists('primary_action_categories', 'id')->where('is_active', true)],
                 'preferred_payout_method' => 'nullable|string|in:stripe,paypal',
                 'referralCode' => 'nullable|string|max:64',
@@ -269,30 +306,19 @@ class OrganizationRegisterController extends Controller
             }
 
             $validated = $validator->validated();
-
-            // Officer knowledge: legal name confirmation must match organization name
-            if (trim((string) ($validated['legal_name_confirmation'] ?? '')) !== trim((string) ($validated['name'] ?? ''))) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The legal organization name you entered does not match our records. Please use the exact name from your IRS filing.',
-                    'errors' => ['legal_name_confirmation' => ['Please enter the exact legal name of the organization as shown above.']],
-                ], 422);
-            }
-
-            // Verification documents: 6 of 7 required (all but one; 990 not needed)
             $docKeys = ['doc_501c3', 'doc_articles', 'doc_bylaws', 'doc_state_registration', 'doc_board_list', 'doc_signer_resolution', 'doc_bank_account'];
-            $docCount = 0;
-            foreach ($docKeys as $key) {
-                if ($request->hasFile($key)) {
-                    $docCount++;
+
+            // When a real EIN matches IRS records, force org/address fields from IRS (not client-editable)
+            if ($validated['has_ein'] ?? false) {
+                $irsRecord = $this->einLookupService->lookupEIN($validated['ein']);
+                if (is_array($irsRecord) && ! empty($irsRecord['name'])) {
+                    foreach (['name', 'street', 'city', 'state', 'zip', 'ico', 'classification', 'ruling', 'deductibility', 'organization', 'status', 'tax_period', 'filing_req', 'ntee_code'] as $irsField) {
+                        if (array_key_exists($irsField, $irsRecord) && $irsRecord[$irsField] !== null && $irsRecord[$irsField] !== '') {
+                            $validated[$irsField] = $irsRecord[$irsField];
+                        }
+                    }
+                    $request->merge(['has_edited_irs_data' => false]);
                 }
-            }
-            if ($docCount < 6) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Please upload at least 6 of the 7 verification documents. One is optional (we have Form 990 on file).',
-                    'errors' => ['verification_documents' => ['At least 6 verification documents are required. You may omit one.']],
-                ], 422);
             }
 
             // 990 officer match + attestation (policy: allow when name matches 990 officer and user self-attests)
@@ -301,18 +327,21 @@ class OrganizationRegisterController extends Controller
             $contactTitle = $validated['contact_title'] ?? null;
             $selectedIrsBoardMemberId = $validated['selected_irs_board_member_id'] ?? null;
 
-            $matchResult = $this->orgClaim990Service->matchRegistrantToOfficers($contactName, $contactTitle, $ein);
+            $simplifiedRegistration = ! $request->hasFile('officer_id');
+            $matchResult = ($validated['has_ein'] ?? true)
+                ? $this->orgClaim990Service->matchRegistrantToOfficers($contactName, $contactTitle, $ein)
+                : ['status' => 'no_match', 'possible_matches' => []];
 
             $verificationSource = OrgClaim990Service::VERIFICATION_SOURCE;
             $claimVerificationMetadata = null;
 
-            if ($matchResult['status'] === 'single_match') {
+            if (! $simplifiedRegistration && $matchResult['status'] === 'single_match') {
                 $claimVerificationMetadata = $this->orgClaim990Service->buildVerificationMetadata(
                     (int) $matchResult['matched_id'],
                     $matchResult['tax_year'] ?? null,
                     isset($matchResult['matched_position']) ? 'name_and_title' : 'name'
                 );
-            } elseif ($matchResult['status'] === 'multiple_matches') {
+            } elseif (! $simplifiedRegistration && $matchResult['status'] === 'multiple_matches') {
                 if (! $selectedIrsBoardMemberId) {
                     return response()->json([
                         'success' => false,
@@ -335,23 +364,21 @@ class OrganizationRegisterController extends Controller
                     'user_selected'
                 );
             } else {
-                // no_match or no officers: allow with self-attestation only (don't block MVP)
+                // Simplified 3-step registration or no 990 match: allow with self-attestation
                 $claimVerificationMetadata = [
                     'verification_source' => $verificationSource,
-                    'match_type' => empty($matchResult['possible_matches'] ?? []) ? 'no_officers_in_990' : 'no_match_self_attestation',
+                    'match_type' => $simplifiedRegistration
+                        ? 'simplified_registration'
+                        : (empty($matchResult['possible_matches'] ?? []) ? 'no_officers_in_990' : 'no_match_self_attestation'),
                     'verified_at' => now()->toIso8601String(),
                 ];
-                if (! empty($matchResult['possible_matches'])) {
-                    $claimVerificationMetadata['possible_matches_shown'] = array_slice($matchResult['possible_matches'], 0, 10);
-                }
             }
 
-            // Store Government ID upload for officer verification (audit trail)
-            $officerIdPath = $request->file('officer_id')->store('organizations/officer_id', 'public');
-            $claimVerificationMetadata = array_merge($claimVerificationMetadata ?? [], [
-                'officer_id_upload_path' => $officerIdPath,
-                'legal_name_confirmed_at' => now()->toIso8601String(),
-            ]);
+            if ($request->hasFile('officer_id')) {
+                $officerIdPath = $request->file('officer_id')->store('organizations/officer_id', 'public');
+                $claimVerificationMetadata['officer_id_upload_path'] = $officerIdPath;
+            }
+            $claimVerificationMetadata['legal_name_confirmed_at'] = now()->toIso8601String();
 
             // Store verification documents (6 of 7 required; 990 not needed)
             $verificationDocPaths = [];
@@ -374,9 +401,9 @@ class OrganizationRegisterController extends Controller
 
             DB::beginTransaction();
 
-            // Check if IRS data was edited
-            $hasEditedIRS = $request->boolean('has_edited_irs_data', false);
-            $initialRole = ($hasEditedIRS || $taxEvaluation['should_lock']) ? 'organization_pending' : 'organization';
+            // Check if IRS data was edited / no real EIN — keep pending until verified
+            $hasEditedIRS = $request->boolean('has_edited_irs_data', false) || ! ($validated['has_ein'] ?? true);
+            $initialRole = ($hasEditedIRS || $taxEvaluation['should_lock'] || $simplifiedRegistration) ? 'organization_pending' : 'organization';
 
             // Store original IRS data if edited
             $originalIRSData = null;
@@ -441,6 +468,18 @@ class OrganizationRegisterController extends Controller
                 'tax_period' => $validated['tax_period'] ?? null,
                 'filing_req' => $validated['filing_req'] ?? null,
                 'ntee_code' => $validated['ntee_code'] ?? null,
+                'community_organization_type' => $validated['community_organization_type'] ?? null,
+                'community_organization_type_other' => ($validated['community_organization_type'] ?? null) === 'other'
+                    ? ($validated['community_organization_type_other'] ?? null)
+                    : null,
+                'legal_entity_status' => $validated['legal_entity_status'] ?? null,
+                'legal_entity_status_other' => ($validated['legal_entity_status'] ?? null) === 'other'
+                    ? ($validated['legal_entity_status_other'] ?? null)
+                    : null,
+                'has_ein' => (bool) ($validated['has_ein'] ?? true),
+                'has_members' => (bool) ($validated['has_members'] ?? false),
+                'memberships_enabled' => (bool) ($validated['memberships_enabled'] ?? false),
+                'membership_type' => $validated['membership_type'] ?? null,
                 'email' => $validated['email'],
                 'platform_email' => $platformEmail,
                 'phone' => $validated['phone'],
@@ -450,7 +489,9 @@ class OrganizationRegisterController extends Controller
                 'description' => $validated['description'],
                 'mission' => $validated['mission'],
                 'registered_user_image' => $imagePath,
-                'registration_status' => $hasEditedIRS ? 'pending' : ($taxEvaluation['should_lock'] ? 'pending' : 'approved'),
+                'registration_status' => ($hasEditedIRS || $simplifiedRegistration || $taxEvaluation['should_lock'])
+                    ? 'pending'
+                    : 'approved',
                 'verification_source' => $verificationSource,
                 'claim_verification_metadata' => $claimVerificationMetadata,
                 'has_edited_irs_data' => $hasEditedIRS,
@@ -463,7 +504,7 @@ class OrganizationRegisterController extends Controller
             ]);
 
             $organization->primaryActionCategories()->sync(
-                array_values(array_unique(array_map('intval', $validated['primary_action_category_ids'])))
+                array_values(array_unique(array_map('intval', $validated['primary_action_category_ids'] ?? [])))
             );
 
             $this->syncOrganizationUserRole($user, $organization);

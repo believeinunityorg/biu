@@ -215,7 +215,7 @@ export default function UserRegisterPage({
                         Full Name
                       </Label>
                       <div className="relative mt-2">
-                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <User className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                         <Input
                           id="firstName"
                           type="text"
@@ -226,8 +226,8 @@ export default function UserRegisterPage({
                           className="pl-10 h-12 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                           required
                         />
-                        <InputError message={errors.name} className="mt-2" />
                       </div>
+                      <InputError message={errors.name} className="mt-2" />
                     </div>
 
                     {/* Email Address */}
@@ -236,7 +236,7 @@ export default function UserRegisterPage({
                         Email Address
                       </Label>
                       <div className="relative mt-2">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                         <Input
                           id="email"
                           type="email"
@@ -248,8 +248,8 @@ export default function UserRegisterPage({
                           className="pl-10 h-12 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all duration-200"
                           required
                         />
-                        <InputError message={errors.email} className="mt-2" />
                       </div>
+                      <InputError message={errors.email} className="mt-2" />
                     </div>
 
                     {/* Password */}
@@ -258,7 +258,7 @@ export default function UserRegisterPage({
                         Password
                       </Label>
                       <div className="relative mt-2">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                         <Input
                           id="password"
                           type={showPassword ? "text" : "password"}
@@ -272,12 +272,12 @@ export default function UserRegisterPage({
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
                         >
                           {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                         </button>
-                        <InputError message={errors.password} className="mt-2" />
                       </div>
+                      <InputError message={errors.password} className="mt-2" />
                     </div>
 
                     {/* Confirm Password */}
@@ -286,7 +286,7 @@ export default function UserRegisterPage({
                         Confirm Password
                       </Label>
                       <div className="relative mt-2">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                        <Lock className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
                         <Input
                           id="confirmPassword"
                           type={showConfirmPassword ? "text" : "password"}
@@ -300,12 +300,12 @@ export default function UserRegisterPage({
                         <button
                           type="button"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
                         >
                           {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                         </button>
-                        <InputError message={errors.password_confirmation} className="mt-2" />
                       </div>
+                      <InputError message={errors.password_confirmation} className="mt-2" />
                     </div>
 
                     {/* Position Selection - Full Width */}

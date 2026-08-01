@@ -334,6 +334,11 @@ class User extends Authenticatable implements MustVerifyEmail
             ->withTimestamps()->with(['user', 'nteeCode']);
     }
 
+    public function memberships(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SupporterMembership::class, 'supporter_id');
+    }
+
     public function aiVideos(): HasMany
     {
         return $this->hasMany(AiVideo::class);

@@ -55,6 +55,7 @@ import {
     FolderOpen,
     ShoppingBag,
     Search,
+    UsersRound,
     Youtube,
     Video,
     TrendingUp,
@@ -693,6 +694,12 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 organizationOnlyNav: true,
             },
             {
+                title: 'Membership',
+                href: '/organization/membership',
+                icon: UsersRound,
+                role: ['organization', 'care_alliance'],
+            },
+            {
                 title: 'Unity Impact Alliance',
                 icon: HeartHandshake,
                 role: 'care_alliance',
@@ -701,6 +708,12 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                         title: 'Members',
                         href: '/care-alliance/workspace/members',
                         icon: Users,
+                        role: 'care_alliance',
+                    },
+                    {
+                        title: 'Membership',
+                        href: '/care-alliance/membership',
+                        icon: UsersRound,
                         role: 'care_alliance',
                     },
                     {

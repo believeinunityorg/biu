@@ -17,6 +17,8 @@ use App\Models\Enrollment;
 use App\Models\FundMeDonation;
 use App\Models\JobApplication;
 use App\Models\NodeSell;
+use App\Models\CareAlliance;
+use App\Models\Group;
 use App\Models\Organization;
 use App\Models\Subscription as AppSubscription;
 use App\Models\UserFavoriteOrganization;
@@ -41,6 +43,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
@@ -64,6 +67,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Relation::morphMap([
+            'Organization' => Organization::class,
+            'UnityImpactAlliance' => CareAlliance::class,
+            'Group' => Group::class,
+        ]);
+
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
         }

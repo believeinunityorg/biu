@@ -7,9 +7,11 @@ use App\Http\Requests\Settings\CareAllianceFinancialSettingsRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\CareAlliance;
 use App\Models\CareAllianceMembership;
+use App\Models\Organization;
 use App\Models\PrimaryActionCategory;
 use App\Services\CareAllianceGeneralDonationDistributionService;
 use App\Services\CauseGroupChatService;
+use App\Services\MembershipAccountService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,6 +21,10 @@ use Inertia\Response;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        private readonly MembershipAccountService $membershipAccountService,
+    ) {}
+
     /**
      * Show the user's profile settings page.
      */
@@ -29,6 +35,7 @@ class ProfileController extends Controller
         $organizationPrimaryActionCategoryIds = [];
         $careAlliance = null;
         $profileSettingsVariant = 'standard';
+        $membership = null;
 
         $needsOrgCategories = $user?->hasRole('care_alliance') || $user?->role === 'organization';
 
@@ -64,6 +71,7 @@ class ProfileController extends Controller
                     'state' => $alliance->state,
                     'ein' => $alliance->ein,
                 ];
+                $membership = $this->membershipAccountService->settingsPayload($alliance);
             }
 
             $user->load('organization');
@@ -77,6 +85,7 @@ class ProfileController extends Controller
                     ->pluck('id')
                     ->values()
                     ->all();
+                $membership = $this->membershipAccountService->settingsPayload($user->organization);
             }
         }
 
@@ -87,6 +96,7 @@ class ProfileController extends Controller
             'organizationPrimaryActionCategoryIds' => $organizationPrimaryActionCategoryIds,
             'careAlliance' => $careAlliance,
             'profileSettingsVariant' => $profileSettingsVariant,
+            'membership' => $membership,
         ]);
     }
 

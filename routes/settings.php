@@ -11,6 +11,7 @@ use App\Http\Controllers\Settings\ProfileSettingsEntryController;
 use App\Http\Controllers\Settings\ReferralLinkController;
 use App\Http\Controllers\Organization\OrganizationPaymentSettingsController;
 use App\Http\Controllers\Organization\OrganizationManualPaymentVerificationController;
+use App\Http\Controllers\Membership\MembershipSettingsController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -33,6 +34,8 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|admin|car
 
     Route::middleware('topics.selected')->group(function () {
         Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::patch('settings/membership', [MembershipSettingsController::class, 'update'])
+            ->name('membership.settings.update');
         Route::get('settings/financial', [ProfileController::class, 'editFinancial'])
             ->name('profile.financial.edit')
             ->middleware('role:care_alliance');

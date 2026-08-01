@@ -46,9 +46,11 @@ class GiftCardRedemptionService
         string $currency,
     ): GiftCard {
         $faceValue = round($purchaseAmount, 2);
-        $platformFee = BiuPlatformFeeService::getGiftCardPlatformFeeUsd();
-        $pointsRequired = BiuPlatformFeeService::giftCardTotalChargedUsd($faceValue);
-        $feeMeta = BiuPlatformFeeService::giftCardLedgerMetaSlice($faceValue);
+        $supporterTip = BiuPlatformFeeService::normalizeGiftCardSupporterTip(
+            (float) ($validated['supporter_tip'] ?? 0)
+        );
+        $pointsRequired = BiuPlatformFeeService::giftCardTotalChargedUsd($faceValue, $supporterTip);
+        $feeMeta = BiuPlatformFeeService::giftCardLedgerMetaSlice($faceValue, $supporterTip);
         $orderId = Str::uuid()->toString();
         $delayHours = $this->fulfillmentDelayHours();
         $requestedAt = now();
@@ -68,7 +70,7 @@ class GiftCardRedemptionService
             $validated,
             $selectedBrand,
             $faceValue,
-            $platformFee,
+            $supporterTip,
             $currency,
             $pointsRequired,
             $feeMeta,
@@ -104,9 +106,10 @@ class GiftCardRedemptionService
                 'organization_id' => $validated['organization_id'],
                 'card_number' => GiftCard::generateUniqueCardNumber(),
                 'amount' => $faceValue,
-                'platform_fee' => $feeMeta['platform_fee'],
-                'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
-                'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
+                'platform_fee' => 0,
+                'platform_fee_biu_share' => 0,
+                'platform_fee_org_share' => 0,
+                'supporter_tip' => $supporterTip,
                 'brand' => $finalBrandName,
                 'brand_name' => $finalBrandName,
                 'country' => $validated['country'] ?? null,
@@ -130,9 +133,7 @@ class GiftCardRedemptionService
                         'event' => 'submitted',
                         'at' => $requestedAt->toIso8601String(),
                         'amount' => $faceValue,
-                        'platform_fee' => $platformFee,
-                        'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
-                        'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
+                        'supporter_tip' => $supporterTip,
                         'total_charged' => $pointsRequired,
                         'from_gifted' => $fromGifted,
                         'order_id' => $orderId,
@@ -149,7 +150,7 @@ class GiftCardRedemptionService
                 'bp_status' => UnifiedLedgerBpStatus::AVAILABLE,
                 'status' => Transaction::STATUS_PENDING,
                 'amount' => $pointsRequired,
-                'fee' => $platformFee,
+                'fee' => 0,
                 'currency' => $currency,
                 'payment_method' => 'believe_points',
                 'transaction_id' => 'believe_points_gift_card_pending_'.$giftCard->id,
@@ -179,7 +180,7 @@ class GiftCardRedemptionService
             $this->appendAudit($giftCard, 'bp_deducted', [
                 'amount' => $pointsRequired,
                 'face_value' => $faceValue,
-                'platform_fee' => $platformFee,
+                'supporter_tip' => $supporterTip,
                 'from_gifted' => $fromGifted,
                 'closed_loop' => $reduceGiftReporting,
             ]);
@@ -191,7 +192,7 @@ class GiftCardRedemptionService
             'gift_card_id' => $giftCard->id,
             'user_id' => $user->id,
             'amount' => $faceValue,
-            'platform_fee' => $platformFee,
+            'supporter_tip' => $supporterTip,
             'total_charged' => $pointsRequired,
             'scheduled_fulfillment_at' => $giftCard->scheduled_fulfillment_at?->toIso8601String(),
             'order_id' => $orderId,
@@ -218,9 +219,11 @@ class GiftCardRedemptionService
         ?string $idempotencyKey = null,
     ): GiftCard {
         $faceValue = round($purchaseAmount, 2);
-        $platformFee = BiuPlatformFeeService::getGiftCardPlatformFeeUsd();
-        $totalCharged = BiuPlatformFeeService::giftCardTotalChargedUsd($faceValue);
-        $feeMeta = BiuPlatformFeeService::giftCardLedgerMetaSlice($faceValue);
+        $supporterTip = BiuPlatformFeeService::normalizeGiftCardSupporterTip(
+            (float) ($validated['supporter_tip'] ?? 0)
+        );
+        $totalCharged = BiuPlatformFeeService::giftCardTotalChargedUsd($faceValue, $supporterTip);
+        $feeMeta = BiuPlatformFeeService::giftCardLedgerMetaSlice($faceValue, $supporterTip);
         $orderId = Str::uuid()->toString();
         $delayHours = $this->fulfillmentDelayHours();
         $requestedAt = now();
@@ -252,7 +255,7 @@ class GiftCardRedemptionService
             $validated,
             $selectedBrand,
             $faceValue,
-            $platformFee,
+            $supporterTip,
             $currency,
             $totalCharged,
             $feeMeta,
@@ -279,9 +282,10 @@ class GiftCardRedemptionService
                 'organization_id' => $validated['organization_id'],
                 'card_number' => GiftCard::generateUniqueCardNumber(),
                 'amount' => $faceValue,
-                'platform_fee' => $feeMeta['platform_fee'],
-                'platform_fee_biu_share' => $feeMeta['platform_fee_biu_share'],
-                'platform_fee_org_share' => $feeMeta['platform_fee_org_share'],
+                'platform_fee' => 0,
+                'platform_fee_biu_share' => 0,
+                'platform_fee_org_share' => 0,
+                'supporter_tip' => $supporterTip,
                 'brand' => $finalBrandName,
                 'brand_name' => $finalBrandName,
                 'country' => $validated['country'] ?? null,
@@ -306,7 +310,7 @@ class GiftCardRedemptionService
                         'event' => 'submitted_bridge_wallet',
                         'at' => $requestedAt->toIso8601String(),
                         'amount' => $faceValue,
-                        'platform_fee' => $platformFee,
+                        'supporter_tip' => $supporterTip,
                         'total_charged' => $totalCharged,
                         'bridge_transfer_id' => $charge['transfer_id'] ?? null,
                         'order_id' => $orderId,
@@ -323,7 +327,7 @@ class GiftCardRedemptionService
                 'bp_status' => UnifiedLedgerBpStatus::NA,
                 'status' => Transaction::STATUS_PENDING,
                 'amount' => $totalCharged,
-                'fee' => $platformFee,
+                'fee' => 0,
                 'currency' => $currency,
                 'payment_method' => 'bridge_wallet',
                 'transaction_id' => 'bridge_wallet_gift_card_pending_'.$giftCard->id,
@@ -350,7 +354,7 @@ class GiftCardRedemptionService
             $this->appendAudit($giftCard, 'bridge_wallet_charged', [
                 'amount' => $totalCharged,
                 'face_value' => $faceValue,
-                'platform_fee' => $platformFee,
+                'supporter_tip' => $supporterTip,
                 'bridge_transfer_id' => $charge['transfer_id'] ?? null,
             ]);
 
@@ -361,7 +365,7 @@ class GiftCardRedemptionService
             'gift_card_id' => $giftCard->id,
             'user_id' => $user->id,
             'amount' => $faceValue,
-            'platform_fee' => $platformFee,
+            'supporter_tip' => $supporterTip,
             'total_charged' => $totalCharged,
             'bridge_transfer_id' => $charge['transfer_id'] ?? null,
             'scheduled_fulfillment_at' => $giftCard->scheduled_fulfillment_at?->toIso8601String(),
@@ -894,7 +898,7 @@ class GiftCardRedemptionService
             return;
         }
 
-        $recordedFeeSplit = $giftCard->platform_fee !== null
+        $recordedFeeSplit = $giftCard->platform_fee !== null && (float) $giftCard->platform_fee > 0
             ? [
                 'platform_fee' => (float) $giftCard->platform_fee,
                 'platform_fee_biu_share' => (float) ($giftCard->platform_fee_biu_share ?? 0),
@@ -909,6 +913,7 @@ class GiftCardRedemptionService
             $giftCard->nonprofit_commission !== null ? (float) $giftCard->nonprofit_commission : null,
             (float) ($giftCard->merchant_revenue ?? 0),
             $recordedFeeSplit,
+            $giftCard->supporter_tip !== null ? (float) $giftCard->supporter_tip : null,
         );
 
         $meta = $giftCard->meta ?? [];

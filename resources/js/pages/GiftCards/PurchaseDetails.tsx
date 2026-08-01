@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Brand {
   productId?: number
@@ -86,8 +87,9 @@ interface PurchaseDetailsProps {
   is_prime_supporter?: boolean
   organizations: Organization[]
   giftCardPurchaseOrganizations?: OrganizationGiftCardPurchase[]
-  platformFeeUsd?: number
 }
+
+const TIP_PRESETS = [0.1, 0.25, 0.5, 1] as const
 
 /** Phaze HTML often includes inline dark colors; force readable text in light + dark mode */
 const brandHtmlBlockClassName =
@@ -105,14 +107,12 @@ export default function PurchaseDetailsPage({
   is_prime_supporter: isPrimeSupporterProp = false,
   organizations: organizationsProp,
   giftCardPurchaseOrganizations: giftCardPurchaseOrganizationsProp = [],
-  platformFeeUsd: platformFeeUsdProp = 0.5,
 }: PurchaseDetailsProps) {
   const page = usePage()
   const pageProps = page.props as PurchaseDetailsProps & { auth?: any }
   const organizations = pageProps.organizations ?? organizationsProp
   const giftCardPurchaseOrganizations =
     pageProps.giftCardPurchaseOrganizations ?? giftCardPurchaseOrganizationsProp
-  const platformFeeUsd = Number(pageProps.platformFeeUsd ?? platformFeeUsdProp ?? 0.5) || 0
   const auth = pageProps.auth
   const availableBelievePoints = parseFloat(auth?.user?.believe_points) || 0
   const giftedBelievePoints = parseFloat(auth?.user?.gifted_believe_points) || 0
@@ -132,6 +132,9 @@ export default function PurchaseDetailsPage({
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState("")
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("")
+  const [tipEnabled, setTipEnabled] = useState(false)
+  const [tipPreset, setTipPreset] = useState<number | "other" | null>(null)
+  const [customTipAmount, setCustomTipAmount] = useState("")
 
   const infoTabs = useMemo(() => {
     const tabs: { id: InfoTab; label: string; html: string }[] = []
@@ -163,6 +166,7 @@ export default function PurchaseDetailsPage({
     currency: "USD",
     payment_method: requiresBridgeWallet ? ("bridge_wallet" as const) : ("believe_points" as const),
     idempotency_key: "",
+    supporter_tip: 0,
   })
 
   const [bridgeBalance, setBridgeBalance] = useState<number | null>(null)
@@ -360,6 +364,41 @@ export default function PurchaseDetailsPage({
   }, [selectedOrganizationId, giftCardPurchaseOrganizations, organizations])
   const isOrganizationApproved = selectedOrganization?.gift_card_terms_approved ?? false
 
+  const resolvedSupporterTip = useMemo(() => {
+    if (!tipEnabled) return 0
+    if (tipPreset === "other") {
+      const parsed = parseFloat(customTipAmount)
+      if (Number.isNaN(parsed) || parsed < 0) return 0
+      return Number(Math.min(parsed, 100).toFixed(2))
+    }
+    if (typeof tipPreset === "number") return tipPreset
+    return 0
+  }, [tipEnabled, tipPreset, customTipAmount])
+
+  useEffect(() => {
+    setData("supporter_tip", resolvedSupporterTip)
+  }, [resolvedSupporterTip, setData])
+
+  const handleTipToggle = (checked: boolean) => {
+    setTipEnabled(checked)
+    if (!checked) {
+      setTipPreset(null)
+      setCustomTipAmount("")
+      return
+    }
+    if (tipPreset === null) {
+      setTipPreset(0.1)
+    }
+  }
+
+  const handleTipPresetSelect = (value: number | "other") => {
+    setTipEnabled(true)
+    setTipPreset(value)
+    if (value !== "other") {
+      setCustomTipAmount("")
+    }
+  }
+
   const handlePurchase = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -442,7 +481,8 @@ export default function PurchaseDetailsPage({
     data.amount >= minVal && (maxVal === null || data.amount <= maxVal) && data.amount > 0
   const isValidForm = isValidAmount && selectedOrganizationId
 
-  const totalChargedBp = data.amount > 0 ? Number((data.amount + platformFeeUsd).toFixed(2)) : 0
+  const totalChargedBp =
+    data.amount > 0 ? Number((data.amount + resolvedSupporterTip).toFixed(2)) : 0
   const believePointsSufficientForSku =
     data.amount > 0 && spendableForSku >= totalChargedBp
 
@@ -571,13 +611,13 @@ export default function PurchaseDetailsPage({
                 <ul className="mt-4 space-y-3">
                   {(requiresBridgeWallet
                     ? [
-                        `Pay with Believe Cash balance${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
+                        "Pay with Believe Cash balance",
                         "Funds move to the platform reserve when you submit",
                         "Gift card issuance begins after a 72-hour waiting period",
                         "Prime Supporters only — Believe Points are not used",
                       ]
                     : [
-                        `Pay with Available Believe Points${platformFeeUsd > 0 ? ` (includes ${formatCurrency(platformFeeUsd)} platform fee)` : ""}`,
+                        "Pay with Available Believe Points",
                         "BP is deducted immediately when you submit",
                         "Gift card issuance begins after a 72-hour waiting period",
                         "You will be notified when your gift card is ready",
@@ -842,6 +882,101 @@ export default function PurchaseDetailsPage({
                       )}
                     </div>
 
+                    {isValidAmount && selectedOrganization && (
+                      <div className="rounded-xl border border-border/70 bg-muted/30 p-4 dark:border-gray-800 dark:bg-gray-800/30">
+                        <p className="text-sm font-semibold text-foreground">
+                          Support Your Organization{" "}
+                          <span className="font-normal text-muted-foreground">(Optional)</span>
+                        </p>
+
+                        <label className="mt-3 flex cursor-pointer items-start gap-3">
+                          <Checkbox
+                            checked={tipEnabled}
+                            onCheckedChange={(checked) => handleTipToggle(checked === true)}
+                            className="mt-0.5"
+                          />
+                          <span className="text-sm leading-snug text-foreground">
+                            Add a tip to support{" "}
+                            <span className="font-medium">{selectedOrganization.name}</span>
+                          </span>
+                        </label>
+
+                        {tipEnabled && (
+                          <div className="mt-4 space-y-3">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleTipPresetSelect(0)}
+                                className={cn(
+                                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
+                                  tipPreset === 0
+                                    ? "border-purple-600 bg-purple-600 text-white"
+                                    : "border-border bg-background text-foreground hover:bg-muted",
+                                )}
+                              >
+                                No Tip
+                              </button>
+                              {TIP_PRESETS.map((amount) => (
+                                <button
+                                  key={amount}
+                                  type="button"
+                                  onClick={() => handleTipPresetSelect(amount)}
+                                  className={cn(
+                                    "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
+                                    tipPreset === amount
+                                      ? "border-purple-600 bg-purple-600 text-white"
+                                      : "border-border bg-background text-foreground hover:bg-muted",
+                                  )}
+                                >
+                                  {formatCurrency(amount)}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => handleTipPresetSelect("other")}
+                                className={cn(
+                                  "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
+                                  tipPreset === "other"
+                                    ? "border-purple-600 bg-purple-600 text-white"
+                                    : "border-border bg-background text-foreground hover:bg-muted",
+                                )}
+                              >
+                                Other Amount
+                              </button>
+                            </div>
+
+                            {tipPreset === "other" && (
+                              <div>
+                                <Label htmlFor="custom-tip" className="text-xs text-muted-foreground">
+                                  Custom tip amount
+                                </Label>
+                                <div className="relative mt-1.5">
+                                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                    $
+                                  </span>
+                                  <Input
+                                    id="custom-tip"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="0.01"
+                                    value={customTipAmount}
+                                    onChange={(e) => setCustomTipAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    className="h-10 rounded-xl pl-7 dark:border-gray-700 dark:bg-gray-900"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            <p className="text-xs text-muted-foreground">
+                              100% of your tip goes to the organization.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {isValidAmount && (
                       <div className="rounded-xl border border-purple-500/25 bg-gradient-to-r from-purple-600/[0.07] to-blue-600/[0.07] p-4 dark:from-purple-500/10 dark:to-blue-500/10">
                         <div className="flex items-end justify-between gap-3">
@@ -854,8 +989,8 @@ export default function PurchaseDetailsPage({
                             </p>
                             <div className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
                               <p>Gift card: {formatCurrency(data.amount)}</p>
-                              {platformFeeUsd > 0 && (
-                                <p>Platform fee: {formatCurrency(platformFeeUsd)}</p>
+                              {resolvedSupporterTip > 0 && (
+                                <p>Organization tip: {formatCurrency(resolvedSupporterTip)}</p>
                               )}
                             </div>
                           </div>
@@ -1077,18 +1212,14 @@ export default function PurchaseDetailsPage({
 
                             {!believePointsSufficientForSku && (
                               <p className="text-sm text-destructive">
-                                {platformFeeUsd > 0
-                                  ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + fee ${platformFeeUsd.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
+                                {resolvedSupporterTip > 0
+                                  ? `You need ${totalChargedBp.toFixed(2)} Available BP (gift card ${data.amount.toFixed(2)} + tip ${resolvedSupporterTip.toFixed(2)}) but only have ${availableBelievePoints.toFixed(2)}.`
                                   : `You need ${totalChargedBp.toFixed(2)} Available BP but only have ${availableBelievePoints.toFixed(2)}.`}
                               </p>
                             )}
 
                             <p className="text-xs text-muted-foreground">
-                              Points are deducted immediately
-                              {platformFeeUsd > 0
-                                ? ` (includes a ${formatCurrency(platformFeeUsd)} platform fee)`
-                                : ""}
-                              . Issuance starts after 72 hours.
+                              Points are deducted immediately. Issuance starts after 72 hours.
                             </p>
                       </div>
                     )}
@@ -1199,6 +1330,22 @@ export default function PurchaseDetailsPage({
                         {hasMaxLimit ? ` – ${formatCurrency(maxVal!)}` : "+"}
                       </dd>
                     </div>
+                    {isValidAmount && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-muted-foreground">Gift card</dt>
+                        <dd className="font-medium tabular-nums text-foreground">
+                          {formatCurrency(data.amount)}
+                        </dd>
+                      </div>
+                    )}
+                    {isValidAmount && resolvedSupporterTip > 0 && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-muted-foreground">Organization tip</dt>
+                        <dd className="font-medium tabular-nums text-foreground">
+                          {formatCurrency(resolvedSupporterTip)}
+                        </dd>
+                      </div>
+                    )}
                     {isValidAmount && (
                       <div className="flex justify-between gap-3">
                         <dt className="font-medium text-foreground">Total</dt>

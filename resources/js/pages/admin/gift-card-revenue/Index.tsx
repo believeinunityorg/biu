@@ -13,6 +13,7 @@ import { useState } from "react"
 interface Statistics {
   gift_card_sales: number
   buyer_platform_fees: number
+  supporter_tips: number
   platform_fee_biu_share: number
   platform_fee_org_share: number
   provider_commissions: number
@@ -34,6 +35,7 @@ interface RecentPurchase {
   platform_fee: number | null
   platform_fee_biu_share: number | null
   platform_fee_org_share: number | null
+  supporter_tip: number | null
   provider_commission: number | null
   biu_revenue_share: number | null
   organization_revenue: number | null
@@ -86,9 +88,10 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
 
   const metrics = [
     { label: "Gift card sales (face value)", value: statistics.gift_card_sales },
-    { label: "Buyer platform fees", value: statistics.buyer_platform_fees },
-    { label: `Platform fee → BIU (${feePct}%)`, value: statistics.platform_fee_biu_share },
-    { label: `Platform fee → Org (${orgFeePct}%)`, value: statistics.platform_fee_org_share },
+    { label: "Supporter tips (100% to org)", value: statistics.supporter_tips },
+    { label: "Legacy buyer platform fees", value: statistics.buyer_platform_fees },
+    { label: `Legacy platform fee → BIU (${feePct}%)`, value: statistics.platform_fee_biu_share },
+    { label: `Legacy platform fee → Org (${orgFeePct}%)`, value: statistics.platform_fee_org_share },
     { label: "Provider commissions", value: statistics.provider_commissions },
     { label: `BIU provider share (${statistics.biu_share_percentage}%)`, value: statistics.biu_revenue_share },
     { label: "Org provider share", value: statistics.organization_revenue },
@@ -107,7 +110,8 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
           </div>
           <h1 className="text-3xl font-bold text-foreground">Gift card revenue share</h1>
           <p className="max-w-3xl text-muted-foreground">
-            Gift cards sell at face value plus a fixed buyer platform fee. That fee is split{" "}
+            Gift cards sell at face value with an optional supporter tip (100% to the organization).
+            Legacy purchases may include a fixed buyer platform fee split{" "}
             <span className="font-medium text-foreground">{feePct}% BIU / {orgFeePct}% organization</span>.
             Separately, BIU earns{" "}
             <span className="font-medium text-foreground">{statistics.biu_share_percentage}%</span> of provider (Phaze)
@@ -124,7 +128,8 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
             <CardDescription>{statistics.purchase_count} completed purchases in range.</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-1">
-            <p>Buyer platform fee splits: BIU {feePct}% / organization {orgFeePct}%.</p>
+            <p>Optional supporter tips go 100% to the beneficiary organization.</p>
+            <p>Legacy buyer platform fee splits: BIU {feePct}% / organization {orgFeePct}%.</p>
             <p>Provider commission splits: BIU {statistics.biu_share_percentage}% / organization remainder / merchant $0.</p>
           </CardContent>
         </Card>
@@ -158,7 +163,7 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
         <Card>
           <CardHeader>
             <CardTitle>Recent purchases</CardTitle>
-            <CardDescription>Latest gift card sales with platform fee and commission splits.</CardDescription>
+            <CardDescription>Latest gift card sales with supporter tips, legacy platform fees, and commission splits.</CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -168,6 +173,7 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
                   <th className="pb-2 pr-4 font-medium">Brand</th>
                   <th className="pb-2 pr-4 font-medium">Organization</th>
                   <th className="pb-2 pr-4 font-medium text-right">Sale</th>
+                  <th className="pb-2 pr-4 font-medium text-right">Tip</th>
                   <th className="pb-2 pr-4 font-medium text-right">Platform fee</th>
                   <th className="pb-2 pr-4 font-medium text-right">Fee → BIU</th>
                   <th className="pb-2 pr-4 font-medium text-right">Fee → Org</th>
@@ -179,7 +185,7 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
               <tbody>
                 {recentPurchases.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={11} className="py-8 text-center text-muted-foreground">
                       No purchases in this range.
                     </td>
                   </tr>
@@ -192,6 +198,7 @@ export default function AdminGiftCardRevenueIndex({ filters, statistics, recentP
                       <td className="py-3 pr-4">{row.brand_name ?? "—"}</td>
                       <td className="py-3 pr-4">{row.organization_name ?? "—"}</td>
                       <td className="py-3 pr-4 text-right">{formatUsd(row.amount)}</td>
+                      <td className="py-3 pr-4 text-right">{formatUsd(row.supporter_tip)}</td>
                       <td className="py-3 pr-4 text-right">{formatUsd(row.platform_fee)}</td>
                       <td className="py-3 pr-4 text-right">{formatUsd(row.platform_fee_biu_share)}</td>
                       <td className="py-3 pr-4 text-right">{formatUsd(row.platform_fee_org_share)}</td>

@@ -94,8 +94,9 @@ export default function SuccessPage({
 
     const faceValue = Number(giftCard.meta?.gift_card_face_value ?? giftCard.amount) || Number(giftCard.amount) || 0
     const platformFee = Number(giftCard.meta?.platform_fee ?? giftCard.meta?.biu_fee ?? 0) || 0
+    const supporterTip = Number(giftCard.meta?.supporter_tip ?? 0) || 0
     const totalCharged = Number(
-        giftCard.meta?.gift_card_total_charged ?? faceValue + platformFee,
+        giftCard.meta?.gift_card_total_charged ?? faceValue + platformFee + supporterTip,
     ) || faceValue
     const orderNumber =
         (typeof giftCard.meta?.orderId === 'string' && giftCard.meta.orderId) || `GC-${giftCard.id}`
@@ -216,6 +217,14 @@ export default function SuccessPage({
             pdf.text('Platform Fee:', 20, yPos)
             pdf.setFont('helvetica', 'bold')
             pdf.text(formatCurrency(platformFee), 80, yPos)
+            yPos += 8
+        }
+
+        if (supporterTip > 0) {
+            pdf.setFont('helvetica', 'normal')
+            pdf.text('Organization Tip:', 20, yPos)
+            pdf.setFont('helvetica', 'bold')
+            pdf.text(formatCurrency(supporterTip), 80, yPos)
             yPos += 8
         }
 
@@ -527,6 +536,12 @@ export default function SuccessPage({
                                                 <div className="flex justify-between">
                                                     <span className="text-muted-foreground">Platform fee</span>
                                                     <span className="font-medium">{formatCurrency(platformFee)}</span>
+                                                </div>
+                                            )}
+                                            {supporterTip > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Organization tip</span>
+                                                    <span className="font-medium">{formatCurrency(supporterTip)}</span>
                                                 </div>
                                             )}
                                             <div className="flex justify-between">

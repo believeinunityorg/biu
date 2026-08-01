@@ -431,6 +431,7 @@ class GiftCardController extends Controller
             'currency' => 'nullable|string|size:3',
             'payment_method' => 'nullable|string|in:believe_points,bridge_wallet',
             'idempotency_key' => 'nullable|string|max:80',
+            'supporter_tip' => 'nullable|numeric|min:0|max:'.BiuPlatformFeeService::MAX_GIFT_CARD_SUPPORTER_TIP_USD,
         ]);
 
         try {
@@ -556,8 +557,10 @@ class GiftCardController extends Controller
                 ], 403);
             }
 
-            $platformFee = BiuPlatformFeeService::getGiftCardPlatformFeeUsd();
-            $totalCharged = BiuPlatformFeeService::giftCardTotalChargedUsd((float) $purchaseAmount);
+            $supporterTip = BiuPlatformFeeService::normalizeGiftCardSupporterTip(
+                (float) ($validated['supporter_tip'] ?? 0)
+            );
+            $totalCharged = BiuPlatformFeeService::giftCardTotalChargedUsd((float) $purchaseAmount, $supporterTip);
             $user->refresh();
 
             if ($paymentMethod === 'believe_points') {
@@ -566,8 +569,8 @@ class GiftCardController extends Controller
                 if ($eligibleBalance < $totalCharged) {
                     DB::rollBack();
                     $haveAvailable = $user->currentBelievePoints();
-                    $message = $platformFee > 0
-                        ? "Insufficient Believe Points. You need {$totalCharged} Available BP (gift card {$purchaseAmount} + platform fee {$platformFee}) but only have {$haveAvailable}."
+                    $message = $supporterTip > 0
+                        ? "Insufficient Believe Points. You need {$totalCharged} Available BP (gift card {$purchaseAmount} + tip {$supporterTip}) but only have {$haveAvailable}."
                         : "Insufficient Believe Points. You need {$totalCharged} Available BP but only have {$haveAvailable}.";
 
                     if ($isInertiaRequest) {
@@ -1347,7 +1350,6 @@ class GiftCardController extends Controller
                         === \App\Support\SupporterSubscriptionService::SLUG_PRIME,
                 'organizations' => $organizations,
                 'giftCardPurchaseOrganizations' => $giftCardPurchaseOrganizations,
-                'platformFeeUsd' => BiuPlatformFeeService::getGiftCardPlatformFeeUsd(),
             ]);
         }
 
@@ -1491,6 +1493,7 @@ class GiftCardController extends Controller
                     'platform_fee' => $giftCardModel->platform_fee !== null ? (float) $giftCardModel->platform_fee : null,
                     'platform_fee_biu_share' => $giftCardModel->platform_fee_biu_share !== null ? (float) $giftCardModel->platform_fee_biu_share : null,
                     'platform_fee_org_share' => $giftCardModel->platform_fee_org_share !== null ? (float) $giftCardModel->platform_fee_org_share : null,
+                    'supporter_tip' => $giftCardModel->supporter_tip !== null ? (float) $giftCardModel->supporter_tip : null,
                     'platform_commission' => $giftCardModel->platform_commission,
                     'nonprofit_commission' => $giftCardModel->nonprofit_commission,
                     'brand' => $giftCardModel->brand,
@@ -1654,6 +1657,7 @@ class GiftCardController extends Controller
             'platform_fee' => (float) (clone $earningsBase)->sum('platform_fee'),
             'platform_fee_biu_share' => (float) (clone $earningsBase)->sum('platform_fee_biu_share'),
             'platform_fee_org_share' => (float) (clone $earningsBase)->sum('platform_fee_org_share'),
+            'supporter_tips' => (float) (clone $earningsBase)->sum('supporter_tip'),
             'platform_commission' => (float) (clone $earningsBase)->sum('platform_commission'),
             'nonprofit_commission' => (float) (clone $earningsBase)->sum('nonprofit_commission'),
         ];
@@ -1662,7 +1666,7 @@ class GiftCardController extends Controller
             2
         );
         $earningsSummary['organization_total'] = round(
-            $earningsSummary['platform_fee_org_share'] + $earningsSummary['nonprofit_commission'],
+            $earningsSummary['platform_fee_org_share'] + $earningsSummary['nonprofit_commission'] + $earningsSummary['supporter_tips'],
             2
         );
 

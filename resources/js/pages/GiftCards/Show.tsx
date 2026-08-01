@@ -577,21 +577,28 @@ export default function ShowPage({
                                 {(() => {
                                     const faceValue = Number(giftCard.meta?.gift_card_face_value ?? giftCard.amount) || Number(giftCard.amount) || 0
                                     const platformFee = Number(giftCard.meta?.platform_fee ?? giftCard.meta?.biu_fee ?? 0) || 0
+                                    const supporterTip = Number(giftCard.meta?.supporter_tip ?? 0) || 0
                                     const totalCharged = Number(
-                                        giftCard.meta?.gift_card_total_charged ?? faceValue + platformFee,
+                                        giftCard.meta?.gift_card_total_charged ?? faceValue + platformFee + supporterTip,
                                     ) || faceValue
+                                    const hasExtraCharges = platformFee > 0 || supporterTip > 0
 
                                     return (
                                         <div className="space-y-3 p-6 rounded-lg bg-primary/5 border border-primary/20">
                                             <div className="flex items-center justify-between gap-4">
                                                 <div>
                                                     <p className="text-sm text-muted-foreground mb-1">
-                                                        {platformFee > 0 ? 'Total charged' : 'Gift Card Value'}
+                                                        {hasExtraCharges ? 'Total charged' : 'Gift Card Value'}
                                                     </p>
                                                     <p className="text-4xl font-bold text-primary">
                                                         {formatCurrency(totalCharged)}
                                                     </p>
-                                                    {platformFee > 0 && (
+                                                    {supporterTip > 0 && (
+                                                        <p className="text-xs text-muted-foreground mt-1">
+                                                            Includes organization tip
+                                                        </p>
+                                                    )}
+                                                    {platformFee > 0 && supporterTip <= 0 && (
                                                         <p className="text-xs text-muted-foreground mt-1">
                                                             Includes platform fee
                                                         </p>
@@ -599,16 +606,24 @@ export default function ShowPage({
                                                 </div>
                                                 <DollarSign className="h-12 w-12 text-primary opacity-50" />
                                             </div>
-                                            {platformFee > 0 && (
+                                            {hasExtraCharges && (
                                                 <div className="pt-3 border-t border-primary/20 space-y-1.5 text-sm">
                                                     <div className="flex justify-between">
                                                         <span className="text-muted-foreground">Gift card amount</span>
                                                         <span className="font-medium">{formatCurrency(faceValue)}</span>
                                                     </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="text-muted-foreground">Platform fee</span>
-                                                        <span className="font-medium">{formatCurrency(platformFee)}</span>
-                                                    </div>
+                                                    {platformFee > 0 && (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-muted-foreground">Platform fee</span>
+                                                            <span className="font-medium">{formatCurrency(platformFee)}</span>
+                                                        </div>
+                                                    )}
+                                                    {supporterTip > 0 && (
+                                                        <div className="flex justify-between">
+                                                            <span className="text-muted-foreground">Organization tip</span>
+                                                            <span className="font-medium">{formatCurrency(supporterTip)}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

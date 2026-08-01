@@ -13,8 +13,8 @@ use App\Support\ConnectionHubType;
  * BIU platform fee % for sales modules that charge buyers (marketplace, service hub, courses, raffles, merchant hub),
  * plus the fixed gift-card buyer platform fee.
  *
- * Gift cards: face-value card amount + fixed buyer platform fee (default $0.50) charged in Believe Points.
- * That buyer platform fee is split 50/50 between BIU and the beneficiary organization.
+ * Gift cards: face-value card amount plus an optional supporter tip (100% to the beneficiary organization).
+ * Legacy purchases may include a fixed buyer platform fee (50/50 BIU / org split).
  * BIU also earns a share of provider commission via {@see GiftCardRevenueShareService}.
  *
  * Percent fees are applied to the sale base amount (product subtotal, ticket total, course fee, merchant cash spent — not tax/shipping).
@@ -28,7 +28,10 @@ final class BiuPlatformFeeService
 
     public const DEFAULT_MARKETPLACE_MERCHANT_POOL_FEE_PERCENTAGE = 3.0;
 
-    /** Fixed USD / BP platform fee added on top of gift card face value. */
+    /** Maximum optional supporter tip on a gift card purchase (USD / BP). */
+    public const MAX_GIFT_CARD_SUPPORTER_TIP_USD = 100.0;
+
+    /** @deprecated Legacy fixed buyer platform fee — new purchases use optional supporter tips instead. */
     public const DEFAULT_GIFT_CARD_PLATFORM_FEE_USD = 0.50;
 
     /** BIU share of the buyer-facing gift card platform fee (remainder to organization). */
@@ -170,22 +173,33 @@ final class BiuPlatformFeeService
     }
 
     /**
-     * Total Believe Points charged for a gift card: face value + fixed platform fee.
+     * Normalize an optional supporter tip (100% to the beneficiary organization).
      */
-    public static function giftCardTotalChargedUsd(float $faceValueUsd): float
+    public static function normalizeGiftCardSupporterTip(float $tipUsd): float
     {
-        return round(max(0.0, $faceValueUsd) + self::getGiftCardPlatformFeeUsd(), 2);
+        return round(min(max(0.0, $tipUsd), self::MAX_GIFT_CARD_SUPPORTER_TIP_USD), 2);
     }
 
     /**
-     * Ledger / transaction meta slice for gift card buyer platform fee (50/50 BIU / org).
+     * Total Believe Points / USD charged for a gift card: face value + optional supporter tip.
+     */
+    public static function giftCardTotalChargedUsd(float $faceValueUsd, float $supporterTipUsd = 0.0): float
+    {
+        $face = round(max(0.0, $faceValueUsd), 2);
+        $tip = self::normalizeGiftCardSupporterTip($supporterTipUsd);
+
+        return round($face + $tip, 2);
+    }
+
+    /**
+     * Ledger / transaction meta slice for gift card purchase (face value + optional supporter tip).
      *
      * @return array{
      *   platform_fee: float,
      *   platform_fee_biu_share: float,
      *   platform_fee_org_share: float,
-     *   platform_fee_biu_share_percentage: float,
-     *   platform_fee_org_share_percentage: float,
+     *   supporter_tip: float,
+     *   supporter_tip_org_share: float,
      *   biu_fee: float,
      *   believe_biu_fee: float,
      *   gift_card_face_value: float,
@@ -195,22 +209,20 @@ final class BiuPlatformFeeService
      *   subtotal: float
      * }
      */
-    public static function giftCardLedgerMetaSlice(float $faceValueUsd): array
+    public static function giftCardLedgerMetaSlice(float $faceValueUsd, float $supporterTipUsd = 0.0): array
     {
         $face = round(max(0.0, $faceValueUsd), 2);
-        $split = self::splitGiftCardPlatformFee();
-        $fee = $split['platform_fee'];
-        $total = round($face + $fee, 2);
+        $tip = self::normalizeGiftCardSupporterTip($supporterTipUsd);
+        $total = round($face + $tip, 2);
 
         return [
-            'platform_fee' => $fee,
-            'platform_fee_biu_share' => $split['platform_fee_biu_share'],
-            'platform_fee_org_share' => $split['platform_fee_org_share'],
-            'platform_fee_biu_share_percentage' => $split['platform_fee_biu_share_percentage'],
-            'platform_fee_org_share_percentage' => $split['platform_fee_org_share_percentage'],
-            // BIU keeps only its share of the buyer platform fee.
-            'biu_fee' => $split['platform_fee_biu_share'],
-            'believe_biu_fee' => $split['platform_fee_biu_share'],
+            'platform_fee' => 0.0,
+            'platform_fee_biu_share' => 0.0,
+            'platform_fee_org_share' => 0.0,
+            'supporter_tip' => $tip,
+            'supporter_tip_org_share' => $tip,
+            'biu_fee' => 0.0,
+            'believe_biu_fee' => 0.0,
             'gift_card_face_value' => $face,
             'gift_card_total_charged' => $total,
             'amount_gross' => $total,

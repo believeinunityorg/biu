@@ -54,6 +54,16 @@ final class GiftCardLedgerService
         }
 
         $buyerTotal = round(max(0.0, $faceValue + $platformFee), 2);
+        $supporterTip = 0.0;
+        if ($giftCard->supporter_tip !== null) {
+            $supporterTip = (float) $giftCard->supporter_tip;
+        } elseif (array_key_exists('supporter_tip', $meta) || array_key_exists('supporter_tip', $txMeta)) {
+            $supporterTip = (float) ($meta['supporter_tip'] ?? $txMeta['supporter_tip'] ?? 0);
+        }
+        $supporterTip = round(max(0.0, $supporterTip), 2);
+        if ($supporterTip > 0) {
+            $buyerTotal = round(max($buyerTotal, $faceValue + $supporterTip), 2);
+        }
         if ((float) $t->amount > $buyerTotal) {
             $buyerTotal = round((float) $t->amount, 2);
         }
@@ -74,6 +84,8 @@ final class GiftCardLedgerService
         $financials['platform_fee_amount'] = round(max(0.0, $platformFee), 2);
         $financials['platform_fee_biu_share'] = round(max(0.0, $biuFeeShare), 2);
         $financials['platform_fee_org_share'] = round(max(0.0, $orgFeeShare), 2);
+        $financials['supporter_tip'] = $supporterTip;
+        $financials['supporter_tip_org_share'] = $supporterTip;
         $financials['biu_fee'] = round(max(0.0, $biuFeeShare), 2);
         $financials['believe_biu_fee'] = round(max(0.0, $biuFeeShare), 2);
 
@@ -105,11 +117,14 @@ final class GiftCardLedgerService
 
         if ($org !== null && $org > 0) {
             $financials['organization_revenue'] = round($org, 2);
-            $financials['organization_payout'] = round($orgFeeShare + $org, 2);
-            $financials['net_to_organization'] = round($orgFeeShare + $org, 2);
+            $financials['organization_payout'] = round($orgFeeShare + $org + $supporterTip, 2);
+            $financials['net_to_organization'] = round($orgFeeShare + $org + $supporterTip, 2);
         } elseif ($orgFeeShare > 0 && (($biuShare !== null && $biuShare > 0) || $merchant > 0)) {
-            $financials['organization_payout'] = round($orgFeeShare, 2);
-            $financials['net_to_organization'] = round($orgFeeShare, 2);
+            $financials['organization_payout'] = round($orgFeeShare + $supporterTip, 2);
+            $financials['net_to_organization'] = round($orgFeeShare + $supporterTip, 2);
+        } elseif ($supporterTip > 0) {
+            $financials['organization_payout'] = round($supporterTip, 2);
+            $financials['net_to_organization'] = round($supporterTip, 2);
         } else {
             // Keep the key present (null) — ledgerReportFinancials / controller require it.
             unset($financials['organization_payout']);

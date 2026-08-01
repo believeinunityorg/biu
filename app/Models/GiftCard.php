@@ -20,6 +20,7 @@ class GiftCard extends Model
         'platform_fee',
         'platform_fee_biu_share',
         'platform_fee_org_share',
+        'supporter_tip',
         'commission_percentage',
         'total_commission',
         'platform_commission',
@@ -52,6 +53,7 @@ class GiftCard extends Model
         'platform_fee' => 'decimal:8',
         'platform_fee_biu_share' => 'decimal:8',
         'platform_fee_org_share' => 'decimal:8',
+        'supporter_tip' => 'decimal:8',
         'commission_percentage' => 'decimal:6', // Support up to 6 decimal places for percentages
         'total_commission' => 'decimal:8', // Support up to 8 decimal places for very small commission amounts
         'platform_commission' => 'decimal:8', // Support up to 8 decimal places for very small commission amounts

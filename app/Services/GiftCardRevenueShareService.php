@@ -3,8 +3,8 @@
 namespace App\Services;
 
 /**
- * Gift card revenue: face-value card amount + fixed buyer platform fee (see {@see BiuPlatformFeeService}).
- * Buyer platform fee is split 50/50 between BIU and the beneficiary organization.
+ * Gift card revenue: face-value card amount plus optional supporter tip (100% to organization).
+ * Legacy purchases may include a fixed buyer platform fee (50/50 BIU / org split).
  * Provider (Phaze) commission is split — BIU share % and remainder to the beneficiary organization.
  * Merchant revenue is always zero (no merchant pool on gift cards).
  */
@@ -101,7 +101,7 @@ final class GiftCardRevenueShareService
                 'biu_revenue_share' => $platformCommission,
                 'organization_revenue' => $nonprofitCommission,
                 'merchant_revenue' => $merchantRevenue,
-                'gift_card_sales_basis' => 'face_value_plus_fixed_buyer_platform_fee',
+                'gift_card_sales_basis' => 'face_value_plus_optional_supporter_tip',
             ],
         ];
     }
@@ -134,7 +134,7 @@ final class GiftCardRevenueShareService
     /**
      * Ledger / export meta: buyer platform fee (50/50) + commission splits when known.
      *
-     * @param  array<string, float|null>|null  $recordedFeeSplit  Optional stored fee split from the gift card row
+     * @param  array<string, float|null>|null  $recordedFeeSplit  Optional stored legacy platform fee split from the gift card row
      * @return array<string, float|null>
      */
     public static function ledgerMetaSlice(
@@ -144,11 +144,13 @@ final class GiftCardRevenueShareService
         ?float $organizationRevenue = null,
         ?float $merchantRevenue = null,
         ?array $recordedFeeSplit = null,
+        ?float $supporterTip = null,
     ): array {
         $face = round(max(0.0, $saleAmount), 2);
-        $feeSlice = BiuPlatformFeeService::giftCardLedgerMetaSlice($face);
+        $tip = BiuPlatformFeeService::normalizeGiftCardSupporterTip((float) ($supporterTip ?? 0));
+        $feeSlice = BiuPlatformFeeService::giftCardLedgerMetaSlice($face, $tip);
 
-        if ($recordedFeeSplit !== null && isset($recordedFeeSplit['platform_fee'])) {
+        if ($recordedFeeSplit !== null && isset($recordedFeeSplit['platform_fee']) && (float) $recordedFeeSplit['platform_fee'] > 0) {
             $fee = round(max(0.0, (float) $recordedFeeSplit['platform_fee']), 2);
             $biuFeeShare = round(max(0.0, (float) ($recordedFeeSplit['platform_fee_biu_share'] ?? ($fee / 2))), 2);
             $orgFeeShare = round(max(0.0, (float) ($recordedFeeSplit['platform_fee_org_share'] ?? ($fee - $biuFeeShare))), 2);
@@ -169,6 +171,7 @@ final class GiftCardRevenueShareService
 
         $biuFeeShare = (float) $feeSlice['platform_fee_biu_share'];
         $orgFeeShare = (float) $feeSlice['platform_fee_org_share'];
+        $tipOrgShare = (float) ($feeSlice['supporter_tip_org_share'] ?? $tip);
         $merchant = round(max(0.0, (float) ($merchantRevenue ?? 0)), 2);
         $biu = $biuShare !== null ? round(max(0.0, $biuShare), 2) : null;
         $org = $organizationRevenue !== null ? round(max(0.0, $organizationRevenue), 2) : null;
@@ -192,9 +195,9 @@ final class GiftCardRevenueShareService
         }
         if ($org !== null) {
             $meta['organization_revenue'] = $org;
-            $meta['organization_payout'] = round($orgFeeShare + $org, 2);
+            $meta['organization_payout'] = round($orgFeeShare + $org + $tipOrgShare, 2);
         } else {
-            $meta['organization_payout'] = $orgFeeShare;
+            $meta['organization_payout'] = round($orgFeeShare + $tipOrgShare, 2);
         }
 
         return $meta;
@@ -204,6 +207,7 @@ final class GiftCardRevenueShareService
      * @return array{
      *   gift_card_sales: float,
      *   buyer_platform_fees: float,
+     *   supporter_tips: float,
      *   platform_fee_biu_share: float,
      *   platform_fee_org_share: float,
      *   provider_commissions: float,
@@ -231,6 +235,7 @@ final class GiftCardRevenueShareService
         }
 
         $buyerFees = (float) (clone $query)->sum('platform_fee');
+        $supporterTips = (float) (clone $query)->sum('supporter_tip');
         $feeBiu = (float) (clone $query)->sum('platform_fee_biu_share');
         $feeOrg = (float) (clone $query)->sum('platform_fee_org_share');
         $biuProvider = (float) (clone $query)->sum('platform_commission');
@@ -239,13 +244,14 @@ final class GiftCardRevenueShareService
         return [
             'gift_card_sales' => (float) (clone $query)->sum('amount'),
             'buyer_platform_fees' => $buyerFees,
+            'supporter_tips' => $supporterTips,
             'platform_fee_biu_share' => $feeBiu,
             'platform_fee_org_share' => $feeOrg,
             'provider_commissions' => (float) (clone $query)->sum('total_commission'),
             'biu_revenue_share' => $biuProvider,
             'organization_revenue' => $orgProvider,
             'biu_total_earnings' => round($feeBiu + $biuProvider, 2),
-            'organization_total_earnings' => round($feeOrg + $orgProvider, 2),
+            'organization_total_earnings' => round($feeOrg + $orgProvider + $supporterTips, 2),
             'merchant_revenue' => (float) (clone $query)->sum('merchant_revenue'),
             'purchase_count' => (int) (clone $query)->count(),
             'biu_share_percentage' => self::getBiuSharePercentage(),

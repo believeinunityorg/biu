@@ -40,6 +40,7 @@ class GiftCardRevenueShareController extends Controller
                 'platform_fee' => $card->platform_fee !== null ? (float) $card->platform_fee : null,
                 'platform_fee_biu_share' => $card->platform_fee_biu_share !== null ? (float) $card->platform_fee_biu_share : null,
                 'platform_fee_org_share' => $card->platform_fee_org_share !== null ? (float) $card->platform_fee_org_share : null,
+                'supporter_tip' => $card->supporter_tip !== null ? (float) $card->supporter_tip : null,
                 'provider_commission' => $card->total_commission !== null ? (float) $card->total_commission : null,
                 'biu_revenue_share' => $card->platform_commission !== null ? (float) $card->platform_commission : null,
                 'organization_revenue' => $card->nonprofit_commission !== null ? (float) $card->nonprofit_commission : null,

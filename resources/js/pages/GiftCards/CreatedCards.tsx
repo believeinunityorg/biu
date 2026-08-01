@@ -36,6 +36,7 @@ interface GiftCard {
     platform_fee?: number | null
     platform_fee_biu_share?: number | null
     platform_fee_org_share?: number | null
+    supporter_tip?: number | null
     commission_percentage?: number | null
     total_commission?: number | null
     platform_commission?: number | null
@@ -64,6 +65,7 @@ interface EarningsSummary {
     platform_fee: number
     platform_fee_biu_share: number
     platform_fee_org_share: number
+    supporter_tips: number
     platform_commission: number
     nonprofit_commission: number
     biu_total: number
@@ -336,7 +338,22 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Buyer Platform Fees</CardTitle>
+                            <CardTitle className="text-sm font-medium">Supporter Tips</CardTitle>
+                            <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold">
+                                {formatCommission(earningsSummary?.supporter_tips ?? 0, giftCards.data[0]?.currency || 'USD')}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                100% goes to the organization
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Legacy Platform Fees</CardTitle>
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
@@ -344,7 +361,7 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
                                 {formatCommission(earningsSummary?.platform_fee ?? 0, giftCards.data[0]?.currency || 'USD')}
                             </div>
                             <p className="text-xs text-muted-foreground mt-1">
-                                Split 50% BIU / 50% organization
+                                Older purchases only (50% BIU / 50% org)
                             </p>
                         </CardContent>
                     </Card>
@@ -375,7 +392,7 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
                                     {formatCommission(earningsSummary?.organization_total ?? 0, giftCards.data[0]?.currency || 'USD')}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Fee share {formatCommission(earningsSummary?.platform_fee_org_share ?? 0)} + provider {formatCommission(earningsSummary?.nonprofit_commission ?? 0)}
+                                    Tips {formatCommission(earningsSummary?.supporter_tips ?? 0)} + fee share {formatCommission(earningsSummary?.platform_fee_org_share ?? 0)} + provider {formatCommission(earningsSummary?.nonprofit_commission ?? 0)}
                                 </p>
                             </CardContent>
                         </Card>
@@ -491,6 +508,11 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
                                                 <p className="text-2xl font-bold text-primary">
                                                     {formatCurrency(card.amount, card.currency)}
                                                 </p>
+                                                {card.supporter_tip != null && Number(card.supporter_tip) > 0 && (
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        Supporter tip: {formatCommission(card.supporter_tip, card.currency)}
+                                                    </p>
+                                                )}
                                                 {card.platform_fee != null && Number(card.platform_fee) > 0 && (
                                                     <p className="text-xs text-muted-foreground mt-1">
                                                         Platform fee: {formatCommission(card.platform_fee, card.currency)}
@@ -507,7 +529,7 @@ export default function CreatedCardsPage({ giftCards, earningsSummary, organizat
                                                 {!isAdmin && (
                                                     <p className="text-sm font-semibold text-green-600 dark:text-green-400 mt-1">
                                                         Your earnings: {formatCommission(
-                                                            (Number(card.platform_fee_org_share) || 0) + (Number(card.nonprofit_commission) || 0),
+                                                            (Number(card.platform_fee_org_share) || 0) + (Number(card.nonprofit_commission) || 0) + (Number(card.supporter_tip) || 0),
                                                             card.currency
                                                         )}
                                                     </p>

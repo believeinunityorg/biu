@@ -132,8 +132,8 @@ export default function PurchaseDetailsPage({
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState("")
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("")
-  const [tipEnabled, setTipEnabled] = useState(false)
-  const [tipPreset, setTipPreset] = useState<number | "other" | null>(null)
+  const [tipEnabled, setTipEnabled] = useState(true)
+  const [tipPreset, setTipPreset] = useState<number | "other" | null>(0.1)
   const [customTipAmount, setCustomTipAmount] = useState("")
 
   const infoTabs = useMemo(() => {
@@ -166,7 +166,7 @@ export default function PurchaseDetailsPage({
     currency: "USD",
     payment_method: requiresBridgeWallet ? ("bridge_wallet" as const) : ("believe_points" as const),
     idempotency_key: "",
-    supporter_tip: 0,
+    supporter_tip: 0.1,
   })
 
   const [bridgeBalance, setBridgeBalance] = useState<number | null>(null)

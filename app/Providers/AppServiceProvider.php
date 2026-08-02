@@ -19,6 +19,8 @@ use App\Models\FundMeDonation;
 use App\Models\JobApplication;
 use App\Models\NodeSell;
 use App\Models\CareAlliance;
+use App\Models\CommunityContent;
+use App\Models\CommunityReply;
 use App\Models\Group;
 use App\Models\Organization;
 use App\Models\Subscription as AppSubscription;
@@ -72,6 +74,8 @@ class AppServiceProvider extends ServiceProvider
             'Organization' => Organization::class,
             'UnityImpactAlliance' => CareAlliance::class,
             'Group' => Group::class,
+            'CommunityContent' => CommunityContent::class,
+            'CommunityReply' => CommunityReply::class,
         ]);
 
         if ($this->app->environment('production')) {

@@ -31,7 +31,7 @@ export default function GroupProfileSettings({ group, membership, membershipRout
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title={`${group.name} — Profile Settings`} />
 
-      <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
+      <div className="w-full space-y-6 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Group Profile</h1>

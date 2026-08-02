@@ -6,6 +6,8 @@ use App\Enums\MembershipAccountType;
 use App\Models\Concerns\HasMembershipAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Group extends Model
@@ -16,15 +18,23 @@ class Group extends Model
         'name',
         'slug',
         'description',
+        'cover_image',
+        'category',
         'parent_type',
         'parent_id',
         'creator_user_id',
         'memberships_enabled',
         'status',
+        'is_featured',
+        'is_pinned',
+        'is_hidden_on_parent',
     ];
 
     protected $casts = [
         'memberships_enabled' => 'boolean',
+        'is_featured' => 'boolean',
+        'is_pinned' => 'boolean',
+        'is_hidden_on_parent' => 'boolean',
         'parent_type' => MembershipAccountType::class,
     ];
 
@@ -36,6 +46,26 @@ class Group extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'creator_user_id');
+    }
+
+    public function members(): HasMany
+    {
+        return $this->hasMany(GroupMember::class);
+    }
+
+    public function invites(): HasMany
+    {
+        return $this->hasMany(GroupInvite::class);
+    }
+
+    public function communityContents(): MorphMany
+    {
+        return $this->morphMany(CommunityContent::class, 'parent');
+    }
+
+    public function reports(): MorphMany
+    {
+        return $this->morphMany(ContentReport::class, 'reportable');
     }
 
     public static function forAuthUser(User $user): ?self

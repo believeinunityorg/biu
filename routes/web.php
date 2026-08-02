@@ -97,7 +97,13 @@ use App\Http\Controllers\FindCareAlliancesController;
 use App\Http\Controllers\FindSupportersController;
 use App\Http\Controllers\FollowerController;
 use App\Http\Controllers\Form1023ApplicationController;
+use App\Http\Controllers\Admin\ModerationQueueController;
+use App\Http\Controllers\Community\CommunityContentController;
+use App\Http\Controllers\Community\CommunityParentController;
+use App\Http\Controllers\Community\CommunityReportController;
+use App\Http\Controllers\Group\CommunityGroupController;
 use App\Http\Controllers\Group\GroupProfileController;
+use App\Http\Controllers\Group\ParentGroupsController;
 use App\Http\Controllers\Membership\MembershipInvitationController;
 use App\Http\Controllers\Membership\MembershipManagementController;
 use App\Http\Controllers\Membership\MembershipPaymentController;
@@ -258,7 +264,7 @@ Route::get('/robots.txt', function () {
     ]);
 })->name('robots');
 
-// Discover Care Alliances (public — same listing whether or not you’re logged in)
+// Discover Care Alliances (public â€” same listing whether or not youâ€™re logged in)
 Route::get('/find-care-alliances', [FindCareAlliancesController::class, 'index'])->name('find-care-alliances.index');
 
 // Unity Loaves Network Directory (public)
@@ -283,7 +289,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified'])->group(function () {
     Route::post('/gift-bp/invites/{invite}/email', [\App\Http\Controllers\GiftBelievePointsController::class, 'updateEmail'])->name('gift-bp.invites.email');
     Route::get('/search', [App\Http\Controllers\PostController::class, 'searchPage'])->name('search.index');
     Route::get('/social-feed/search', [App\Http\Controllers\PostController::class, 'search'])->name('social-feed.search');
-    // Toggle favorite organization — supporter accounts only (see User::canFollowOrganizations)
+    // Toggle favorite organization â€” supporter accounts only (see User::canFollowOrganizations)
     Route::post('/organizations/{id}/toggle-favorite', [OrganizationController::class, 'toggleFavorite'])->name('organizations.toggle-favorite-search');
     Route::post('/organizations/{id}/toggle-favorite', [OrganizationController::class, 'toggleFavorite'])->name('user.organizations.toggle-favorite');
     Route::post('/organizations/{id}/toggle-favorite', [OrganizationController::class, 'toggleFavorite'])->name('organizations.toggle-favorite');
@@ -395,7 +401,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:admin'])->group(functi
     Route::get('/admin/challenge-hub/tracks/create', [AdminChallengeHubController::class, 'createTrack'])->name('admin.challenge-hub.tracks.create');
     Route::post('/admin/challenge-hub/tracks', [AdminChallengeHubController::class, 'storeTrack'])->name('admin.challenge-hub.tracks.store');
     Route::get('/admin/challenge-hub/questions', [AdminChallengeHubController::class, 'questionsIndex'])->name('admin.challenge-hub.questions.index');
-    // CSV / Excel import temporarily disabled — uncomment routes + controller methods + QuestionsBank UI to restore.
+    // CSV / Excel import temporarily disabled â€” uncomment routes + controller methods + QuestionsBank UI to restore.
     // Route::post('/admin/challenge-hub/questions/import', [AdminChallengeHubController::class, 'importQuestions'])->name('admin.challenge-hub.questions.import');
     // Route::get('/admin/challenge-hub/questions/import-template', [AdminChallengeHubController::class, 'downloadQuestionImportTemplate'])->name('admin.challenge-hub.questions.import-template');
     Route::get('/admin/challenge-hub/questions/create', [AdminChallengeHubController::class, 'createQuestion'])->name('admin.challenge-hub.questions.create');
@@ -492,7 +498,7 @@ Route::post('/unity-live/{slug}/viewer/leave', [UnityLiveEngagementController::c
 Route::get('/unity-live/{slug}/chat', [UnityLiveEngagementController::class, 'chatIndex'])->name('unity-live.chat.index')->where('slug', '[a-zA-Z0-9_-]+');
 Route::post('/unity-live/{slug}/chat', [UnityLiveEngagementController::class, 'chatStore'])->name('unity-live.chat.store')->where('slug', '[a-zA-Z0-9_-]+');
 
-// Unity Meet (supporter UI): personal meetings — also available to org / care alliance accounts from dashboard Tools
+// Unity Meet (supporter UI): personal meetings â€” also available to org / care alliance accounts from dashboard Tools
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user|organization|organization_pending|care_alliance'])->group(function () {
     Route::get('/livestreams/supporter', [SupporterLivestreamController::class, 'index'])->name('livestreams.supporter.index');
     Route::get('/livestreams/supporter/live', [SupporterLivestreamController::class, 'live'])->name('livestreams.supporter.live');
@@ -538,7 +544,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user|organization|orga
     Route::get('/livestreams/supporter/{id}', [SupporterLivestreamController::class, 'show'])->name('livestreams.supporter.show')->where('id', '[0-9]+');
 });
 
-// Email credits — supporters + org accounts (Unity Meet invitations, etc.)
+// Email credits â€” supporters + org accounts (Unity Meet invitations, etc.)
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user|organization|organization_pending|care_alliance'])
     ->prefix('email-credits')
     ->name('email-credits.')
@@ -550,7 +556,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user|organization|orga
 
 // VDO.Ninja meeting: guest join by secure token (public)
 Route::get('/join/{token}', [LivestreamController::class, 'guestJoinByToken'])->name('livestreams.guest-join-by-token')->where('token', '[a-zA-Z0-9_-]+');
-// Viewer page: /live/{slug} — view-only with Mute + Volume (public, when stream is live)
+// Viewer page: /live/{slug} â€” view-only with Mute + Volume (public, when stream is live)
 Route::get('/live/{slug}', [LiveViewController::class, 'show'])->name('live.show')->where('slug', '[a-zA-Z0-9_-]+');
 
 
@@ -585,7 +591,7 @@ Route::post('/explore-by-cause/toggle-interest/{category}', [ExploreByCauseContr
 // Public short URL: group chats are served from /chat (auth + topics). Explore-by-cause links here as "Join Group".
 Route::redirect('/groups', '/chat', 302)->name('groups');
 
-// Care Alliance — public campaign donation + preview (no auth)
+// Care Alliance â€” public campaign donation + preview (no auth)
 Route::get('/care-alliance/{allianceSlug}/campaigns/{campaign}/donate', [CareAllianceDonationController::class, 'donatePage'])
     ->name('care-alliance.campaigns.donate')
     ->where('campaign', '[a-zA-Z0-9][a-zA-Z0-9-]*');
@@ -593,7 +599,7 @@ Route::post('/care-alliance/{allianceSlug}/campaigns/{campaign}/preview', [CareA
     ->name('care-alliance.campaigns.preview')
     ->where('campaign', '[a-zA-Z0-9][a-zA-Z0-9-]*');
 
-// Care Alliance — public hub (must stay before any conflicting /care-alliance/* catch-alls)
+// Care Alliance â€” public hub (must stay before any conflicting /care-alliance/* catch-alls)
 Route::prefix('alliances/{allianceSlug}')
     ->where(['allianceSlug' => '[a-zA-Z0-9][a-zA-Z0-9-]*'])
     ->group(function () {
@@ -609,10 +615,10 @@ Route::prefix('alliances/{allianceSlug}')
 
 Route::get('/pricing', [PlansController::class, 'pricing'])->name('pricing');
 
-// Support a Project — public landing: Give (FundMe) or Grow (Invest / Wefunder)
+// Support a Project â€” public landing: Give (FundMe) or Grow (Invest / Wefunder)
 Route::get('/support-a-project', [FundraiseController::class, 'supportAProject'])->name('support-a-project');
 
-// Public branded funnel: explain → qualify form → redirect to Wefunder (lead capture)
+// Public branded funnel: explain â†’ qualify form â†’ redirect to Wefunder (lead capture)
 Route::get('/fundraise', [FundraiseController::class, 'index'])->name('fundraise');
 Route::post('/fundraise', [FundraiseController::class, 'store'])->name('fundraise.store');
 // Project applications requested (authenticated supporters can view)
@@ -625,7 +631,7 @@ Route::get('/invest/redirect/{lead}', [InvestController::class, 'redirect'])->na
 Route::get('/fundraise/community-projects', [FundraiseController::class, 'communityProjects'])->name('fundraise.community-projects')
     ->middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organization_pending|care_alliance']);
 
-// Believe FundMe – public listing and campaign pages
+// Believe FundMe â€“ public listing and campaign pages
 Route::get('/believe-fundme', [FundMeController::class, 'index'])->name('fundme.index');
 // Thank-you route must come before {slug} to avoid route conflict
 Route::get('/believe-fundme/thank-you', [FundMeDonationController::class, 'thankYou'])->name('fundme.thank-you')
@@ -767,7 +773,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|admin|use
 // Merchant Hub Routes (Public - for viewing offers)
 Route::prefix('merchant-hub')->name('merchant-hub.')->group(function () {
     Route::get('/', [MerchantHubOfferController::class, 'index'])->name('index');
-    // SEO-friendly referral: /merchant-hub/offers/8/ref/ABC123 — stores ref in session, redirects to offer
+    // SEO-friendly referral: /merchant-hub/offers/8/ref/ABC123 â€” stores ref in session, redirects to offer
     Route::get('/offers/{id}/ref/{refCode}', [MerchantRedemptionController::class, 'offerRefRedirect'])->name('offer.show.ref');
     Route::get('/offers/{id}', [MerchantHubOfferController::class, 'show'])->name('offer.show');
     Route::get('/products/{marketplace_product}', [MerchantHubMarketplaceProductController::class, 'show'])->name('product.show');
@@ -906,12 +912,12 @@ Route::get('/organizations/{slug}/impact', [OrganizationController::class, 'impa
 Route::get('/organizations/{slug}/details', [OrganizationController::class, 'details'])->name('organizations.details');
 Route::get('/organizations/{slug}/contact', [OrganizationController::class, 'contact'])->name('organizations.contact');
 
-// Unity Meet — public guest join (Connection Hub, invitations; same handler as legacy path)
+// Unity Meet â€” public guest join (Connection Hub, invitations; same handler as legacy path)
 Route::get('/unity-meet/join/{roomName}', [LivestreamController::class, 'guestJoin'])
     ->where('roomName', '[a-zA-Z0-9_-]+')
     ->name('unity-meet.join');
 
-// Public livestream guest join (no auth) — legacy alias; registered first so /livestreams/join/{roomName} is not matched by /livestreams/{id}
+// Public livestream guest join (no auth) â€” legacy alias; registered first so /livestreams/join/{roomName} is not matched by /livestreams/{id}
 Route::get('/livestreams/join/{roomName}', [LivestreamController::class, 'guestJoin'])
     ->where('roomName', '[a-zA-Z0-9_-]+')
     ->name('livestreams.guest-join');
@@ -965,7 +971,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(f
     });
 });
 
-// BIU AI Media Studio — nonprofits + supporters (OpenAI → fal.ai → Dropbox; work runs on the queue worker).
+// BIU AI Media Studio â€” nonprofits + supporters (OpenAI â†’ fal.ai â†’ Dropbox; work runs on the queue worker).
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'permission:ai.media.read', 'role:user|organization|organization_pending|care_alliance|admin'])
     ->prefix('ai-media-studio')
     ->name('ai-media-studio.')
@@ -980,7 +986,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'permissi
         Route::get('/{ai_video}', [AiMediaStudioController::class, 'show'])->name('show');
     });
 
-// Credit purchases — wallet credits + AI Media Studio packs (supporters + organizations).
+// Credit purchases â€” wallet credits + AI Media Studio packs (supporters + organizations).
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'role:user|organization|organization_pending|care_alliance|admin'])
     ->group(function () {
         Route::get('/credits/purchase', [CreditPurchaseController::class, 'index'])->name('credits.purchase');
@@ -1347,7 +1353,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|care_alli
     Route::get('/campaigns/ai/create', [AiCampaignController::class, 'create'])->name('campaigns.ai-create');
     Route::post('/campaigns/ai', [AiCampaignController::class, 'store'])->name('campaigns.ai-store');
 
-    // Believe FundMe – organization campaigns
+    // Believe FundMe â€“ organization campaigns
     Route::get('/fundme', [FundMeCampaignController::class, 'index'])->name('fundme.campaigns.index');
     Route::get('/fundme/create', [FundMeCampaignController::class, 'create'])->name('fundme.campaigns.create');
     Route::post('/fundme', [FundMeCampaignController::class, 'store'])->name('fundme.campaigns.store');
@@ -1501,7 +1507,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|care_alli
             Route::delete('/{board}/cards/{card}/attachments/{attachment}', [$extras, 'destroyAttachment'])->middleware('permission:project.delete')->name('attachments.destroy');
         });
 
-    // Organization BRP Wallet routes removed — organizations use the existing Believe Points (BP) wallet
+    // Organization BRP Wallet routes removed â€” organizations use the existing Believe Points (BP) wallet
 
     // old Facebook Integration Routes
     // Route::prefix('facebook')->group(function () {
@@ -1582,12 +1588,12 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|admin|org
         Route::delete('/{id}', [LivestreamController::class, 'destroy'])->name('destroy');
     });
 
-    // Unity Meet host entry (organization accounts) — Meeting Ready page
+    // Unity Meet host entry (organization accounts) â€” Meeting Ready page
     Route::get('unity-meet/host/organization/{id}', [LivestreamController::class, 'ready'])
         ->name('unity-meet.host.organization')
         ->where('id', '[0-9]+');
 
-    // Nonprofit Barter Network (NNBN) – EIN + KYB + Board + Bridge + Admin approved only
+    // Nonprofit Barter Network (NNBN) â€“ EIN + KYB + Board + Bridge + Admin approved only
     Route::middleware('barter.access')->prefix('barter')->name('barter.')->group(function () {
         Route::get('/', [BarterNetworkController::class, 'index'])->name('index');
         Route::get('/marketplace', [BarterNetworkController::class, 'marketplace'])->name('marketplace');
@@ -1785,7 +1791,7 @@ Route::middleware(['auth', 'topics.selected', 'role:admin|organization|care_alli
     // Route::post('/printify/products/sync', [ProductController::class, 'syncFromPrintify'])->name('printify.products.sync');
 });
 
-/* Category Routes — global catalog; admin only (not organization dashboard) */
+/* Category Routes â€” global catalog; admin only (not organization dashboard) */
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'role:admin'])->group(function () {
     Route::resource('categories', CategoryController::class)->except(['show'])->middleware([
         'index' => 'permission:category.read',
@@ -1914,7 +1920,7 @@ Route::get('volunteers/{volunteer}', [VolunteerController::class, 'show'])
     ->name('volunteers.show')
     ->middleware(['role:organization|care_alliance', 'permission:volunteer.read']);
 
-// Events Routes (create/store: nonprofit roles + event.create — see EnsureCanCreateEvents)
+// Events Routes (create/store: nonprofit roles + event.create â€” see EnsureCanCreateEvents)
 Route::resource('events', EventController::class)->middleware([
     'index' => 'permission:event.read',
     'create' => 'can.create.events',
@@ -2067,7 +2073,7 @@ Route::post('withdrawals/{withdrawal}/make-payment', [WithdrawalController::clas
 //     Route::post('/payment-methods', [PaymentMethodSettingController::class, 'update'])->name('payment-methods.update');
 // });
 
-// Newsletter Routes (auth required — guests are redirected to login, not 403)
+// Newsletter Routes (auth required â€” guests are redirected to login, not 403)
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->prefix('newsletter')->name('newsletter.')->group(function () {
     Route::get('/', [NewsletterController::class, 'index'])->name('index');
     Route::get('/templates', [NewsletterController::class, 'templates'])->name('templates');
@@ -2185,7 +2191,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(f
         'destroy' => 'permission:topic.delete',
     ]);
 
-    // Event types (admin CRUD; org / Care Alliance read — index matches EnsureCanReadEventTypes + controller)
+    // Event types (admin CRUD; org / Care Alliance read â€” index matches EnsureCanReadEventTypes + controller)
     Route::resource('event-types', EventTypeController::class)->only(['index', 'store', 'update', 'destroy'])->middleware([
         'index' => 'can.read.event_types',
         'store' => 'permission:event_type.create',
@@ -2259,6 +2265,15 @@ Route::prefix('admin/push-notifications')
         Route::get('/{pushNotificationLog}', [PushNotificationLogController::class, 'show'])->name('show');
         Route::post('/{pushNotificationLog}/repush', [PushNotificationLogController::class, 'repush'])->name('repush');
         Route::post('/{pushNotificationLog}/recipients/{recipient}/repush', [PushNotificationLogController::class, 'repushRecipient'])->name('recipients.repush');
+    });
+
+// BIU community moderation queue
+Route::prefix('admin/moderation')
+    ->middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'role:admin'])
+    ->name('admin.moderation.')
+    ->group(function () {
+        Route::get('/', [ModerationQueueController::class, 'index'])->name('index');
+        Route::post('/{report}', [ModerationQueueController::class, 'update'])->name('update');
     });
 
 Route::prefix('admin')->middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected', 'role:admin|'])->group(function () {
@@ -2399,7 +2414,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(f
     });
 });
 
-// Integrations – Dropbox (organization + supporter)
+// Integrations â€“ Dropbox (organization + supporter)
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|admin|organization_pending|user|care_alliance', 'topics.selected'])->prefix('integrations')->name('integrations.')->group(function () {
     Route::get('/dropbox', [IntegrationsController::class, 'dropbox'])->name('dropbox');
     Route::get('/dropbox/search', [IntegrationsController::class, 'searchDropbox'])->name('dropbox.search');
@@ -2465,13 +2480,14 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|care_alli
     Route::get('/donations', [DonationController::class, 'organizationIndex'])->name('donations.index');
 });
 
-// Care Alliance — workspace & APIs (same app shell as organizations; requires topics.selected)
+// Care Alliance â€” workspace & APIs (same app shell as organizations; requires topics.selected)
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organization_pending|care_alliance', 'topics.selected'])->prefix('care-alliance')->name('care-alliance.')->group(function () {
     Route::get('/dashboard', [CareAllianceDashboardController::class, 'index'])->name('dashboard');
     Route::get('/workspace/overview', [CareAllianceDashboardController::class, 'workspaceOverview'])->name('workspace.overview');
     Route::get('/workspace/members', [CareAllianceDashboardController::class, 'workspaceMembers'])->name('workspace.members');
     Route::get('/workspace/campaigns/{campaign}/edit', [CareAllianceDashboardController::class, 'workspaceCampaignEdit'])->name('workspace.campaigns.edit');
     Route::get('/workspace/campaigns', [CareAllianceDashboardController::class, 'workspaceCampaigns'])->name('workspace.campaigns');
+    Route::get('/workspace/groups', [ParentGroupsController::class, 'careAllianceIndex'])->name('workspace.groups');
     Route::get('/workspace/settings', [CareAllianceDashboardController::class, 'workspaceSettings'])->name('workspace.settings');
     Route::patch('/settings', [CareAllianceDashboardController::class, 'updateSettings'])->name('settings.update');
     Route::get('/organizations/search', [CareAllianceInvitationController::class, 'searchOrganizations'])->name('organizations.search');
@@ -2486,7 +2502,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
     Route::get('/membership', [MembershipManagementController::class, 'careAlliance'])->name('membership.index');
 });
 
-// Care Alliance — nonprofits accept/decline alliance invites (not Care Alliance hub users)
+// Care Alliance â€” nonprofits accept/decline alliance invites (not Care Alliance hub users)
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organization_pending', 'deny.care_alliance.hub'])->group(function () {
     Route::get('/organization/alliance-membership', [CareAllianceOrgMembershipController::class, 'index'])->name('organization.alliance-membership');
     Route::get('/organization/care-alliances/search', [CareAllianceOrgJoinRequestController::class, 'searchAlliances'])->name('organization.care-alliances.search');
@@ -2497,11 +2513,44 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
     Route::get('/organization/membership', [MembershipManagementController::class, 'organization'])->name('organization.membership.index');
 });
 
-Route::get('/groups/{group:slug}', [GroupProfileController::class, 'show'])->name('groups.show');
+Route::get('/community/contents/{content}', [CommunityContentController::class, 'show'])->name('community.contents.show');
+Route::get('/community/{parentType}/{parentId}', [CommunityParentController::class, 'show'])
+    ->where(['parentType' => 'Organization|UnityImpactAlliance', 'parentId' => '[0-9]+'])
+    ->name('community.parent.show');
 
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(function () {
+    Route::get('/organization/groups', [ParentGroupsController::class, 'organizationIndex'])->name('organization.groups.index');
+    Route::get('/groups/create', [CommunityGroupController::class, 'create'])->name('groups.create');
+    Route::post('/groups', [CommunityGroupController::class, 'store'])->name('groups.store');
+    Route::get('/groups/invites/{token}', [CommunityGroupController::class, 'acceptInvite'])->name('groups.invites.accept');
+    Route::get('/groups/{group:slug}/settings', [CommunityGroupController::class, 'settings'])->name('groups.settings');
+    Route::post('/groups/{group:slug}/settings', [CommunityGroupController::class, 'updateSettings'])->name('groups.settings.update');
+    Route::post('/groups/{group:slug}/join', [CommunityGroupController::class, 'join'])->name('groups.join');
+    Route::post('/groups/{group:slug}/leave', [CommunityGroupController::class, 'leave'])->name('groups.leave');
+    Route::get('/groups/{group:slug}/invite-recipients', [CommunityGroupController::class, 'searchInviteRecipients'])->name('groups.invite-recipients');
+    Route::post('/groups/{group:slug}/invite', [CommunityGroupController::class, 'invite'])->name('groups.invite');
+    Route::post('/groups/{group:slug}/members/{member}/role', [CommunityGroupController::class, 'updateMemberRole'])->name('groups.members.role');
+    Route::post('/groups/{group:slug}/members/{member}/suspend', [CommunityGroupController::class, 'suspendMember'])->name('groups.members.suspend');
+    Route::delete('/groups/{group:slug}/members/{member}', [CommunityGroupController::class, 'removeMember'])->name('groups.members.remove');
+    Route::post('/groups/{group:slug}/parent-controls', [CommunityGroupController::class, 'updateParentControls'])->name('groups.parent-controls');
+
+
+    Route::post('/community/contents', [CommunityContentController::class, 'store'])->name('community.contents.store');
+    Route::post('/community/contents/{content}', [CommunityContentController::class, 'update'])->name('community.contents.update');
+    Route::post('/community/contents/{content}/reply', [CommunityContentController::class, 'reply'])->name('community.contents.reply');
+    Route::post('/community/contents/{content}/react', [CommunityContentController::class, 'react'])->name('community.contents.react');
+    Route::post('/community/contents/{content}/follow', [CommunityContentController::class, 'follow'])->name('community.contents.follow');
+    Route::post('/community/contents/{content}/moderate', [CommunityContentController::class, 'moderate'])->name('community.contents.moderate');
+    Route::post('/community/replies/{reply}/moderate', [CommunityContentController::class, 'moderateReply'])->name('community.replies.moderate');
+    Route::post('/community/reports', [CommunityReportController::class, 'store'])->name('community.reports.store');
+
     Route::get('/groups/{group:slug}/settings/profile', [GroupProfileController::class, 'edit'])->name('groups.profile.edit');
     Route::get('/groups/{group:slug}/membership', [MembershipManagementController::class, 'group'])->name('groups.membership.index');
+});
+
+Route::get('/groups/{group:slug}', [CommunityGroupController::class, 'show'])->name('groups.show');
+
+Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(function () {
     Route::post('/membership-requests', [SupporterMembershipRequestController::class, 'store'])
         ->name('membership-requests.store')
         ->middleware('role:user');
@@ -2612,7 +2661,7 @@ Route::prefix('admin/service-categories')
         Route::delete('/{serviceCategory}', [ServiceCategoryController::class, 'destroy'])->name('destroy');
     });
 
-// Org registration: Category Grid (Primary Action) — lookup table managed by admins
+// Org registration: Category Grid (Primary Action) â€” lookup table managed by admins
 Route::prefix('admin/primary-action-categories')
     ->middleware(['auth', 'EnsureEmailIsVerified', 'role:admin', 'topics.selected'])
     ->name('admin.primary-action-categories.')
@@ -2726,7 +2775,7 @@ Route::prefix('admin/irs-members')
         Route::get('/', [IrsBoardMemberController::class, 'index'])->name('index');
     });
 
-// Admin Fundraise Leads (qualified leads from /fundraise funnel → Wefunder)
+// Admin Fundraise Leads (qualified leads from /fundraise funnel â†’ Wefunder)
 Route::prefix('admin/fundraise-leads')
     ->middleware(['auth', 'EnsureEmailIsVerified', 'role:admin', 'topics.selected'])
     ->name('admin.fundraise-leads.')

@@ -38,7 +38,7 @@ class ParentGroupsController extends Controller
     }
 
     /**
-     * Unity Alliance workspace: manage groups under the alliance parent.
+     * Unity Impact Alliance workspace: manage groups under the alliance parent.
      */
     public function careAllianceIndex(Request $request): Response
     {
@@ -46,7 +46,7 @@ class ParentGroupsController extends Controller
         $alliance = CareAlliance::query()->where('creator_user_id', $user->id)->first();
 
         if (! $alliance) {
-            abort(404, 'Unity Alliance not found for this account.');
+            abort(404, 'Unity Impact Alliance not found for this account.');
         }
 
         return $this->renderParentGroupsIndex($user, $alliance);
@@ -94,7 +94,7 @@ class ParentGroupsController extends Controller
 
         $canCreate = $this->eligibility->canCreateGroupUnder($user, $parent);
         $title = $parent instanceof CareAlliance
-            ? 'Unity Alliance Community Groups'
+            ? 'Unity Impact Alliance Community Groups'
             : 'Community Groups';
 
         return Inertia::render('Group/Index', [

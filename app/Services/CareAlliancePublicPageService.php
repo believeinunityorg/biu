@@ -751,10 +751,7 @@ class CareAlliancePublicPageService
             'jobs' => [],
             'connectedCareAlliances' => [],
             ...$this->communityGroupsPayload($alliance, Auth::user()),
-            'communityFeedUrl' => route('community.parent.show', [
-                'parentType' => MembershipAccountType::UnityImpactAlliance->value,
-                'parentId' => $alliance->id,
-            ]),
+            ...app(CommunityContentService::class)->publicParentFeedProps($alliance, Auth::user()),
         ];
 
         if ($currentPage === 'products') {

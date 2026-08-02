@@ -27,6 +27,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\UserFavoriteOrganization;
 use App\Services\CareAlliancePublicPageService;
+use App\Services\CommunityContentService;
 use App\Services\ExcelDataTransformer;
 use App\Services\ImpactScoreService;
 use App\Services\GroupEligibilityService;
@@ -1137,12 +1138,18 @@ class OrganizationController extends BaseController
             'communityGroups' => $communityGroupsPayload['groups'],
             'canCreateCommunityGroup' => $communityGroupsPayload['can_create'],
             'createCommunityGroupUrl' => $communityGroupsPayload['create_url'],
-            'communityFeedUrl' => $registeredOrg
-                ? route('community.parent.show', [
-                    'parentType' => MembershipAccountType::Organization->value,
-                    'parentId' => $registeredOrg->id,
-                ])
-                : null,
+            ...($registeredOrg
+                ? app(CommunityContentService::class)->publicParentFeedProps($registeredOrg, $request->user())
+                : [
+                    'communityDiscussions' => [],
+                    'communityAnnouncements' => [],
+                    'canCreateCommunityDiscussion' => false,
+                    'canCreateCommunityAnnouncement' => false,
+                    'canModerateCommunity' => false,
+                    'communityParentType' => null,
+                    'communityParentId' => null,
+                    'communityReportReasons' => config('community.report_reasons'),
+                ]),
         ]);
     }
 

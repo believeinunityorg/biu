@@ -58,6 +58,8 @@ import MembershipJoinCard, {
   type MembershipJoinPayload,
   MembershipJoinButton,
 } from "@/components/membership/MembershipJoinCard"
+import CommunityComposer from "@/components/community/CommunityComposer"
+import CommunityFeedList, { type CommunityFeedItem } from "@/components/community/CommunityFeedList"
 
 function supporterIsOrganizationAccount(supporter: {
   is_organization_follower?: boolean
@@ -171,7 +173,14 @@ interface OrganizationPageProps {
   }>
   canCreateCommunityGroup?: boolean
   createCommunityGroupUrl?: string | null
-  communityFeedUrl?: string | null
+  communityDiscussions?: CommunityFeedItem[]
+  communityAnnouncements?: CommunityFeedItem[]
+  canCreateCommunityDiscussion?: boolean
+  canCreateCommunityAnnouncement?: boolean
+  canModerateCommunity?: boolean
+  communityParentType?: string | null
+  communityParentId?: number | null
+  communityReportReasons?: Record<string, string>
   seo?: { title?: string; description?: string }
 }
 
@@ -209,7 +218,14 @@ export default function OrganizationPage({
   communityGroups = [],
   canCreateCommunityGroup = false,
   createCommunityGroupUrl = null,
-  communityFeedUrl = null,
+  communityDiscussions = [],
+  communityAnnouncements = [],
+  canCreateCommunityDiscussion = false,
+  canCreateCommunityAnnouncement = false,
+  canModerateCommunity = false,
+  communityParentType = null,
+  communityParentId = null,
+  communityReportReasons = {},
   seo: seoProp,
 }: OrganizationPageProps) {
   const { url } = usePage()
@@ -292,6 +308,10 @@ export default function OrganizationPage({
         tab = "Membership"
       } else if (tabParam === "groups") {
         tab = "Groups"
+      } else if (tabParam === "discussion") {
+        tab = "Discussion"
+      } else if (tabParam === "announcements") {
+        tab = "Announcements"
       }
     }
     if (pageType === 'products') tab = "Products"
@@ -354,17 +374,6 @@ export default function OrganizationPage({
       return
     }
 
-    if ((tabName === "Discussion" || tabName === "Announcements") && communityFeedUrl) {
-      const tabKey = tabName === "Announcements" ? "announcements" : "discussion"
-      router.visit(`${communityFeedUrl}?tab=${tabKey}`, {
-        preserveState: false,
-        preserveScroll: false,
-        onFinish: () => setIsPageLoading(false),
-        onError: () => setIsPageLoading(false),
-      })
-      return
-    }
-
     let routePath = ''
     if (isCareAlliancePublic && alliancePublicSlug) {
       switch (tabName) {
@@ -395,6 +404,12 @@ export default function OrganizationPage({
         case "Groups":
           routePath = `${route('alliances.show', alliancePublicSlug)}?tab=groups`
           break
+        case "Discussion":
+          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=discussion`
+          break
+        case "Announcements":
+          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=announcements`
+          break
         default:
           routePath = route('alliances.show', alliancePublicSlug)
       }
@@ -423,6 +438,12 @@ export default function OrganizationPage({
           break
         case "Groups":
           routePath = `${route('organizations.show', slug)}?tab=groups`
+          break
+        case "Discussion":
+          routePath = `${route('organizations.show', slug)}?tab=discussion`
+          break
+        case "Announcements":
+          routePath = `${route('organizations.show', slug)}?tab=announcements`
           break
         default:
           routePath = route('organizations.show', slug)
@@ -2072,6 +2093,46 @@ export default function OrganizationPage({
                 {activeTab === "Membership" && membershipJoin && (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <MembershipJoinCard membershipJoin={membershipJoin} />
+                  </div>
+                )}
+
+                {(activeTab === "Discussion" || activeTab === "Announcements") &&
+                  (organization.is_registered || organization.is_care_alliance_public) &&
+                  communityParentType &&
+                  communityParentId != null && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {activeTab === "Announcements" ? "Announcements" : "Discussion"}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {activeTab === "Announcements"
+                          ? "Official updates from this community."
+                          : "Community conversations for this organization."}
+                      </p>
+                    </div>
+                    <CommunityComposer
+                      parentType={communityParentType}
+                      parentId={communityParentId}
+                      type={activeTab === "Announcements" ? "announcement" : "discussion"}
+                      canCreate={
+                        activeTab === "Announcements"
+                          ? canCreateCommunityAnnouncement
+                          : canCreateCommunityDiscussion
+                      }
+                    />
+                    <CommunityFeedList
+                      items={
+                        activeTab === "Announcements"
+                          ? communityAnnouncements
+                          : communityDiscussions
+                      }
+                      emptyLabel={
+                        activeTab === "Announcements" ? "announcements" : "discussions"
+                      }
+                      reportReasons={communityReportReasons}
+                      canModerate={canModerateCommunity}
+                    />
                   </div>
                 )}
 

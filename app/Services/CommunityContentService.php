@@ -244,6 +244,60 @@ class CommunityContentService
         };
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function listVisibleContent(Model $parent, CommunityContentType $type, int $limit = 50): array
+    {
+        $parentType = $this->parentMorphType($parent);
+
+        return CommunityContent::query()
+            ->where('parent_type', $parentType)
+            ->where('parent_id', $parent->getKey())
+            ->where('type', $type->value)
+            ->visiblePublic()
+            ->with(['author:id,name'])
+            ->withCount(['replies' => fn ($q) => $q->where('visibility_status', 'visible')])
+            ->orderByDesc('is_pinned')
+            ->orderByDesc('published_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn (CommunityContent $c) => [
+                'id' => $c->id,
+                'slug' => $c->slug,
+                'type' => $c->type?->value ?? $c->type,
+                'title' => $c->title,
+                'body' => $c->body,
+                'category' => $c->category,
+                'is_pinned' => (bool) $c->is_pinned,
+                'is_locked' => (bool) $c->is_locked,
+                'replies_count' => $c->replies_count ?? 0,
+                'author' => $c->author ? ['id' => $c->author->id, 'name' => $c->author->name] : null,
+                'cover_image' => $c->cover_image ? asset('storage/'.$c->cover_image) : null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Props for embedding Discussion / Announcements on org or alliance public pages.
+     *
+     * @return array<string, mixed>
+     */
+    public function publicParentFeedProps(Model $parent, ?User $viewer): array
+    {
+        return [
+            'communityDiscussions' => $this->listVisibleContent($parent, CommunityContentType::Discussion),
+            'communityAnnouncements' => $this->listVisibleContent($parent, CommunityContentType::Announcement),
+            'canCreateCommunityDiscussion' => $viewer ? $this->canCreateDiscussion($viewer, $parent) : false,
+            'canCreateCommunityAnnouncement' => $viewer ? $this->canCreateAnnouncement($viewer, $parent) : false,
+            'canModerateCommunity' => $viewer ? $this->canModerate($viewer, $parent) : false,
+            'communityParentType' => $this->parentMorphType($parent),
+            'communityParentId' => (int) $parent->getKey(),
+            'communityReportReasons' => config('community.report_reasons'),
+        ];
+    }
+
     private function membership(User $user, Group $group): ?GroupMember
     {
         return GroupMember::query()

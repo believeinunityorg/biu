@@ -707,7 +707,7 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 role: ['organization', 'care_alliance'],
             },
             {
-                title: 'Unity Alliance',
+                title: 'Unity Impact Alliance',
                 icon: HeartHandshake,
                 role: 'care_alliance',
                 items: [

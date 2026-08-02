@@ -62,7 +62,7 @@ export default function ParentShow({
 
           <div className="mb-6">
             <p className="text-sm font-medium uppercase tracking-wide text-purple-600 dark:text-purple-300">
-              {parent.kind === "alliance" ? "Unity Alliance community" : "Organization community"}
+              {parent.kind === "alliance" ? "Unity Impact Alliance community" : "Organization community"}
             </p>
             <h1 className="mt-1 text-3xl font-bold">{parent.name}</h1>
             <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-gray-400">

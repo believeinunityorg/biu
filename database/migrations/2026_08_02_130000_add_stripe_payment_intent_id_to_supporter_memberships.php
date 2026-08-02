@@ -9,14 +9,18 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('supporter_memberships', function (Blueprint $table) {
-            $table->string('stripe_payment_intent_id')->nullable()->after('stripe_checkout_session_id');
+            if (! Schema::hasColumn('supporter_memberships', 'stripe_payment_intent_id')) {
+                $table->string('stripe_payment_intent_id')->nullable()->after('stripe_checkout_session_id');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('supporter_memberships', function (Blueprint $table) {
-            $table->dropColumn('stripe_payment_intent_id');
+            if (Schema::hasColumn('supporter_memberships', 'stripe_payment_intent_id')) {
+                $table->dropColumn('stripe_payment_intent_id');
+            }
         });
     }
 };

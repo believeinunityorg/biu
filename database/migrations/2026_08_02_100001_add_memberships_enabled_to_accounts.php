@@ -9,22 +9,30 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('organizations', function (Blueprint $table) {
-            $table->boolean('memberships_enabled')->default(false)->after('gift_card_terms_approved_at');
+            if (! Schema::hasColumn('organizations', 'memberships_enabled')) {
+                $table->boolean('memberships_enabled')->default(false)->after('gift_card_terms_approved_at');
+            }
         });
 
         Schema::table('care_alliances', function (Blueprint $table) {
-            $table->boolean('memberships_enabled')->default(false)->after('status');
+            if (! Schema::hasColumn('care_alliances', 'memberships_enabled')) {
+                $table->boolean('memberships_enabled')->default(false)->after('status');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('organizations', function (Blueprint $table) {
-            $table->dropColumn('memberships_enabled');
+            if (Schema::hasColumn('organizations', 'memberships_enabled')) {
+                $table->dropColumn('memberships_enabled');
+            }
         });
 
         Schema::table('care_alliances', function (Blueprint $table) {
-            $table->dropColumn('memberships_enabled');
+            if (Schema::hasColumn('care_alliances', 'memberships_enabled')) {
+                $table->dropColumn('memberships_enabled');
+            }
         });
     }
 };

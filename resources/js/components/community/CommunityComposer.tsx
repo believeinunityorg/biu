@@ -2,11 +2,11 @@
 
 import { FormEvent, useState } from "react"
 import { useForm } from "@inertiajs/react"
+import MentionTextarea from "@/components/community/MentionTextarea"
 import { Button } from "@/components/frontend/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/frontend/ui/card"
 import { Input } from "@/components/frontend/ui/input"
 import { Label } from "@/components/frontend/ui/label"
-import { Textarea } from "@/components/frontend/ui/textarea"
 import { Megaphone, MessageSquare } from "lucide-react"
 
 export type CommunityComposerProps = {
@@ -135,16 +135,22 @@ export default function CommunityComposer({
             </div>
             <div>
               <Label className="text-gray-800 dark:text-gray-200">Message</Label>
-              <Textarea
+              <MentionTextarea
                 className={`mt-1.5 ${fieldClass}`}
                 rows={4}
                 value={form.data.body}
-                onChange={(e) => form.setData("body", e.target.value)}
-                placeholder="Write your message… Use @Name to mention someone."
+                mentionedUserIds={form.data.mentioned_user_ids}
+                parentType={parentType}
+                parentId={parentId}
+                onChange={(body, mentionedUserIds) => {
+                  form.setData("body", body)
+                  form.setData("mentioned_user_ids", mentionedUserIds)
+                }}
+                placeholder="Write your message… Type @ to mention a group member."
                 required
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Tip: type @ followed by a name to mention someone (e.g. @Jane Doe).
+                Tip: type @ to pick someone from the dropdown.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">

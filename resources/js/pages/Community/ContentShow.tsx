@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react"
 import { Head, Link, router, useForm } from "@inertiajs/react"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import ReportDialog from "@/components/community/ReportDialog"
+import MentionTextarea from "@/components/community/MentionTextarea"
 import { Button } from "@/components/frontend/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/frontend/ui/card"
 import { Input } from "@/components/frontend/ui/input"
@@ -62,6 +63,8 @@ type Props = {
     cover_image: string | null
     attachment_url: string | null
     attachment_name: string | null
+    parent_type: string
+    parent_id: number
     parent_name: string | null
     replies_count: number
   }
@@ -136,6 +139,7 @@ export default function ContentShow({
     body: "",
     parent_reply_id: null as number | null,
     attachment: null as File | null,
+    mentioned_user_ids: [] as number[],
   })
   const editForm = useForm({
     title: content.title,
@@ -159,7 +163,7 @@ export default function ContentShow({
       forceFormData: true,
       preserveScroll: true,
       onSuccess: () => {
-        form.reset("body", "attachment")
+        form.reset("body", "attachment", "mentioned_user_ids")
         setReplyTo(null)
       },
     })
@@ -624,12 +628,18 @@ export default function ContentShow({
                           </button>
                         </p>
                       )}
-                      <Textarea
+                      <MentionTextarea
                         rows={3}
                         className={fieldClass}
                         value={form.data.body}
-                        onChange={(e) => form.setData("body", e.target.value)}
-                        placeholder="Write a reply… Use @Name to mention someone."
+                        mentionedUserIds={form.data.mentioned_user_ids}
+                        parentType={content.parent_type}
+                        parentId={content.parent_id}
+                        onChange={(body, mentionedUserIds) => {
+                          form.setData("body", body)
+                          form.setData("mentioned_user_ids", mentionedUserIds)
+                        }}
+                        placeholder="Write a reply… Type @ to mention a group member."
                         required
                       />
                       <div>
@@ -663,6 +673,7 @@ export default function ContentShow({
               <Card className="border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#111827]">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">About this post</CardTitle>
+                  <CardDescription>Details and engagement for this community topic.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
                   <dl className="space-y-2">

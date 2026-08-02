@@ -46,9 +46,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/frontend/ui/select"
-import MembershipSettingsSection, {
-  type MembershipSettingsPayload,
-} from "@/components/membership/MembershipSettingsSection"
 // import { TextArea } from "@/components/ui/textarea"
 
 type ProfileForm = {
@@ -87,7 +84,6 @@ export default function ProfileEdit({
   organizationPrimaryActionCategoryIds = [],
   careAlliance = null,
   profileSettingsVariant = "standard",
-  membership = null,
 }: {
   mustVerifyEmail: boolean
   status?: string
@@ -95,7 +91,6 @@ export default function ProfileEdit({
   organizationPrimaryActionCategoryIds?: number[]
   careAlliance?: CareAlliancePayload
   profileSettingsVariant?: ProfileSettingsVariant
-  membership?: MembershipSettingsPayload | null
 }) {
   const page = usePage<SharedData & { success?: string }>()
   const { auth } = page.props
@@ -1249,18 +1244,6 @@ const getCroppedImage = async (
                       </Card>
 
                     )}
-
-          {showOrgProfileCard && membership && (
-            <MembershipSettingsSection
-              membership={membership}
-              membershipRoute={
-                isCareAllianceHub
-                  ? route("care-alliance.membership.index")
-                  : route("organization.membership.index")
-              }
-            />
-          )}
-
 
           {/* Save Button */}
           <div className="flex justify-end">

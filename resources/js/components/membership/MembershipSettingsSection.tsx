@@ -101,6 +101,10 @@ export default function MembershipSettingsSection({
   transform((formData) => ({
     ...formData,
     billing_frequency: billingFrequencyToApi(formData.billing_frequency),
+    membership_name:
+      formData.memberships_enabled && formData.membership_name.trim() === ""
+        ? "Member"
+        : formData.membership_name,
   }))
 
   useEffect(() => {

@@ -77,7 +77,6 @@ interface Props {
   membership: MembershipManagementPayload
   settingsBranding?: "default" | "alliance"
   membershipRoute: string
-  profileSettingsUrl: string
 }
 
 function planSummary(plan: MembershipManagementPayload["plan"]) {
@@ -236,41 +235,18 @@ export default function MembershipIndex({
   membership,
   settingsBranding = "default",
   membershipRoute,
-  profileSettingsUrl,
 }: Props) {
   const isAlliance = settingsBranding === "alliance"
-  const defaultTab = membership.counts.pending > 0 ? "pending" : "verified"
+  const membershipsEnabled = membership.account.memberships_enabled
+  const defaultTab = !membershipsEnabled
+    ? "settings"
+    : membership.counts.pending > 0
+      ? "pending"
+      : "verified"
   const breadcrumbs: BreadcrumbItem[] = [
     { title: "Dashboard", href: "/dashboard" },
     { title: "Membership", href: membershipRoute },
   ]
-
-  if (!membership.account.memberships_enabled) {
-    return (
-      <AppLayout breadcrumbs={breadcrumbs}>
-        <Head title="Membership" />
-        <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <UsersRound className="h-5 w-5" />
-                Membership
-              </CardTitle>
-              <CardDescription>
-                Memberships are not enabled for {membership.account.name}. Enable them in profile settings to manage
-                members.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
-                <Link href={profileSettingsUrl}>Go to profile settings</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </AppLayout>
-    )
-  }
 
   const membershipSettingsPayload: MembershipSettingsPayload = {
     memberships_enabled: membership.account.memberships_enabled,
@@ -295,25 +271,42 @@ export default function MembershipIndex({
               {isAlliance ? "Unity Impact Alliance" : membership.account.name} supporter membership foundation.
             </p>
           </div>
-          <Badge variant="secondary" className="w-fit">
-            {planSummary(membership.plan)}
-          </Badge>
+          {membershipsEnabled && (
+            <Badge variant="secondary" className="w-fit">
+              {planSummary(membership.plan)}
+            </Badge>
+          )}
         </div>
 
+        {!membershipsEnabled && (
+          <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20">
+            <CardContent className="p-4 text-sm text-amber-900 dark:text-amber-100">
+              Memberships are not enabled yet. Turn them on in the <strong>Membership Settings</strong> tab below, then
+              save your plan details.
+            </CardContent>
+          </Card>
+        )}
+
         <Tabs defaultValue={defaultTab} className="space-y-4">
-          <TabsList className={`grid w-full grid-cols-1 gap-2 ${isInvitationOnly ? "sm:grid-cols-4" : "sm:grid-cols-3"} sm:gap-0`}>
-            <TabsTrigger value="verified" className="gap-2">
+          <TabsList
+            className={
+              isInvitationOnly
+                ? "grid w-full grid-cols-1 gap-2 sm:grid-cols-4 sm:gap-0"
+                : "grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-0"
+            }
+          >
+            <TabsTrigger value="verified" className="gap-2" disabled={!membershipsEnabled}>
               <CheckCircle2 className="h-4 w-4" />
               Verified Members
               <Badge variant="outline">{membership.counts.verified}</Badge>
             </TabsTrigger>
-            <TabsTrigger value="pending" className="gap-2">
+            <TabsTrigger value="pending" className="gap-2" disabled={!membershipsEnabled}>
               <Clock3 className="h-4 w-4" />
               Pending Members
               <Badge variant="outline">{membership.counts.pending}</Badge>
             </TabsTrigger>
             {isInvitationOnly && (
-              <TabsTrigger value="invitations" className="gap-2">
+              <TabsTrigger value="invitations" className="gap-2" disabled={!membershipsEnabled}>
                 <Mail className="h-4 w-4" />
                 Invitations
                 <Badge variant="outline">{pendingInvites.length}</Badge>

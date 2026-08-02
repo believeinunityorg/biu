@@ -64,10 +64,6 @@ class MembershipManagementController extends Controller
                 MembershipAccountType::UnityImpactAlliance => route('care-alliance.membership.index'),
                 MembershipAccountType::Group => route('groups.membership.index', $account),
             },
-            'profileSettingsUrl' => match ($accountType) {
-                MembershipAccountType::Organization, MembershipAccountType::UnityImpactAlliance => route('profile.edit').'#membership-settings',
-                MembershipAccountType::Group => route('groups.profile.edit', $account).'#membership-settings',
-            },
         ]);
     }
 }

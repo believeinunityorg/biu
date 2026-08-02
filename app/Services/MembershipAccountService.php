@@ -146,13 +146,23 @@ class MembershipAccountService
                 ]);
             }
 
+            $membershipName = trim((string) ($validated['membership_name'] ?? ''));
+            if ($membershipName === '') {
+                $membershipName = match (true) {
+                    $account instanceof Organization => (string) ($account->name ?? 'Member'),
+                    $account instanceof CareAlliance => (string) ($account->name ?? 'Member'),
+                    $account instanceof Group => (string) ($account->name ?? 'Member'),
+                    default => 'Member',
+                };
+            }
+
             $plan = MembershipPlan::query()->firstOrNew([
                 'account_type' => $accountType->value,
                 'account_id' => $account->id,
             ]);
 
             $plan->fill([
-                'membership_name' => $validated['membership_name'],
+                'membership_name' => $membershipName,
                 'membership_type' => $validated['membership_type'],
                 'membership_fee' => ($validated['membership_type'] ?? null) === MembershipType::Paid->value
                     ? $validated['membership_fee']

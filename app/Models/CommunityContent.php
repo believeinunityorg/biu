@@ -16,6 +16,7 @@ class CommunityContent extends Model
         'parent_id',
         'type',
         'title',
+        'slug',
         'body',
         'cover_image',
         'attachment_path',
@@ -43,6 +44,41 @@ class CommunityContent extends Model
         'archived_at' => 'datetime',
     ];
 
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if (ctype_digit((string) $value)) {
+            return $this->whereKey($value)->firstOrFail();
+        }
+
+        return $this->where($field ?? $this->getRouteKeyName(), $value)->firstOrFail();
+    }
+
+    public static function uniqueSlugFromTitle(string $title, ?int $ignoreId = null): string
+    {
+        $base = \Illuminate\Support\Str::slug($title);
+        if ($base === '') {
+            $base = 'post';
+        }
+
+        $slug = $base;
+        $counter = 2;
+        while (
+            static::query()
+                ->where('slug', $slug)
+                ->when($ignoreId, fn ($q) => $q->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = $base.'-'.$counter;
+            $counter++;
+        }
+
+        return $slug;
+    }
     public function parent(): MorphTo
     {
         return $this->morphTo();

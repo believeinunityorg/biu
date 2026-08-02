@@ -114,6 +114,7 @@ class CommunityContentService
             'parent_id' => $parent->getKey(),
             'type' => $type,
             'title' => $data['title'],
+            'slug' => CommunityContent::uniqueSlugFromTitle((string) $data['title']),
             'body' => $data['body'],
             'cover_image' => $coverPath,
             'attachment_path' => $attachmentPath,

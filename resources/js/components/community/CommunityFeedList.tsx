@@ -9,6 +9,7 @@ import { Lock, Megaphone, MessageSquare, Pin } from "lucide-react"
 
 export type CommunityFeedItem = {
   id: number
+  slug: string
   type: string
   title: string
   body: string
@@ -74,7 +75,7 @@ export default function CommunityFeedList({
             </div>
             <CardTitle className="text-lg sm:text-xl">
               <Link
-                href={route("community.contents.show", item.id)}
+                href={route("community.contents.show", item.slug)}
                 className="hover:text-purple-600 hover:underline dark:hover:text-purple-300"
               >
                 {item.title}
@@ -92,7 +93,7 @@ export default function CommunityFeedList({
             <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">{item.body}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button asChild size="sm" variant="outline" className="cursor-pointer">
-                <Link href={route("community.contents.show", item.id)}>Open</Link>
+                <Link href={route("community.contents.show", item.slug)}>Open</Link>
               </Button>
               <ReportDialog
                 reportableType="CommunityContent"
@@ -106,7 +107,7 @@ export default function CommunityFeedList({
                     variant="ghost"
                     className="cursor-pointer"
                     onClick={() =>
-                      router.post(route("community.contents.moderate", item.id), {
+                      router.post(route("community.contents.moderate", item.slug), {
                         action: "lock",
                         reason: "Moderator lock",
                       })
@@ -119,7 +120,7 @@ export default function CommunityFeedList({
                     variant="ghost"
                     className="cursor-pointer"
                     onClick={() =>
-                      router.post(route("community.contents.moderate", item.id), {
+                      router.post(route("community.contents.moderate", item.slug), {
                         action: "hide",
                         reason: "Hidden by moderator",
                       })

@@ -11,12 +11,16 @@ use App\Models\CommunityFollow;
 use App\Models\CommunityReaction;
 use App\Models\CommunityReply;
 use App\Models\Group;
+use App\Models\GroupMember;
 use App\Models\Organization;
+use App\Models\User;
 use App\Services\CommunityContentService;
 use App\Services\CommunityModerationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,6 +31,81 @@ class CommunityContentController extends Controller
         private readonly CommunityContentService $contentService,
         private readonly CommunityModerationService $moderation,
     ) {}
+
+    public function searchMentionables(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'parent_type' => ['required', 'string'],
+            'parent_id' => ['required', 'integer'],
+            'q' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $parent = $this->contentService->resolveParent($validated['parent_type'], (int) $validated['parent_id']);
+        if (! $parent) {
+            return response()->json(['results' => []], 404);
+        }
+
+        $q = trim((string) ($validated['q'] ?? ''));
+        $like = '%'.$q.'%';
+        $userId = (int) $request->user()->id;
+
+        if ($parent instanceof Group) {
+            $memberIds = GroupMember::query()
+                ->where('group_id', $parent->id)
+                ->pluck('user_id')
+                ->all();
+
+            $results = User::query()
+                ->whereIn('id', $memberIds)
+                ->where('id', '!=', $userId)
+                ->when($q !== '', function ($query) use ($like) {
+                    $query->where(function ($inner) use ($like) {
+                        $inner->where('name', 'LIKE', $like)
+                            ->orWhere('email', 'LIKE', $like);
+                    });
+                })
+                ->orderBy('name')
+                ->limit(12)
+                ->get(['id', 'name', 'email', 'image'])
+                ->map(fn (User $u) => [
+                    'id' => $u->id,
+                    'name' => (string) $u->name,
+                    'email' => $u->email ? Str::lower(trim((string) $u->email)) : null,
+                    'image' => $u->image ? '/storage/'.$u->image : null,
+                ])
+                ->values()
+                ->all();
+
+            return response()->json(['results' => $results]);
+        }
+
+        // Org / Alliance community feeds: search verified supporters by name (broader than group members)
+        $results = User::query()
+            ->where('role', 'user')
+            ->whereNotNull('email_verified_at')
+            ->where('id', '!=', $userId)
+            ->when($q !== '', function ($query) use ($like) {
+                $query->where(function ($inner) use ($like) {
+                    $inner->where('name', 'LIKE', $like)
+                        ->orWhere('email', 'LIKE', $like);
+                });
+            }, function ($query) {
+                $query->whereRaw('1 = 0');
+            })
+            ->orderBy('name')
+            ->limit(12)
+            ->get(['id', 'name', 'email', 'image'])
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => (string) $u->name,
+                'email' => $u->email ? Str::lower(trim((string) $u->email)) : null,
+                'image' => $u->image ? '/storage/'.$u->image : null,
+            ])
+            ->values()
+            ->all();
+
+        return response()->json(['results' => $results]);
+    }
 
     public function store(Request $request): RedirectResponse
     {

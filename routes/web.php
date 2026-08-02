@@ -2535,6 +2535,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(f
     Route::post('/groups/{group:slug}/parent-controls', [CommunityGroupController::class, 'updateParentControls'])->name('groups.parent-controls');
 
 
+    Route::get('/community/mentionables', [CommunityContentController::class, 'searchMentionables'])->name('community.mentionables');
     Route::post('/community/contents', [CommunityContentController::class, 'store'])->name('community.contents.store');
     Route::post('/community/contents/{content:slug}', [CommunityContentController::class, 'update'])->name('community.contents.update');
     Route::post('/community/contents/{content:slug}/reply', [CommunityContentController::class, 'reply'])->name('community.contents.reply');

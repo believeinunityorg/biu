@@ -219,6 +219,11 @@ final class UnifiedLedgerMajorType
             'bp_redemption', 'believe_points_wallet_transfer' => [self::TRANSFER, 'bp_redemption', 'Transfer to Believe Cash'],
             'bridge_wallet_transfer' => [self::TRANSFER, 'bridge_wallet_transfer', 'Believe Cash Transfer'],
             'bp_gift_sent' => [self::TRANSFER, 'bp_gift_sent', 'BP Gift Sent'],
+            'supporter_membership_payment', 'supporter_membership_received', 'organization_membership' => [
+                self::ENROLLMENT,
+                'supporter_membership',
+                'Supporter Membership',
+            ],
             'bp_gift_claimed' => [self::TRANSFER, 'bp_gift_claimed', 'BP Gift Claimed'],
             'bp_gift_cancelled' => [self::TRANSFER, 'bp_gift_cancelled', 'BP Gift Cancelled'],
             'bp_gift_expired' => [self::TRANSFER, 'bp_gift_expired', 'BP Gift Expired'],

@@ -15,6 +15,7 @@ use App\Models\Post;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\UserFavoriteOrganization;
+use App\Services\MembershipAccountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -717,8 +718,11 @@ class CareAlliancePublicPageService
 
         $campaigns = $this->campaignsForAlliance($alliance);
 
+        $alliance->loadMissing('membershipPlan');
+
         $props = [
             'organization' => $organization,
+            'membershipJoin' => app(MembershipAccountService::class)->publicJoinPayload($alliance, Auth::user()),
             'posts' => $posts,
             'postsCount' => $counts['postsCount'],
             'supportersCount' => $counts['supportersCount'],

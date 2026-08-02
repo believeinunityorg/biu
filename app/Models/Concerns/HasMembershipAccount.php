@@ -18,6 +18,14 @@ trait HasMembershipAccount
             ->where('account_type', $accountType->value);
     }
 
+    public function membershipInvitations(): HasMany
+    {
+        $accountType = MembershipAccountType::fromModel($this);
+
+        return $this->hasMany(MembershipInvitation::class, 'account_id')
+            ->where('account_type', $accountType->value);
+    }
+
     public function memberships(): HasMany
     {
         $accountType = MembershipAccountType::fromModel($this);

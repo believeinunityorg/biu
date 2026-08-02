@@ -345,6 +345,7 @@ class UnifiedLedgerPresenter
                         : 'marketplace')),
             'service_order' => 'servicehub',
             'enrollment' => 'connection_hub',
+            'supporter_membership' => UnifiedLedgerModule::GENERAL,
             'plan_subscription', 'wallet_plan_subscription' => 'supporter_subscription',
             'gift_card' => 'gift_card',
             'raffle' => 'marketplace',

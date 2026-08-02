@@ -52,6 +52,10 @@ import { PageHead } from "@/components/frontend/PageHead"
 import { motion, AnimatePresence } from "framer-motion"
 import useAxios from "@/hooks/useAxios"
 import OrganizationSetupStatusBar from "@/components/organization/OrganizationSetupStatusBar"
+import MembershipJoinCard, {
+  type MembershipJoinPayload,
+  MembershipJoinButton,
+} from "@/components/membership/MembershipJoinCard"
 
 function supporterIsOrganizationAccount(supporter: {
   is_organization_follower?: boolean
@@ -150,6 +154,7 @@ interface OrganizationPageProps {
     joined_at?: string | null
   }>
   connectedCareAlliances?: Array<{ id: number; name: string; slug: string }>
+  membershipJoin?: MembershipJoinPayload | null
   seo?: { title?: string; description?: string }
 }
 
@@ -183,6 +188,7 @@ export default function OrganizationPage({
   careAllianceProfile,
   allianceMembers = [],
   connectedCareAlliances = [],
+  membershipJoin = null,
   seo: seoProp,
 }: OrganizationPageProps) {
   const { url } = usePage()
@@ -259,6 +265,12 @@ export default function OrganizationPage({
   const initialTab = useMemo(() => {
     // For unregistered organizations, default to "About" instead of "Community Feed"
     let tab = organization.is_registered ? "Community Feed" : "About"
+    if (typeof window !== "undefined") {
+      const tabParam = new URLSearchParams(window.location.search).get("tab")
+      if (tabParam === "membership" && membershipJoin) {
+        tab = "Membership"
+      }
+    }
     if (pageType === 'products') tab = "Products"
     else if (pageType === 'jobs') tab = "Opportunities"
     else if (pageType === 'events') tab = "Events"
@@ -275,7 +287,7 @@ export default function OrganizationPage({
     }
 
     return tab
-  }, [pageType, organization.is_registered, organization.is_care_alliance_public])
+  }, [pageType, organization.is_registered, organization.is_care_alliance_public, membershipJoin])
 
   const [activeTab, setActiveTab] = useState(initialTab)
   const [postsState, setPostsState] = useState<any[]>(posts)
@@ -314,6 +326,11 @@ export default function OrganizationPage({
     setIsPageLoading(true) // Set loading immediately when navigation starts
     const slug = organization.registered_organization?.user?.slug || organization.id
 
+    if (tabName === "Membership" && membershipJoin && !isSubPage) {
+      setIsPageLoading(false)
+      return
+    }
+
     let routePath = ''
     if (isCareAlliancePublic && alliancePublicSlug) {
       switch (tabName) {
@@ -338,6 +355,9 @@ export default function OrganizationPage({
         case "Followers":
           routePath = route('alliances.supporters', alliancePublicSlug)
           break
+        case "Membership":
+          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=membership`
+          break
         default:
           routePath = route('alliances.show', alliancePublicSlug)
       }
@@ -360,6 +380,9 @@ export default function OrganizationPage({
           break
         case "Supporters":
           routePath = route('organizations.supporters', slug)
+          break
+        case "Membership":
+          routePath = `${route('organizations.show', slug)}?tab=membership`
           break
         default:
           routePath = route('organizations.show', slug)
@@ -724,9 +747,35 @@ export default function OrganizationPage({
     { name: "Contact", count: null },
   ]
 
-  const profileTabs = organization.is_registered
-    ? (organization.is_care_alliance_public ? careAllianceTabs : registeredOrgTabs)
-    : registeredOrgTabs.filter(tab => tab.name === "About" || tab.name === "Contact" || tab.name === "Supporters")
+  const profileTabs = useMemo(() => {
+    const base = organization.is_registered
+      ? (organization.is_care_alliance_public ? [...careAllianceTabs] : [...registeredOrgTabs])
+      : registeredOrgTabs.filter(tab => tab.name === "About" || tab.name === "Contact" || tab.name === "Supporters")
+
+    if (!membershipJoin) {
+      return base
+    }
+
+    const contactIndex = base.findIndex((tab) => tab.name === "Contact")
+    const membershipTab = { name: "Membership", count: null as number | null }
+    if (contactIndex >= 0) {
+      const next = [...base]
+      next.splice(contactIndex, 0, membershipTab)
+      return next
+    }
+
+    return [...base, membershipTab]
+  }, [
+    organization.is_registered,
+    organization.is_care_alliance_public,
+    membershipJoin,
+    postsCount,
+    eventsCount,
+    jobsCount,
+    supportersCount,
+    products?.length,
+    partnerOrganizationsCount,
+  ])
 
   // Use only dynamic data from backend - no static defaults - memoize to prevent infinite loops
   const peopleToShow = useMemo(() => {
@@ -884,6 +933,12 @@ export default function OrganizationPage({
                   initialNotifications={organization.notifications_enabled || false}
                 />
                 )}
+                {membershipJoin && !organization.is_own_organization && (
+                  <MembershipJoinButton
+                    membershipJoin={membershipJoin}
+                    onOpenMembership={() => handleTabChange("Membership")}
+                  />
+                )}
                 {organization.is_registered && !organization.is_own_organization && !organization.is_care_alliance_public && (
                     <>
                     <Button
@@ -1018,6 +1073,7 @@ export default function OrganizationPage({
                         {tab.name === "Supporters" && <UserPlus className="w-5 h-5" />}
                         {tab.name === "Followers" && <UserPlus className="w-5 h-5" />}
                         {tab.name === "Members" && <UsersRound className="w-5 h-5" />}
+                        {tab.name === "Membership" && <BadgeCheck className="w-5 h-5" />}
                         {tab.name === "Products" && <ShoppingBag className="w-5 h-5" />}
                         {tab.name === "Contact" && <Phone className="w-5 h-5" />}
                         <span className="text-sm">{tab.name}</span>
@@ -1173,6 +1229,12 @@ export default function OrganizationPage({
                   </div>
                 ) : (
                   <>
+                    {membershipJoin && !organization.is_own_organization && activeTab !== "Membership" && (
+                      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-950/30">
+                        <MembershipJoinCard membershipJoin={membershipJoin} compact />
+                      </div>
+                    )}
+
                     {/* Community Feed - Only for registered organizations */}
                     {activeTab === "Community Feed" && organization.is_registered && (
                   <div className="space-y-4">
@@ -1953,6 +2015,13 @@ export default function OrganizationPage({
                         <p className="text-gray-600 dark:text-gray-400">No events scheduled at the moment.</p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Membership Tab Content */}
+                {activeTab === "Membership" && membershipJoin && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <MembershipJoinCard membershipJoin={membershipJoin} />
                   </div>
                 )}
 

@@ -19,6 +19,7 @@ class GroupProfileController extends Controller
     {
         $group->load('parent');
         $canManage = $request->user() !== null && $group->isManagedBy($request->user());
+        $membershipJoin = app(MembershipAccountService::class)->publicJoinPayload($group, $request->user());
 
         return Inertia::render('Group/Show', [
             'group' => [
@@ -30,6 +31,7 @@ class GroupProfileController extends Controller
                 'parent' => $this->parentPayload($group),
             ],
             'canManage' => $canManage,
+            'membershipJoin' => $membershipJoin,
             'membershipRoute' => $group->memberships_enabled && $canManage
                 ? route('groups.membership.index', $group)
                 : null,

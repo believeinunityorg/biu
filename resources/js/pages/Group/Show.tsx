@@ -1,11 +1,16 @@
 "use client"
 
+import { useState } from "react"
 import { Head, Link } from "@inertiajs/react"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
+import MembershipJoinCard, {
+  type MembershipJoinPayload,
+  MembershipJoinButton,
+} from "@/components/membership/MembershipJoinCard"
 import { Button } from "@/components/frontend/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/frontend/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Building2, Settings, UsersRound } from "lucide-react"
+import { BadgeCheck, Building2, Settings, UsersRound } from "lucide-react"
 
 interface Props {
   group: {
@@ -18,12 +23,15 @@ interface Props {
   }
   canManage: boolean
   membershipRoute: string | null
+  membershipJoin?: MembershipJoinPayload | null
 }
 
-export default function GroupShow({ group, canManage, membershipRoute }: Props) {
-  const profileTabs = [
-    { name: "About", active: true },
-    ...(group.memberships_enabled ? [{ name: "Membership", active: false }] : []),
+export default function GroupShow({ group, canManage, membershipRoute, membershipJoin = null }: Props) {
+  const [activeTab, setActiveTab] = useState<"About" | "Membership">("About")
+
+  const profileTabs: Array<{ name: "About" | "Membership"; active: boolean }> = [
+    { name: "About", active: activeTab === "About" },
+    ...(membershipJoin ? [{ name: "Membership" as const, active: activeTab === "Membership" }] : []),
   ]
 
   return (
@@ -61,10 +69,16 @@ export default function GroupShow({ group, canManage, membershipRoute }: Props) 
               </Button>
               {membershipRoute && (
                 <Button asChild>
-                  <Link href={membershipRoute}>Membership</Link>
+                  <Link href={membershipRoute}>Manage membership</Link>
                 </Button>
               )}
             </div>
+          )}
+          {!canManage && membershipJoin && (
+            <MembershipJoinButton
+              membershipJoin={membershipJoin}
+              onOpenMembership={() => setActiveTab("Membership")}
+            />
           )}
         </div>
 
@@ -73,30 +87,38 @@ export default function GroupShow({ group, canManage, membershipRoute }: Props) 
             <button
               key={tab.name}
               type="button"
+              onClick={() => setActiveTab(tab.name)}
               className={`rounded-md px-3 py-2 text-sm font-medium ${
                 tab.active
                   ? "bg-primary/10 text-primary"
                   : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               }`}
             >
+              {tab.name === "Membership" && <BadgeCheck className="mr-2 inline h-4 w-4" />}
               {tab.name}
             </button>
           ))}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>About this group</CardTitle>
-            <CardDescription>
-              Groups under organizations and Unity Impact Alliances can offer supporter memberships when enabled.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              {group.description || "No description has been added for this group yet."}
-            </p>
-          </CardContent>
-        </Card>
+        {activeTab === "About" && (
+          <Card>
+            <CardHeader>
+              <CardTitle>About this group</CardTitle>
+              <CardDescription>
+                Groups under organizations and Unity Impact Alliances can offer supporter memberships when enabled.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {group.description || "No description has been added for this group yet."}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeTab === "Membership" && membershipJoin && (
+          <MembershipJoinCard membershipJoin={membershipJoin} />
+        )}
       </div>
     </FrontendLayout>
   )

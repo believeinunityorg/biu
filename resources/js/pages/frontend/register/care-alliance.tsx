@@ -37,6 +37,12 @@ import InputError from "@/components/input-error"
 import { Alert, AlertDescription } from "@/components/frontend/ui/alert"
 import toast from "react-hot-toast"
 
+const MEMBERSHIP_JOIN_METHODS = [
+  { value: "open_enrollment", label: "Open Enrollment" },
+  { value: "request_to_join", label: "Request to Join" },
+  { value: "invitation_only", label: "Invitation Only" },
+] as const
+
 const STEPS = 3
 
 /** Map Laravel/Inertia validation keys to the first step that contains those fields. */
@@ -59,6 +65,10 @@ function getFirstStepWithErrors(errors: Record<string, string | string[] | undef
     "ein",
     "management_fee_percent",
     "fund_model",
+    "memberships_enabled",
+    "membership_type",
+    "membership_name",
+    "join_method",
   ])
 
   if (keys.some((k) => step1.has(k))) return 1
@@ -92,6 +102,10 @@ type CareAllianceForm = {
   management_fee_percent: string
   fund_model: "direct" | "campaign_split"
   primary_action_category_ids: number[]
+  memberships_enabled: boolean
+  membership_type: "free" | "paid"
+  membership_name: string
+  join_method: (typeof MEMBERSHIP_JOIN_METHODS)[number]["value"]
 }
 
 export default function RegisterCareAlliancePage() {
@@ -116,6 +130,10 @@ export default function RegisterCareAlliancePage() {
     management_fee_percent: "",
     fund_model: "campaign_split",
     primary_action_category_ids: [],
+    memberships_enabled: false,
+    membership_type: "free",
+    membership_name: "",
+    join_method: "request_to_join",
   })
 
   const inputClass =
@@ -191,7 +209,15 @@ export default function RegisterCareAlliancePage() {
           passwordsMatch
         )
       case 2:
-        return form.data.name.trim().length > 0
+        if (!form.data.name.trim()) return false
+        if (form.data.memberships_enabled) {
+          return (
+            form.data.membership_name.trim().length > 0 &&
+            (form.data.membership_type === "free" || form.data.membership_type === "paid") &&
+            MEMBERSHIP_JOIN_METHODS.some((method) => method.value === form.data.join_method)
+          )
+        }
+        return true
       case 3:
         return form.data.primary_action_category_ids.length >= 1 && form.data.primary_action_category_ids.length <= 8
       default:
@@ -204,7 +230,9 @@ export default function RegisterCareAlliancePage() {
       case 1:
         return "Please enter your name, email, and a password of at least 8 characters that matches the confirmation."
       case 2:
-        return "Please enter your alliance name."
+        return form.data.memberships_enabled
+          ? "Please enter your alliance name, membership name, type, and join method."
+          : "Please enter your alliance name."
       case 3:
         return "Please select at least one category (up to 8)."
       default:
@@ -664,6 +692,101 @@ export default function RegisterCareAlliancePage() {
                         <InputError message={errors.fund_model} className="mt-2" />
                       </div>
                     </div>
+
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-800 dark:bg-violet-950/30">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">Enable Memberships</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            Turn on supporter membership for your Unity Impact Alliance
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={form.data.memberships_enabled}
+                          onClick={() => {
+                            const next = !form.data.memberships_enabled
+                            form.setData("memberships_enabled", next)
+                            if (next && !form.data.membership_name.trim() && form.data.name.trim()) {
+                              form.setData("membership_name", form.data.name.trim())
+                            }
+                          }}
+                          className={`relative h-7 w-12 shrink-0 cursor-pointer rounded-full transition ${
+                            form.data.memberships_enabled ? "bg-violet-600" : "bg-gray-300 dark:bg-gray-600"
+                          }`}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+                              form.data.memberships_enabled ? "left-5" : "left-0.5"
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {form.data.memberships_enabled && (
+                        <div className="mt-4 space-y-4 border-t border-violet-200 pt-4 dark:border-violet-800">
+                          <div>
+                            <Label htmlFor="membershipName" className={labelClass}>
+                              Membership Name *
+                            </Label>
+                            <Input
+                              id="membershipName"
+                              value={form.data.membership_name}
+                              onChange={(e) => form.setData("membership_name", e.target.value)}
+                              placeholder="e.g. Alliance Supporters"
+                              className={`${inputClass} mt-2 pl-3`}
+                            />
+                            <InputError message={errors.membership_name} className="mt-2" />
+                          </div>
+
+                          <div>
+                            <Label className={labelClass}>Membership Type *</Label>
+                            <Select
+                              value={form.data.membership_type}
+                              onValueChange={(value) =>
+                                form.setData("membership_type", value as "free" | "paid")
+                              }
+                            >
+                              <SelectTrigger className="mt-2 h-12 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="free">Free</SelectItem>
+                                <SelectItem value="paid">Paid</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <InputError message={errors.membership_type} className="mt-2" />
+                          </div>
+
+                          <div>
+                            <Label className={labelClass}>Join Method *</Label>
+                            <Select
+                              value={form.data.join_method}
+                              onValueChange={(value) =>
+                                form.setData(
+                                  "join_method",
+                                  value as (typeof MEMBERSHIP_JOIN_METHODS)[number]["value"],
+                                )
+                              }
+                            >
+                              <SelectTrigger className="mt-2 h-12 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600">
+                                <SelectValue placeholder="Select join method" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {MEMBERSHIP_JOIN_METHODS.map((method) => (
+                                  <SelectItem key={method.value} value={method.value}>
+                                    {method.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <InputError message={errors.join_method} className="mt-2" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-3">
                       <Button
                         type="button"

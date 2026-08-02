@@ -204,6 +204,11 @@ export default function MembershipSettingsSection({
                     </SelectContent>
                   </Select>
                   <InputError message={errors.join_method} className="mt-1" />
+                  {data.join_method === "invitation_only" && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Manage sent invites from the Membership dashboard → Invitations tab after saving.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -225,6 +230,13 @@ export default function MembershipSettingsSection({
                       required
                     />
                     <InputError message={errors.membership_fee} className="mt-1" />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Supporters pay through Stripe Checkout using your organization&apos;s Stripe payout account. Finish setup under{" "}
+                      <Link href={route("integrations.payout-settings")} className="text-primary underline">
+                        Stripe payout settings
+                      </Link>
+                      .
+                    </p>
                   </div>
 
                   <div>

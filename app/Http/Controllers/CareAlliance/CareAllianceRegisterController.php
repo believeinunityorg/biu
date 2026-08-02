@@ -10,7 +10,9 @@ use App\Models\ChatTopic;
 use App\Models\Organization;
 use App\Models\PrimaryActionCategory;
 use App\Models\User;
+use App\Enums\MembershipJoinMethod;
 use App\Services\CauseGroupChatService;
+use App\Services\MembershipAccountService;
 use App\Services\SeoService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
@@ -27,6 +29,10 @@ use Spatie\Permission\Models\Role;
 
 class CareAllianceRegisterController extends Controller
 {
+    public function __construct(
+        private readonly MembershipAccountService $membershipAccountService,
+    ) {}
+
     public function create(Request $request)
     {
         return Inertia::render('frontend/register/care-alliance', [
@@ -67,7 +73,17 @@ class CareAllianceRegisterController extends Controller
             'city' => $request->filled('city') ? $request->input('city') : null,
             'state' => $request->filled('state') ? $request->input('state') : null,
             'management_fee_percent' => $request->filled('management_fee_percent') ? $request->input('management_fee_percent') : null,
+            'memberships_enabled' => filter_var($request->input('memberships_enabled', false), FILTER_VALIDATE_BOOLEAN),
+            'membership_type' => in_array($request->input('membership_type'), ['free', 'paid'], true)
+                ? $request->input('membership_type')
+                : 'free',
+            'membership_name' => $request->filled('membership_name') ? trim((string) $request->input('membership_name')) : null,
+            'join_method' => in_array($request->input('join_method'), MembershipJoinMethod::values(), true)
+                ? $request->input('join_method')
+                : null,
         ]);
+
+        $membershipsEnabled = filter_var($request->input('memberships_enabled', false), FILTER_VALIDATE_BOOLEAN);
 
         $validator = Validator::make($request->all(), [
             'contact_name' => 'required|string|max:255',
@@ -100,6 +116,20 @@ class CareAllianceRegisterController extends Controller
             ],
             'management_fee_percent' => 'nullable|numeric|min:0|max:100',
             'fund_model' => ['required', Rule::in(['direct', 'campaign_split'])],
+            'memberships_enabled' => ['required', 'boolean'],
+            'membership_type' => ['nullable', 'string', Rule::in(['free', 'paid'])],
+            'membership_name' => [
+                Rule::requiredIf($membershipsEnabled),
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'join_method' => [
+                Rule::requiredIf($membershipsEnabled),
+                'nullable',
+                'string',
+                Rule::in(MembershipJoinMethod::values()),
+            ],
             'primary_action_category_ids' => ['required', 'array', 'min:1', 'max:8'],
             'primary_action_category_ids.*' => ['integer', 'distinct', Rule::exists('primary_action_categories', 'id')->where('is_active', true)],
         ]);
@@ -164,10 +194,18 @@ class CareAllianceRegisterController extends Controller
                 'management_fee_bps' => $feeBps,
                 'fund_model' => $validated['fund_model'],
                 'status' => 'active',
+                'memberships_enabled' => (bool) ($validated['memberships_enabled'] ?? false),
                 'balance_cents' => 0,
             ]);
 
             $alliance->primaryActionCategories()->sync($validated['primary_action_category_ids']);
+
+            $this->membershipAccountService->bootstrapFromRegistration($alliance, [
+                'memberships_enabled' => (bool) ($validated['memberships_enabled'] ?? false),
+                'membership_name' => $validated['membership_name'] ?? $validated['name'],
+                'membership_type' => $validated['membership_type'] ?? 'free',
+                'join_method' => $validated['join_method'] ?? MembershipJoinMethod::RequestToJoin->value,
+            ]);
 
             $organization = Organization::create([
                 'user_id' => $user->id,

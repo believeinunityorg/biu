@@ -10,6 +10,7 @@ use App\Listeners\GrantAiMediaStudioCreditsOnPlanSubscriptionRenewal;
 use App\Listeners\SyncBelievePointSettlementFromStripeWebhook;
 use App\Listeners\SyncLedgerTransactionStripeFees;
 use App\Listeners\SyncMainDonationFromStripeWebhook;
+use App\Listeners\SyncMembershipPaymentFromStripeWebhook;
 use App\Models\BelievePointPurchase;
 use App\Models\BelievePointWalletTransfer;
 use App\Models\Donation;
@@ -117,6 +118,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(WebhookReceived::class, CompleteBelievePointPurchaseFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, SyncBelievePointSettlementFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, SyncMainDonationFromStripeWebhook::class);
+        Event::listen(WebhookReceived::class, SyncMembershipPaymentFromStripeWebhook::class);
         Event::listen(WebhookReceived::class, GrantAiMediaStudioCreditsOnPlanSubscriptionRenewal::class);
 
         Inertia::share([

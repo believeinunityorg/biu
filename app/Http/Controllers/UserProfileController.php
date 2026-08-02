@@ -30,6 +30,7 @@ use App\Models\VolunteerTimesheet;
 use App\Services\ExcelDataTransformer;
 use App\Services\ImpactScoreService;
 use App\Services\KioskProviderAiIngestService;
+use App\Services\MembershipAccountService;
 use App\Services\PrintifyService;
 use App\Services\SupporterPrimaryOrganizationService;
 use App\Services\TimezoneService;
@@ -1049,6 +1050,16 @@ class UserProfileController extends Controller
             'totalDonated' => (float) $totalDonated,
             'thisYearDonated' => (float) $thisYearDonated,
             'organizationsSupported' => (int) $organizationsSupported,
+        ]);
+    }
+
+    public function memberships(Request $request): Response
+    {
+        $user = $request->user();
+        $memberships = app(MembershipAccountService::class)->listForSupporter($user);
+
+        return Inertia::render('frontend/user-profile/memberships', [
+            'memberships' => $memberships,
         ]);
     }
 

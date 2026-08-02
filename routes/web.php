@@ -2513,7 +2513,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
     Route::get('/organization/membership', [MembershipManagementController::class, 'organization'])->name('organization.membership.index');
 });
 
-Route::get('/community/contents/{content}', [CommunityContentController::class, 'show'])->name('community.contents.show');
+Route::get('/community/contents/{content:slug}', [CommunityContentController::class, 'show'])->name('community.contents.show');
 Route::get('/community/{parentType}/{parentId}', [CommunityParentController::class, 'show'])
     ->where(['parentType' => 'Organization|UnityImpactAlliance', 'parentId' => '[0-9]+'])
     ->name('community.parent.show');
@@ -2536,11 +2536,11 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(f
 
 
     Route::post('/community/contents', [CommunityContentController::class, 'store'])->name('community.contents.store');
-    Route::post('/community/contents/{content}', [CommunityContentController::class, 'update'])->name('community.contents.update');
-    Route::post('/community/contents/{content}/reply', [CommunityContentController::class, 'reply'])->name('community.contents.reply');
-    Route::post('/community/contents/{content}/react', [CommunityContentController::class, 'react'])->name('community.contents.react');
-    Route::post('/community/contents/{content}/follow', [CommunityContentController::class, 'follow'])->name('community.contents.follow');
-    Route::post('/community/contents/{content}/moderate', [CommunityContentController::class, 'moderate'])->name('community.contents.moderate');
+    Route::post('/community/contents/{content:slug}', [CommunityContentController::class, 'update'])->name('community.contents.update');
+    Route::post('/community/contents/{content:slug}/reply', [CommunityContentController::class, 'reply'])->name('community.contents.reply');
+    Route::post('/community/contents/{content:slug}/react', [CommunityContentController::class, 'react'])->name('community.contents.react');
+    Route::post('/community/contents/{content:slug}/follow', [CommunityContentController::class, 'follow'])->name('community.contents.follow');
+    Route::post('/community/contents/{content:slug}/moderate', [CommunityContentController::class, 'moderate'])->name('community.contents.moderate');
     Route::post('/community/replies/{reply}/moderate', [CommunityContentController::class, 'moderateReply'])->name('community.replies.moderate');
     Route::post('/community/reports', [CommunityReportController::class, 'store'])->name('community.reports.store');
 

@@ -525,6 +525,7 @@ class CommunityGroupController extends Controller
     {
         return [
             'id' => $content->id,
+            'slug' => $content->slug,
             'type' => $content->type?->value ?? $content->type,
             'title' => $content->title,
             'body' => $content->body,

@@ -66,8 +66,13 @@ class CommunityContentController extends Controller
             ->with('success', $type === CommunityContentType::Announcement ? 'Announcement published.' : 'Discussion started.');
     }
 
-    public function show(Request $request, CommunityContent $content): Response
+    public function show(Request $request, CommunityContent $content): Response|RedirectResponse
     {
+        $raw = $request->segment(3);
+        if (ctype_digit((string) $raw) && filled($content->slug)) {
+            return redirect()->route('community.contents.show', $content, 301);
+        }
+
         Gate::authorize('view', $content);
         $content->load(['author:id,name', 'parent']);
 
@@ -100,14 +105,17 @@ class CommunityContentController extends Controller
 
         $parent = $content->parent;
         $tab = $content->type === CommunityContentType::Announcement ? 'announcements' : 'discussion';
+        $parentName = null;
         if ($parent instanceof Group) {
             $backUrl = route('groups.show', ['group' => $parent, 'tab' => $tab]);
+            $parentName = $parent->name;
         } elseif ($parent instanceof Organization || $parent instanceof CareAlliance) {
             $backUrl = route('community.parent.show', [
                 'parentType' => $this->contentService->parentMorphType($parent),
                 'parentId' => $parent->id,
                 'tab' => $tab,
             ]);
+            $parentName = $parent->name ?? null;
         } else {
             $backUrl = url()->previous();
         }
@@ -129,6 +137,7 @@ class CommunityContentController extends Controller
         return Inertia::render('Community/ContentShow', [
             'content' => [
                 'id' => $content->id,
+                'slug' => $content->slug,
                 'type' => $content->type?->value ?? $content->type,
                 'title' => $content->title,
                 'body' => $content->body,
@@ -150,6 +159,8 @@ class CommunityContentController extends Controller
                     : false,
                 'parent_type' => $content->parent_type,
                 'parent_id' => $content->parent_id,
+                'parent_name' => $parentName,
+                'replies_count' => $replies->count(),
             ],
             'replies' => $replies,
             'versions' => $versions,

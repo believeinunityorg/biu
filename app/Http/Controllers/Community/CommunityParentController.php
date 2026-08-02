@@ -87,6 +87,7 @@ class CommunityParentController extends Controller
             ->get()
             ->map(fn (CommunityContent $c) => [
                 'id' => $c->id,
+                'slug' => $c->slug,
                 'type' => $c->type?->value ?? $c->type,
                 'title' => $c->title,
                 'body' => $c->body,

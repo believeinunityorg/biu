@@ -29,6 +29,7 @@ import {
 
 type ContentItem = {
   id: number
+  slug?: string
   title: string
   body: string
   category: string | null

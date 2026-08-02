@@ -40,6 +40,8 @@ import {
   TrendingUp,
   ExternalLink,
   UsersRound,
+  Megaphone,
+  MessageSquare,
 } from "lucide-react"
 import { Button } from "@/components/frontend/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/frontend/ui/avatar"
@@ -155,6 +157,21 @@ interface OrganizationPageProps {
   }>
   connectedCareAlliances?: Array<{ id: number; name: string; slug: string }>
   membershipJoin?: MembershipJoinPayload | null
+  communityGroups?: Array<{
+    id: number
+    name: string
+    slug: string
+    description: string | null
+    category: string | null
+    cover_image: string | null
+    is_featured: boolean
+    is_pinned: boolean
+    members_count: number
+    url: string
+  }>
+  canCreateCommunityGroup?: boolean
+  createCommunityGroupUrl?: string | null
+  communityFeedUrl?: string | null
   seo?: { title?: string; description?: string }
 }
 
@@ -189,6 +206,10 @@ export default function OrganizationPage({
   allianceMembers = [],
   connectedCareAlliances = [],
   membershipJoin = null,
+  communityGroups = [],
+  canCreateCommunityGroup = false,
+  createCommunityGroupUrl = null,
+  communityFeedUrl = null,
   seo: seoProp,
 }: OrganizationPageProps) {
   const { url } = usePage()
@@ -269,6 +290,8 @@ export default function OrganizationPage({
       const tabParam = new URLSearchParams(window.location.search).get("tab")
       if (tabParam === "membership" && membershipJoin) {
         tab = "Membership"
+      } else if (tabParam === "groups") {
+        tab = "Groups"
       }
     }
     if (pageType === 'products') tab = "Products"
@@ -331,6 +354,17 @@ export default function OrganizationPage({
       return
     }
 
+    if ((tabName === "Discussion" || tabName === "Announcements") && communityFeedUrl) {
+      const tabKey = tabName === "Announcements" ? "announcements" : "discussion"
+      router.visit(`${communityFeedUrl}?tab=${tabKey}`, {
+        preserveState: false,
+        preserveScroll: false,
+        onFinish: () => setIsPageLoading(false),
+        onError: () => setIsPageLoading(false),
+      })
+      return
+    }
+
     let routePath = ''
     if (isCareAlliancePublic && alliancePublicSlug) {
       switch (tabName) {
@@ -358,6 +392,9 @@ export default function OrganizationPage({
         case "Membership":
           routePath = `${route('alliances.show', alliancePublicSlug)}?tab=membership`
           break
+        case "Groups":
+          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=groups`
+          break
         default:
           routePath = route('alliances.show', alliancePublicSlug)
       }
@@ -383,6 +420,9 @@ export default function OrganizationPage({
           break
         case "Membership":
           routePath = `${route('organizations.show', slug)}?tab=membership`
+          break
+        case "Groups":
+          routePath = `${route('organizations.show', slug)}?tab=groups`
           break
         default:
           routePath = route('organizations.show', slug)
@@ -729,6 +769,9 @@ export default function OrganizationPage({
   const registeredOrgTabs = [
     { name: "Community Feed", count: postsCount || 0 },
     { name: "About", count: null },
+    { name: "Discussion", count: null },
+    { name: "Announcements", count: null },
+    { name: "Groups", count: communityGroups.length || null },
     { name: "Events", count: eventsCount },
     { name: "Opportunities", count: jobsCount || 0 },
     { name: "Supporters", count: supportersCount || 0 },
@@ -741,6 +784,9 @@ export default function OrganizationPage({
     { name: "Members", count: partnerOrganizationsCount || 0 },
     { name: "Followers", count: supportersCount || 0 },
     { name: "About", count: null },
+    { name: "Discussion", count: null },
+    { name: "Announcements", count: null },
+    { name: "Groups", count: communityGroups.length || null },
     { name: "Events", count: eventsCount },
     { name: "Opportunities", count: jobsCount || 0 },
     { name: "Products", count: products?.length || 0 },
@@ -775,6 +821,7 @@ export default function OrganizationPage({
     supportersCount,
     products?.length,
     partnerOrganizationsCount,
+    communityGroups.length,
   ])
 
   // Use only dynamic data from backend - no static defaults - memoize to prevent infinite loops
@@ -1073,6 +1120,9 @@ export default function OrganizationPage({
                         {tab.name === "Supporters" && <UserPlus className="w-5 h-5" />}
                         {tab.name === "Followers" && <UserPlus className="w-5 h-5" />}
                         {tab.name === "Members" && <UsersRound className="w-5 h-5" />}
+                        {tab.name === "Groups" && <UsersRound className="w-5 h-5" />}
+                        {tab.name === "Discussion" && <MessageSquare className="w-5 h-5" />}
+                        {tab.name === "Announcements" && <Megaphone className="w-5 h-5" />}
                         {tab.name === "Membership" && <BadgeCheck className="w-5 h-5" />}
                         {tab.name === "Products" && <ShoppingBag className="w-5 h-5" />}
                         {tab.name === "Contact" && <Phone className="w-5 h-5" />}
@@ -2022,6 +2072,58 @@ export default function OrganizationPage({
                 {activeTab === "Membership" && membershipJoin && (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <MembershipJoinCard membershipJoin={membershipJoin} />
+                  </div>
+                )}
+
+                {/* Community Groups Tab */}
+                {activeTab === "Groups" && (organization.is_registered || organization.is_care_alliance_public) && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Community Groups</h2>
+                        <p className="text-sm text-muted-foreground">
+                          Followers and members can create groups instantly — no org approval required.
+                        </p>
+                      </div>
+                      {canCreateCommunityGroup && createCommunityGroupUrl && (
+                        <Button asChild className="cursor-pointer bg-gradient-to-r from-purple-600 to-blue-600">
+                          <Link href={createCommunityGroupUrl}>Create Group</Link>
+                        </Button>
+                      )}
+                    </div>
+                    {communityGroups.length === 0 ? (
+                      <div className="rounded-xl border bg-white p-10 text-center dark:bg-[#111827]">
+                        <p className="text-muted-foreground">No public groups yet.</p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {communityGroups.map((g) => (
+                          <Link
+                            key={g.id}
+                            href={g.url}
+                            className="overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md dark:bg-[#111827]"
+                          >
+                            {g.cover_image ? (
+                              <img src={g.cover_image} alt="" className="h-32 w-full object-cover" />
+                            ) : (
+                              <div className="flex h-32 items-center justify-center bg-gradient-to-r from-purple-600 to-blue-600">
+                                <UsersRound className="h-8 w-8 text-white" />
+                              </div>
+                            )}
+                            <div className="space-y-1 p-4">
+                              <div className="flex flex-wrap gap-2">
+                                {g.is_pinned && <Badge variant="secondary">Pinned</Badge>}
+                                {g.is_featured && <Badge variant="secondary">Featured</Badge>}
+                                {g.category && <Badge variant="outline">{g.category}</Badge>}
+                              </div>
+                              <h3 className="font-semibold text-gray-900 dark:text-white">{g.name}</h3>
+                              <p className="line-clamp-2 text-sm text-muted-foreground">{g.description}</p>
+                              <p className="text-xs text-muted-foreground">{g.members_count} members</p>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

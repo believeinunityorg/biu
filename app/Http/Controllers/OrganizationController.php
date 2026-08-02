@@ -15,6 +15,8 @@ use App\Models\FollowerPosition;
 use App\Models\FollowingUserPosition;
 use App\Models\JobPost;
 use App\Models\NteeCode;
+use App\Enums\MembershipAccountType;
+use App\Models\Group;
 use App\Models\Organization;
 use App\Models\OrganizationInvite;
 use App\Models\Post;
@@ -27,6 +29,7 @@ use App\Models\UserFavoriteOrganization;
 use App\Services\CareAlliancePublicPageService;
 use App\Services\ExcelDataTransformer;
 use App\Services\ImpactScoreService;
+use App\Services\GroupEligibilityService;
 use App\Services\MembershipAccountService;
 use App\Services\OpenAiService;
 use App\Services\SeoService;
@@ -1111,6 +1114,8 @@ class OrganizationController extends BaseController
         $trendingOrganizations = $sidebarData['trendingOrganizations'];
         $eventsCount = $registeredOrg ? Event::where('organization_id', $registeredOrg->id)->count() : 0;
 
+        $communityGroupsPayload = $this->communityGroupsPayload($registeredOrg, $request->user());
+
         return Inertia::render('frontend/organization/organization-show', [
             'organization' => $transformedOrganization,
             'seo' => $this->seoForOrganizationShow($transformedOrganization),
@@ -1129,6 +1134,15 @@ class OrganizationController extends BaseController
             'postFilter' => $postFilter ?? 'organization', // Pass filter to frontend
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
             'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
+            'communityGroups' => $communityGroupsPayload['groups'],
+            'canCreateCommunityGroup' => $communityGroupsPayload['can_create'],
+            'createCommunityGroupUrl' => $communityGroupsPayload['create_url'],
+            'communityFeedUrl' => $registeredOrg
+                ? route('community.parent.show', [
+                    'parentType' => MembershipAccountType::Organization->value,
+                    'parentId' => $registeredOrg->id,
+                ])
+                : null,
         ]);
     }
 
@@ -2689,6 +2703,65 @@ class OrganizationController extends BaseController
         }
 
         return app(MembershipAccountService::class)->publicJoinPayload($org, Auth::user());
+    }
+
+    /**
+     * Public community groups for an organization page (hidden groups excluded for non-managers).
+     *
+     * @return array{groups: list<array<string, mixed>>, can_create: bool, create_url: string|null}
+     */
+    private function communityGroupsPayload(?Organization $registeredOrg, ?User $viewer): array
+    {
+        if ($registeredOrg === null) {
+            return ['groups' => [], 'can_create' => false, 'create_url' => null];
+        }
+
+        $canManage = false;
+        if ($viewer) {
+            $own = Organization::forAuthUser($viewer);
+            $canManage = $own !== null && (int) $own->id === (int) $registeredOrg->id;
+        }
+
+        $groups = Group::query()
+            ->where('parent_type', MembershipAccountType::Organization->value)
+            ->where('parent_id', $registeredOrg->id)
+            ->where('status', 'active')
+            ->when(! $canManage, fn ($q) => $q->where('is_hidden_on_parent', false))
+            ->withCount('members')
+            ->orderByDesc('is_pinned')
+            ->orderByDesc('is_featured')
+            ->orderByDesc('updated_at')
+            ->limit(12)
+            ->get()
+            ->map(fn (Group $g) => [
+                'id' => $g->id,
+                'name' => $g->name,
+                'slug' => $g->slug,
+                'description' => $g->description,
+                'category' => $g->category,
+                'cover_image' => $g->cover_image ? asset('storage/'.$g->cover_image) : null,
+                'is_featured' => (bool) $g->is_featured,
+                'is_pinned' => (bool) $g->is_pinned,
+                'members_count' => $g->members_count,
+                'url' => route('groups.show', $g),
+            ])
+            ->values()
+            ->all();
+
+        $canCreate = $viewer
+            ? app(GroupEligibilityService::class)->canCreateGroupUnder($viewer, $registeredOrg)
+            : false;
+
+        return [
+            'groups' => $groups,
+            'can_create' => $canCreate,
+            'create_url' => $canCreate
+                ? route('groups.create', [
+                    'parent_type' => MembershipAccountType::Organization->value,
+                    'parent_id' => $registeredOrg->id,
+                ])
+                : null,
+        ];
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\MembershipAccountType;
 use App\Models\CareAlliance;
 use App\Models\CareAllianceCampaign;
 use App\Models\CareAllianceMembership;
@@ -9,12 +10,14 @@ use App\Models\Donation;
 use App\Models\Event;
 use App\Models\ExcelData;
 use App\Models\FacebookPost;
+use App\Models\Group;
 use App\Models\JobPost;
 use App\Models\Organization;
 use App\Models\Post;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\UserFavoriteOrganization;
+use App\Services\GroupEligibilityService;
 use App\Services\MembershipAccountService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -747,6 +750,11 @@ class CareAlliancePublicPageService
             'products' => [],
             'jobs' => [],
             'connectedCareAlliances' => [],
+            ...$this->communityGroupsPayload($alliance, Auth::user()),
+            'communityFeedUrl' => route('community.parent.show', [
+                'parentType' => MembershipAccountType::UnityImpactAlliance->value,
+                'parentId' => $alliance->id,
+            ]),
         ];
 
         if ($currentPage === 'products') {
@@ -766,6 +774,55 @@ class CareAlliancePublicPageService
         }
 
         return $props;
+    }
+
+    /**
+     * @return array{communityGroups: list<array<string, mixed>>, canCreateCommunityGroup: bool, createCommunityGroupUrl: string|null}
+     */
+    private function communityGroupsPayload(CareAlliance $alliance, ?User $viewer): array
+    {
+        $canManage = $viewer && (int) $alliance->creator_user_id === (int) $viewer->id;
+
+        $groups = Group::query()
+            ->where('parent_type', MembershipAccountType::UnityImpactAlliance->value)
+            ->where('parent_id', $alliance->id)
+            ->where('status', 'active')
+            ->when(! $canManage, fn ($q) => $q->where('is_hidden_on_parent', false))
+            ->withCount('members')
+            ->orderByDesc('is_pinned')
+            ->orderByDesc('is_featured')
+            ->orderByDesc('updated_at')
+            ->limit(12)
+            ->get()
+            ->map(fn (Group $g) => [
+                'id' => $g->id,
+                'name' => $g->name,
+                'slug' => $g->slug,
+                'description' => $g->description,
+                'category' => $g->category,
+                'cover_image' => $g->cover_image ? asset('storage/'.$g->cover_image) : null,
+                'is_featured' => (bool) $g->is_featured,
+                'is_pinned' => (bool) $g->is_pinned,
+                'members_count' => $g->members_count,
+                'url' => route('groups.show', $g),
+            ])
+            ->values()
+            ->all();
+
+        $canCreate = $viewer
+            ? app(GroupEligibilityService::class)->canCreateGroupUnder($viewer, $alliance)
+            : false;
+
+        return [
+            'communityGroups' => $groups,
+            'canCreateCommunityGroup' => $canCreate,
+            'createCommunityGroupUrl' => $canCreate
+                ? route('groups.create', [
+                    'parent_type' => MembershipAccountType::UnityImpactAlliance->value,
+                    'parent_id' => $alliance->id,
+                ])
+                : null,
+        ];
     }
 
     private function persistHubOrganizationIdIfMissing(CareAlliance $alliance, Organization $org): void

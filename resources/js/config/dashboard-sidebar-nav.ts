@@ -76,6 +76,7 @@ import {
     Trophy,
     Radio,
     Columns3,
+    Flag,
 } from 'lucide-react';
 
 /**
@@ -447,13 +448,19 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
     {
         title: 'Community',
         icon: Users,
-        role: ['organization', 'user'],
+        role: ['organization', 'care_alliance', 'user'],
         items: [
             {
                 title: 'Unity Loaves',
                 href: '/dashboard/unity-loaves',
                 icon: Heart,
                 role: ['organization', 'user'],
+            },
+            {
+                title: 'Community Groups',
+                href: '/organization/groups',
+                icon: UsersRound,
+                role: ['organization', 'care_alliance', 'user'],
             },
             {
                 title: 'Followers',
@@ -700,7 +707,7 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 role: ['organization', 'care_alliance'],
             },
             {
-                title: 'Unity Impact Alliance',
+                title: 'Unity Alliance',
                 icon: HeartHandshake,
                 role: 'care_alliance',
                 items: [
@@ -720,6 +727,12 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                         title: 'Campaigns',
                         href: '/care-alliance/workspace/campaigns',
                         icon: Megaphone,
+                        role: 'care_alliance',
+                    },
+                    {
+                        title: 'Groups',
+                        href: '/care-alliance/workspace/groups',
+                        icon: UsersRound,
                         role: 'care_alliance',
                     },
                 ],
@@ -1037,6 +1050,12 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                         title: 'Fundraise leads',
                         href: '/admin/fundraise-leads',
                         icon: TrendingUp,
+                        role: 'admin',
+                    },
+                    {
+                        title: 'Moderation queue',
+                        href: '/admin/moderation',
+                        icon: Flag,
                         role: 'admin',
                     },
                     {

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Concerns\ManagesPreferredPayoutMethod;
 use App\Contracts\HasPreferredPayoutMethod;
+use App\Models\Concerns\HasMembershipAccount;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
 
 class Organization extends Model implements HasPreferredPayoutMethod
 {
-    use HasFactory, ManagesPreferredPayoutMethod;
+    use HasFactory, HasMembershipAccount, ManagesPreferredPayoutMethod;
 
     /**
      * Resolve the organization for an authenticated user: primary owner (organizations.user_id)
@@ -117,6 +118,7 @@ class Organization extends Model implements HasPreferredPayoutMethod
         'dropbox_governance_provisioned_at',
         'authorized_signer_info',
         'onboarding_completed_at',
+        'memberships_enabled',
     ];
 
     protected $hidden = [
@@ -149,6 +151,7 @@ class Organization extends Model implements HasPreferredPayoutMethod
         'dropbox_governance_provisioned_at' => 'datetime',
         'authorized_signer_info' => 'array',
         'onboarding_completed_at' => 'datetime',
+        'memberships_enabled' => 'boolean',
     ];
 
     public function onboardingDocuments()
@@ -185,6 +188,12 @@ class Organization extends Model implements HasPreferredPayoutMethod
     {
         return $this->belongsToMany(PrimaryActionCategory::class, 'org_primary_action_category')
             ->withTimestamps();
+    }
+
+    public function groups(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Group::class, 'parent_id')
+            ->where('parent_type', \App\Enums\MembershipAccountType::Organization->value);
     }
 
     public function careAllianceMemberships(): \Illuminate\Database\Eloquent\Relations\HasMany

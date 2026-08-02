@@ -25,6 +25,19 @@ import { Input } from "@/components/frontend/ui/input"
 import { Label } from "@/components/frontend/ui/label"
 import { Checkbox } from "@/components/frontend/ui/checkbox"
 import { Alert, AlertDescription } from "@/components/frontend/ui/alert"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/frontend/ui/select"
+
+const MEMBERSHIP_JOIN_METHODS = [
+  { value: "open_enrollment", label: "Open Enrollment" },
+  { value: "request_to_join", label: "Request to Join" },
+  { value: "invitation_only", label: "Invitation Only" },
+] as const
 
 interface EINLookupResponse {
   success: boolean
@@ -76,6 +89,8 @@ export default function OrganizationRegisterPage({
     has_members: null as boolean | null,
     memberships_enabled: false,
     membership_type: "free" as "free" | "paid",
+    membership_name: "",
+    join_method: "request_to_join" as (typeof MEMBERSHIP_JOIN_METHODS)[number]["value"],
     name: organizationName || "",
     street: "",
     city: "",
@@ -144,7 +159,11 @@ export default function OrganizationRegisterPage({
     if (n === 2) {
       if (form.has_members === null) return false
       if (form.has_members && form.memberships_enabled) {
-        return form.membership_type === "free" || form.membership_type === "paid"
+        return (
+          (form.membership_type === "free" || form.membership_type === "paid") &&
+          form.membership_name.trim().length > 0 &&
+          MEMBERSHIP_JOIN_METHODS.some((method) => method.value === form.join_method)
+        )
       }
       return true
     }
@@ -257,7 +276,11 @@ export default function OrganizationRegisterPage({
     if (form.has_ein && form.ein) payload.append("ein", form.ein)
     payload.append("has_members", form.has_members ? "1" : "0")
     payload.append("memberships_enabled", form.memberships_enabled ? "1" : "0")
-    if (form.memberships_enabled) payload.append("membership_type", form.membership_type)
+    if (form.memberships_enabled) {
+      payload.append("membership_type", form.membership_type)
+      payload.append("membership_name", form.membership_name.trim() || form.name.trim())
+      payload.append("join_method", form.join_method)
+    }
     payload.append("name", form.name)
     payload.append("street", form.street)
     payload.append("city", form.city)
@@ -571,7 +594,13 @@ export default function OrganizationRegisterPage({
                             type="button"
                             role="switch"
                             aria-checked={form.memberships_enabled}
-                            onClick={() => setField("memberships_enabled", !form.memberships_enabled)}
+                            onClick={() => {
+                              const next = !form.memberships_enabled
+                              setField("memberships_enabled", next)
+                              if (next && !form.membership_name.trim() && form.name.trim()) {
+                                setField("membership_name", form.name.trim())
+                              }
+                            }}
                             className={`relative h-7 w-12 cursor-pointer rounded-full transition ${
                               form.memberships_enabled ? "bg-emerald-600" : "bg-muted"
                             }`}
@@ -618,6 +647,53 @@ export default function OrganizationRegisterPage({
                               ))}
                             </div>
                           </div>
+                        )}
+
+                        {form.memberships_enabled && (
+                          <>
+                            <div>
+                              <Label htmlFor="membership_name" className="text-sm font-semibold">
+                                Membership Name *
+                              </Label>
+                              <Input
+                                id="membership_name"
+                                value={form.membership_name}
+                                onChange={(e) => setField("membership_name", e.target.value)}
+                                placeholder="e.g. Supporter Circle"
+                                className="mt-2"
+                              />
+                              {errors.membership_name && (
+                                <p className="mt-1 text-sm text-red-600">{errors.membership_name}</p>
+                              )}
+                            </div>
+
+                            <div>
+                              <p className="mb-2 text-sm font-semibold">Join Method *</p>
+                              <Select
+                                value={form.join_method}
+                                onValueChange={(value) =>
+                                  setField(
+                                    "join_method",
+                                    value as (typeof MEMBERSHIP_JOIN_METHODS)[number]["value"],
+                                  )
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select join method" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {MEMBERSHIP_JOIN_METHODS.map((method) => (
+                                    <SelectItem key={method.value} value={method.value}>
+                                      {method.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {errors.join_method && (
+                                <p className="mt-1 text-sm text-red-600">{errors.join_method}</p>
+                              )}
+                            </div>
+                          </>
                         )}
                       </>
                     )}

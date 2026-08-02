@@ -13,7 +13,9 @@ use App\Models\PrimaryActionCategory;
 use App\Models\User;
 use App\Services\BridgeService;
 use App\Services\CauseGroupChatService;
+use App\Enums\MembershipJoinMethod;
 use App\Services\EINLookupService;
+use App\Services\MembershipAccountService;
 use App\Services\OrgClaim990Service;
 use App\Services\TaxComplianceService;
 use Illuminate\Auth\Events\Registered;
@@ -37,16 +39,20 @@ class OrganizationRegisterController extends Controller
     protected BridgeService $bridgeService;
     protected OrgClaim990Service $orgClaim990Service;
 
+    protected MembershipAccountService $membershipAccountService;
+
     public function __construct(
         EINLookupService $einLookupService,
         TaxComplianceService $taxComplianceService,
         BridgeService $bridgeService,
-        OrgClaim990Service $orgClaim990Service
+        OrgClaim990Service $orgClaim990Service,
+        MembershipAccountService $membershipAccountService,
     ) {
         $this->einLookupService = $einLookupService;
         $this->taxComplianceService = $taxComplianceService;
         $this->bridgeService = $bridgeService;
         $this->orgClaim990Service = $orgClaim990Service;
+        $this->membershipAccountService = $membershipAccountService;
     }
 
     public function create(Request $request)
@@ -225,6 +231,10 @@ class OrganizationRegisterController extends Controller
             $membershipType = $membershipsEnabled
                 ? (in_array($request->input('membership_type'), ['free', 'paid'], true) ? $request->input('membership_type') : 'free')
                 : null;
+            $joinMethod = $membershipsEnabled && in_array($request->input('join_method'), MembershipJoinMethod::values(), true)
+                ? $request->input('join_method')
+                : null;
+            $membershipName = $membershipsEnabled ? trim((string) $request->input('membership_name', '')) : null;
 
             $request->merge([
                 'ein' => $ein,
@@ -232,6 +242,8 @@ class OrganizationRegisterController extends Controller
                 'has_members' => $hasMembers,
                 'memberships_enabled' => $membershipsEnabled,
                 'membership_type' => $membershipType,
+                'membership_name' => $membershipName !== '' ? $membershipName : null,
+                'join_method' => $joinMethod,
                 'primary_action_category_ids' => array_values(array_unique(array_filter(array_map('intval', $pacIds)))),
                 'contact_title' => $request->filled('contact_title') ? $request->input('contact_title') : 'Administrator',
                 'phone' => $request->filled('phone') ? $request->input('phone') : '0000000000',
@@ -251,6 +263,18 @@ class OrganizationRegisterController extends Controller
                 'has_members' => 'required|boolean',
                 'memberships_enabled' => 'required|boolean',
                 'membership_type' => 'nullable|string|in:free,paid',
+                'membership_name' => [
+                    Rule::requiredIf($membershipsEnabled),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'join_method' => [
+                    Rule::requiredIf($membershipsEnabled),
+                    'nullable',
+                    'string',
+                    Rule::in(MembershipJoinMethod::values()),
+                ],
                 'name' => 'required|string|max:255',
                 'ico' => 'nullable|string|max:255',
                 'street' => 'required|string|max:255',
@@ -506,6 +530,13 @@ class OrganizationRegisterController extends Controller
             $organization->primaryActionCategories()->sync(
                 array_values(array_unique(array_map('intval', $validated['primary_action_category_ids'] ?? [])))
             );
+
+            $this->membershipAccountService->bootstrapFromRegistration($organization, [
+                'memberships_enabled' => (bool) ($validated['memberships_enabled'] ?? false),
+                'membership_name' => $validated['membership_name'] ?? $validated['name'],
+                'membership_type' => $validated['membership_type'] ?? 'free',
+                'join_method' => $validated['join_method'] ?? MembershipJoinMethod::RequestToJoin->value,
+            ]);
 
             $this->syncOrganizationUserRole($user, $organization);
             app(CauseGroupChatService::class)->ensureForUser($user->fresh());

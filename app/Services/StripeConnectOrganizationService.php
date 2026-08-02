@@ -206,6 +206,31 @@ class StripeConnectOrganizationService
 
     public static function organizationCanAcceptDirectDonations(Organization $organization): bool
     {
+        return self::organizationStripeConnectReady($organization);
+    }
+
+    /**
+     * Whether the org's Standard Connect account can receive destination charges (donations, memberships, etc.).
+     * Optionally refreshes charges/payouts flags from Stripe when a connected account id exists.
+     */
+    public static function organizationCanAcceptConnectPayments(Organization $organization, bool $syncFromStripe = true): bool
+    {
+        if (! self::configureStripe()) {
+            return false;
+        }
+
+        if ($syncFromStripe
+            && $organization->stripe_connect_account_id !== null
+            && $organization->stripe_connect_account_id !== '') {
+            self::syncAccountStatusFromStripe($organization);
+            $organization->refresh();
+        }
+
+        return self::organizationStripeConnectReady($organization);
+    }
+
+    private static function organizationStripeConnectReady(Organization $organization): bool
+    {
         if ($organization->stripe_connect_account_id === null || $organization->stripe_connect_account_id === '') {
             return false;
         }

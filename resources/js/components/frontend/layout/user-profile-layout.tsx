@@ -18,6 +18,7 @@ import {
   Copy,
   Check,
   Award,
+  BadgeCheck,
   Target,
   BookOpen,
   Settings,
@@ -126,6 +127,13 @@ const navigationItems = [
     icon: UserCheck,
     description: "Following organizations",
     color: "from-red-500 to-pink-600",
+  },
+  {
+    name: "My Memberships",
+    href: "/profile/memberships",
+    icon: BadgeCheck,
+    description: "Membership requests and verified memberships",
+    color: "from-indigo-500 to-blue-600",
   },
   {
     name: "Project Applications",

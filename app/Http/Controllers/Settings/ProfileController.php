@@ -7,6 +7,7 @@ use App\Http\Requests\Settings\CareAllianceFinancialSettingsRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\CareAlliance;
 use App\Models\CareAllianceMembership;
+use App\Models\Organization;
 use App\Models\PrimaryActionCategory;
 use App\Services\CareAllianceGeneralDonationDistributionService;
 use App\Services\CauseGroupChatService;
@@ -71,12 +72,21 @@ class ProfileController extends Controller
             $profileSettingsVariant = 'organization';
             $user->load('organization.primaryActionCategories');
 
-            if ($user->organization) {
-                $organizationPrimaryActionCategoryIds = $user->organization
-                    ->primaryActionCategories
-                    ->pluck('id')
-                    ->values()
-                    ->all();
+            $organization = Organization::forAuthUser($user);
+            if ($organization) {
+                if ($user->organization) {
+                    $organizationPrimaryActionCategoryIds = $user->organization
+                        ->primaryActionCategories
+                        ->pluck('id')
+                        ->values()
+                        ->all();
+                } else {
+                    $organization->loadMissing('primaryActionCategories');
+                    $organizationPrimaryActionCategoryIds = $organization->primaryActionCategories
+                        ->pluck('id')
+                        ->values()
+                        ->all();
+                }
             }
         }
 

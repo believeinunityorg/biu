@@ -20,6 +20,7 @@ use App\Models\Organization;
 use App\Models\Plan;
 use App\Models\Raffle;
 use App\Models\ServiceOrder;
+use App\Models\SupporterMembership;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Admin\LedgerAdjustmentService;
@@ -1135,6 +1136,17 @@ class TransactionLedgerController extends Controller
         }
         if (($meta['source'] ?? '') === 'course_enrollment') {
             return 'enrollment';
+        }
+        if ($rt === SupporterMembership::class || str_ends_with($rt, 'SupporterMembership')) {
+            return 'supporter_membership';
+        }
+        if (($meta['source'] ?? '') === 'organization_membership'
+            || ($meta['source'] ?? '') === 'supporter_membership_checkout'
+            || ($meta['payment_purpose'] ?? '') === 'supporter_membership') {
+            return 'supporter_membership';
+        }
+        if (($t->payment_method ?? '') === 'membership') {
+            return 'supporter_membership';
         }
 
         if ($rt === CareAllianceDonation::class || str_ends_with($rt, 'CareAllianceDonation')) {

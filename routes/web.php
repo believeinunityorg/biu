@@ -97,6 +97,12 @@ use App\Http\Controllers\FindCareAlliancesController;
 use App\Http\Controllers\FindSupportersController;
 use App\Http\Controllers\FollowerController;
 use App\Http\Controllers\Form1023ApplicationController;
+use App\Http\Controllers\Group\GroupProfileController;
+use App\Http\Controllers\Membership\MembershipInvitationController;
+use App\Http\Controllers\Membership\MembershipManagementController;
+use App\Http\Controllers\Membership\MembershipPaymentController;
+use App\Http\Controllers\Membership\SupporterMembershipActionController;
+use App\Http\Controllers\Membership\SupporterMembershipRequestController;
 use App\Http\Controllers\FractionalCertificateController;
 use App\Http\Controllers\FractionalOwnershipController;
 use App\Http\Controllers\FrontendCourseController;
@@ -947,6 +953,7 @@ Route::get('/api/cities-by-state', [OrganizationController::class, 'getCitiesByS
 // Giving dashboard (donation history) - available to both supporters and organizations
 Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(function () {
     Route::get('/profile/donations', [UserProfileController::class, 'donations'])->name('profile.donations');
+    Route::get('/profile/memberships', [UserProfileController::class, 'memberships'])->name('profile.memberships');
 
     Route::prefix('me/favorite-menus')->name('favorite-menus.')->group(function () {
         Route::post('/', [FavoriteMenuController::class, 'syncQuick'])->name('sync');
@@ -2476,6 +2483,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
     Route::post('/campaigns', [CareAllianceCampaignManageController::class, 'store'])->name('campaigns.store');
     Route::patch('/campaigns/{campaign}', [CareAllianceCampaignManageController::class, 'update'])->name('campaigns.update');
     Route::delete('/campaigns/{campaign}', [CareAllianceCampaignManageController::class, 'destroy'])->name('campaigns.destroy');
+    Route::get('/membership', [MembershipManagementController::class, 'careAlliance'])->name('membership.index');
 });
 
 // Care Alliance — nonprofits accept/decline alliance invites (not Care Alliance hub users)
@@ -2486,6 +2494,39 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
     Route::get('/organization/care-alliance-invitations', [CareAllianceOrgInvitationController::class, 'pending'])->name('organization.care-alliance.invitations');
     Route::post('/organization/care-alliance-invitations/{invitation}/accept', [CareAllianceOrgInvitationController::class, 'accept'])->name('organization.care-alliance.invitations.accept');
     Route::post('/organization/care-alliance-invitations/{invitation}/decline', [CareAllianceOrgInvitationController::class, 'decline'])->name('organization.care-alliance.invitations.decline');
+    Route::get('/organization/membership', [MembershipManagementController::class, 'organization'])->name('organization.membership.index');
+});
+
+Route::get('/groups/{group:slug}', [GroupProfileController::class, 'show'])->name('groups.show');
+
+Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(function () {
+    Route::get('/groups/{group:slug}/settings/profile', [GroupProfileController::class, 'edit'])->name('groups.profile.edit');
+    Route::get('/groups/{group:slug}/membership', [MembershipManagementController::class, 'group'])->name('groups.membership.index');
+    Route::post('/membership-requests', [SupporterMembershipRequestController::class, 'store'])
+        ->name('membership-requests.store')
+        ->middleware('role:user');
+    Route::post('/membership-invitations', [MembershipInvitationController::class, 'store'])
+        ->name('membership-invitations.store');
+    Route::delete('/membership-invitations/{membershipInvitation}', [MembershipInvitationController::class, 'destroy'])
+        ->name('membership-invitations.destroy');
+    Route::post('/membership-invitations/{membershipInvitation}/accept', [MembershipInvitationController::class, 'accept'])
+        ->name('membership-invitations.accept')
+        ->middleware('role:user');
+    Route::get('/membership/payment/{membership}/checkout', [MembershipPaymentController::class, 'checkout'])
+        ->name('membership.payment.checkout')
+        ->middleware('role:user');
+    Route::get('/membership/payment/{membership}/success', [MembershipPaymentController::class, 'success'])
+        ->name('membership.payment.success')
+        ->middleware('role:user');
+    Route::post('/membership-requests/{supporterMembership}/approve', [SupporterMembershipActionController::class, 'approve'])
+        ->name('membership-requests.approve');
+    Route::post('/membership-requests/{supporterMembership}/decline', [SupporterMembershipActionController::class, 'decline'])
+        ->name('membership-requests.decline');
+    Route::post('/membership-requests/{supporterMembership}/revoke', [SupporterMembershipActionController::class, 'revoke'])
+        ->name('membership-requests.revoke');
+    Route::delete('/membership-requests/{supporterMembership}', [SupporterMembershipActionController::class, 'destroy'])
+        ->name('membership-requests.destroy')
+        ->middleware('role:user');
 });
 
 // Gift Cards routes

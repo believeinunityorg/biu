@@ -334,6 +334,11 @@ class User extends Authenticatable implements MustVerifyEmail
             ->withTimestamps()->with(['user', 'nteeCode']);
     }
 
+    public function memberships(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SupporterMembership::class, 'supporter_id');
+    }
+
     public function aiVideos(): HasMany
     {
         return $this->hasMany(AiVideo::class);
@@ -505,6 +510,15 @@ class User extends Authenticatable implements MustVerifyEmail
         // Use hasOneThrough relationship but fix ambiguous column issue.
         // Only include youtube columns if they exist (migrations may not be run yet).
         $base = 'organizations.id, organizations.name, organizations.user_id, organizations.ein, organizations.description, organizations.mission, organizations.website, organizations.email, organizations.phone, organizations.contact_name, organizations.contact_title, organizations.city, organizations.state, organizations.zip, organizations.registration_status, organizations.created_at, organizations.updated_at';
+        if (Schema::hasColumn('organizations', 'memberships_enabled')) {
+            $base .= ', organizations.memberships_enabled';
+        }
+        if (Schema::hasColumn('organizations', 'has_members')) {
+            $base .= ', organizations.has_members';
+        }
+        if (Schema::hasColumn('organizations', 'membership_type')) {
+            $base .= ', organizations.membership_type';
+        }
         $youtube = Schema::hasColumn('organizations', 'youtube_channel_url') ? ', organizations.youtube_channel_url' : '';
         $youtubeOAuth = '';
         if (Schema::hasColumn('organizations', 'youtube_access_token')) {

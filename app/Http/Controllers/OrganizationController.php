@@ -27,6 +27,7 @@ use App\Models\UserFavoriteOrganization;
 use App\Services\CareAlliancePublicPageService;
 use App\Services\ExcelDataTransformer;
 use App\Services\ImpactScoreService;
+use App\Services\MembershipAccountService;
 use App\Services\OpenAiService;
 use App\Services\SeoService;
 use Illuminate\Database\Eloquent\Builder;
@@ -765,7 +766,7 @@ class OrganizationController extends BaseController
                 $registeredOrg = Organization::where('user_id', $user->id)
                     ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                     ->with('user:id,slug,name,email,image,cover_img')
-                    ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state')
+                    ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                     ->first();
 
                 if ($registeredOrg) {
@@ -874,6 +875,7 @@ class OrganizationController extends BaseController
         $believePointsBalance = $bp['believePointsBalance'];
 
         if ($registeredOrg) {
+            $registeredOrg->loadMissing('membershipPlan', 'user:id,slug');
             // Get posts count - use single query with union for faster counting
             $postsCount = Post::where('user_id', $registeredOrg->user_id)->count()
                 + FacebookPost::where('organization_id', $registeredOrg->id)
@@ -1126,6 +1128,7 @@ class OrganizationController extends BaseController
             'believePointsBalance' => $believePointsBalance,
             'postFilter' => $postFilter ?? 'organization', // Pass filter to frontend
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
         ]);
     }
 
@@ -1989,7 +1992,7 @@ class OrganizationController extends BaseController
             $registeredOrg = Organization::where('ein', $organization->ein)
                 ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                 ->with('user:id,slug,name,email,image,cover_img')
-                ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state')
+                ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                 ->first();
         } else {
             // Fallback: Try by user slug
@@ -1999,7 +2002,7 @@ class OrganizationController extends BaseController
                 $registeredOrg = Organization::where('user_id', $user->id)
                     ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                     ->with('user:id,slug,name,email,image,cover_img')
-                    ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state')
+                    ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                     ->first();
 
                 if ($registeredOrg) {
@@ -2025,7 +2028,7 @@ class OrganizationController extends BaseController
             $registeredOrg = Organization::where('ein', $organization->ein)
                 ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                 ->with('user:id,slug,name,email,image,cover_img')
-                ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state')
+                ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                 ->first();
         }
 
@@ -2172,6 +2175,7 @@ class OrganizationController extends BaseController
             'currentPage' => 'products',
             'auth' => Auth::user() ? ['user' => Auth::user()] : null,
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
             ...$sidebarData,
         ]);
     }
@@ -2264,6 +2268,7 @@ class OrganizationController extends BaseController
             'currentPage' => 'jobs',
             'auth' => Auth::user() ? ['user' => Auth::user()] : null,
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
             ...$believePoints,
             ...$sidebarData,
         ]);
@@ -2318,6 +2323,7 @@ class OrganizationController extends BaseController
             'currentPage' => 'events',
             'auth' => Auth::user() ? ['user' => Auth::user()] : null,
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
             ...$sidebarData,
         ]);
     }
@@ -2402,6 +2408,7 @@ class OrganizationController extends BaseController
             'currentPage' => 'about',
             'auth' => Auth::user() ? ['user' => Auth::user()] : null,
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
             ...$believePoints,
             ...$sidebarData,
         ]);
@@ -2486,6 +2493,7 @@ class OrganizationController extends BaseController
             'currentPage' => 'contact',
             'auth' => Auth::user() ? ['user' => Auth::user()] : null,
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
             ...$sidebarData,
         ]);
     }
@@ -2589,6 +2597,7 @@ class OrganizationController extends BaseController
             'currentPage' => 'supporters',
             'auth' => Auth::user() ? ['user' => Auth::user()] : null,
             'connectedCareAlliances' => $this->connectedCareAlliancesPayload($registeredOrg),
+            'membershipJoin' => $this->membershipJoinPayload($registeredOrg),
             ...$believePoints,
             ...$sidebarData,
         ]);
@@ -2650,6 +2659,36 @@ class OrganizationController extends BaseController
             ->sortBy(fn (array $row) => strtolower($row['name']))
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function membershipJoinPayload(?Organization $registeredOrg): ?array
+    {
+        if ($registeredOrg === null) {
+            return null;
+        }
+
+        // Profile queries often use a limited select(); reload membership fields explicitly.
+        $org = Organization::query()
+            ->whereKey($registeredOrg->getKey())
+            ->with(['membershipPlan', 'user:id,slug'])
+            ->first([
+                'id',
+                'name',
+                'user_id',
+                'ein',
+                'memberships_enabled',
+                'has_members',
+                'membership_type',
+            ]);
+
+        if ($org === null) {
+            return null;
+        }
+
+        return app(MembershipAccountService::class)->publicJoinPayload($org, Auth::user());
     }
 
     /**

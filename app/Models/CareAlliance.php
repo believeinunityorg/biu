@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasMembershipAccount;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CareAlliance extends Model
 {
+    use HasMembershipAccount;
+
     protected $fillable = [
         'creator_user_id',
         'hub_organization_id',
@@ -22,6 +25,7 @@ class CareAlliance extends Model
         'management_fee_bps',
         'fund_model',
         'status',
+        'memberships_enabled',
         'balance_cents',
         'allocation_method',
         'distribution_frequency',
@@ -34,6 +38,7 @@ class CareAlliance extends Model
     ];
 
     protected $casts = [
+        'memberships_enabled' => 'boolean',
         'management_fee_bps' => 'integer',
         'balance_cents' => 'integer',
         'min_payout_cents' => 'integer',
@@ -58,6 +63,12 @@ class CareAlliance extends Model
     {
         return $this->belongsToMany(PrimaryActionCategory::class, 'ca_primary_action_categories')
             ->withTimestamps();
+    }
+
+    public function groups(): HasMany
+    {
+        return $this->hasMany(Group::class, 'parent_id')
+            ->where('parent_type', \App\Enums\MembershipAccountType::UnityImpactAlliance->value);
     }
 
     public function memberships(): HasMany

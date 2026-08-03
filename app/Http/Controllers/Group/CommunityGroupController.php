@@ -619,6 +619,9 @@ class CommunityGroupController extends Controller
             'canManage' => (bool) $canManage,
             'canModerate' => $canModerate,
             'canJoin' => $user ? Gate::allows('join', $group) : false,
+            'joinBlockedReason' => ($user && ! Gate::allows('join', $group) && ! $membership)
+                ? $this->eligibility->joinEligibilityBlockedReason($user, $group)
+                : null,
             'canLeave' => $user ? Gate::allows('leave', $group) : false,
             'canViewFeeds' => $canViewFeeds,
             'canCreateDiscussion' => $user ? $this->contentService->canCreateDiscussion($user, $group) : false,
@@ -872,10 +875,27 @@ class CommunityGroupController extends Controller
 
     public function join(Request $request, Group $group): RedirectResponse
     {
-        Gate::authorize('join', $group);
         $user = $request->user();
+        $group->loadMissing('parent');
+
+        if (! Gate::forUser($user)->allows('join', $group)) {
+            $reason = $this->eligibility->joinEligibilityBlockedReason($user, $group)
+                ?? 'You are not allowed to join this group.';
+
+            return redirect()
+                ->route('groups.show', $group)
+                ->with('error', $reason);
+        }
 
         $policy = $group->join_policy ?? 'anyone';
+
+        // Defensive: never activate if eligibility failed
+        if (! $this->eligibility->canJoinGroup($user, $group)) {
+            return redirect()
+                ->route('groups.show', $group)
+                ->with('error', $this->eligibility->joinEligibilityBlockedReason($user, $group)
+                    ?? 'You are not eligible to join this group.');
+        }
 
         if ($policy === 'approval') {
             GroupMember::updateOrCreate(

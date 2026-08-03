@@ -103,6 +103,7 @@ type Props = {
   canManage: boolean
   canModerate: boolean
   canJoin: boolean
+  joinBlockedReason?: string | null
   canLeave: boolean
   canViewFeeds?: boolean
   canCreateDiscussion: boolean
@@ -231,6 +232,7 @@ export default function GroupShow({
   canManage,
   canModerate,
   canJoin,
+  joinBlockedReason = null,
   canLeave,
   canViewFeeds = true,
   canCreateDiscussion,
@@ -299,12 +301,23 @@ export default function GroupShow({
 
   const VisibilityIcon = group.visibility === "public" ? Globe2 : Lock
 
+  const parentKind =
+    group.parent?.type === "UnityImpactAlliance" || group.parent?.type === "CareAlliance"
+      ? "Alliance"
+      : "Organization"
+
   const joinPolicyLabel =
     group.join_policy === "invite_only"
-      ? "Invite only"
+      ? "Invitation only"
       : group.join_policy === "approval"
         ? "Approval required"
-        : "Anyone can join"
+        : group.join_policy === "followers"
+          ? `${parentKind} followers only`
+          : group.join_policy === "members"
+            ? `${parentKind} members only`
+            : group.join_policy === "followers_and_members"
+              ? "Followers & members"
+              : "Anyone can join"
 
   const postingLabel =
     group.posting_policy === "admins"
@@ -533,6 +546,11 @@ export default function GroupShow({
                     >
                       Invite only
                     </Button>
+                  )}
+                  {!canJoin && !membership && joinBlockedReason && group.join_policy !== "invite_only" && (
+                    <p className="w-full text-sm text-slate-500 dark:text-slate-400 sm:w-auto sm:max-w-xs">
+                      {joinBlockedReason}
+                    </p>
                   )}
                   {canModerate && (
                     <SoftButton onClick={() => setTab("members")}>

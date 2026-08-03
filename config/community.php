@@ -55,8 +55,11 @@ return [
 
     'group_join_policies' => [
         'anyone' => 'Anyone',
-        'approval' => 'Approval Required',
-        'invite_only' => 'Invite Only',
+        'followers' => 'Followers only',
+        'members' => 'Members only',
+        'followers_and_members' => 'Followers & members',
+        'approval' => 'Approval required',
+        'invite_only' => 'Invitation only',
     ],
 
     'group_posting_policies' => [

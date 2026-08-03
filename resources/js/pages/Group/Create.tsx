@@ -18,8 +18,12 @@ import {
   HeartHandshake,
   ImagePlus,
   Lock,
+  MessageSquare,
+  Shield,
+  Users,
   UsersRound,
 } from "lucide-react"
+import GroupJoinPolicyCards from "@/components/community/GroupJoinPolicyCards"
 
 type ParentOption = { type: string; id: number; name: string; label: string }
 
@@ -508,48 +512,54 @@ export default function GroupCreate({
 
               {step === 3 && (
                 <>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Optional — you can skip and adjust later in group settings.
-                  </p>
-
-                  <FieldBlock title="Who can join?">
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(joinPolicyOptions).map(([value, label]) => {
-                        const selected = data.join_policy === value
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => setData("join_policy", value)}
-                            className={`cursor-pointer rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                              selected
-                                ? "border-purple-500 bg-gradient-to-r from-purple-600 to-blue-600 text-white"
-                                : "border-purple-100 bg-gradient-to-r from-purple-50 to-blue-50 text-purple-800 dark:border-purple-500/25 dark:from-purple-500/15 dark:to-blue-500/15 dark:text-purple-100"
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </FieldBlock>
+                  <GroupJoinPolicyCards
+                    value={data.join_policy}
+                    options={joinPolicyOptions}
+                    parentLabel={parent.label}
+                    onChange={(value) => setData("join_policy", value)}
+                  />
 
                   <FieldBlock title="Who can create posts?">
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {Object.entries(postingPolicyOptions).map(([value, label]) => {
                         const selected = data.posting_policy === value
+                        const Icon =
+                          value === "everyone"
+                            ? UsersRound
+                            : value === "members"
+                              ? Users
+                              : value === "moderators"
+                                ? Shield
+                                : MessageSquare
                         return (
                           <button
                             key={value}
                             type="button"
                             onClick={() => setData("posting_policy", value)}
-                            className={`cursor-pointer rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                            className={`flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                               selected
-                                ? "border-purple-500 bg-gradient-to-r from-purple-600 to-blue-600 text-white"
-                                : "border-purple-100 bg-gradient-to-r from-purple-50 to-blue-50 text-purple-800 dark:border-purple-500/25 dark:from-purple-500/15 dark:to-blue-500/15 dark:text-purple-100"
+                                ? "border-purple-500 bg-gradient-to-br from-purple-50 to-blue-50 dark:border-purple-400 dark:from-purple-500/20 dark:to-blue-500/15"
+                                : "border-purple-100 hover:bg-purple-50/40 dark:border-purple-500/20 dark:hover:bg-purple-500/5"
                             }`}
                           >
-                            {label}
+                            <span
+                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                                selected
+                                  ? "bg-gradient-to-br from-purple-600 to-blue-600 text-white"
+                                  : "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-200"
+                              }`}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </span>
+                            <span>
+                              <span
+                                className={`block text-[13px] font-bold leading-none ${
+                                  selected ? "text-purple-900 dark:text-purple-50" : "text-slate-900 dark:text-white"
+                                }`}
+                              >
+                                {label}
+                              </span>
+                            </span>
                           </button>
                         )
                       })}
@@ -561,10 +571,10 @@ export default function GroupCreate({
                       {mediaOptions.map(([key, label]) => (
                         <label
                           key={key}
-                          className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${
+                          className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition ${
                             data[key]
-                              ? "border-purple-500/40 bg-purple-50/60 dark:border-purple-400/40 dark:bg-purple-500/10"
-                              : "border-purple-100 dark:border-purple-500/20"
+                              ? "border-purple-500/40 bg-gradient-to-r from-purple-50 to-blue-50 text-purple-900 dark:border-purple-400/40 dark:from-purple-500/15 dark:to-blue-500/15 dark:text-purple-50"
+                              : "border-purple-100 text-slate-700 dark:border-purple-500/20 dark:text-slate-300"
                           }`}
                         >
                           <input

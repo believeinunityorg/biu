@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Trash2 } from "lucide-react"
+import GroupJoinPolicyCards from "@/components/community/GroupJoinPolicyCards"
 
 type Props = {
   group: {
@@ -345,26 +346,33 @@ export default function GroupSettings({
                 </div>
               </Section>
 
-              <div className="grid gap-4 lg:grid-cols-2">
-                <Section title="Who can join? *">
-                  <ChoiceGrid
-                    name="join_policy"
-                    options={joinPolicyOptions}
-                    value={data.join_policy}
-                    onChange={(value) => setData("join_policy", value)}
-                    columns="grid-cols-1"
-                  />
-                </Section>
-                <Section title="Who can create posts? *">
-                  <ChoiceGrid
-                    name="posting_policy"
-                    options={postingPolicyOptions}
-                    value={data.posting_policy}
-                    onChange={(value) => setData("posting_policy", value)}
-                    columns="sm:grid-cols-2"
-                  />
-                </Section>
-              </div>
+              <Section
+                title="Who can join?"
+                description="Choose who is allowed to become a member of this group."
+              >
+                <GroupJoinPolicyCards
+                  value={data.join_policy}
+                  options={joinPolicyOptions}
+                  parentLabel={
+                    group.parent?.type === "UnityImpactAlliance" || group.parent?.type === "CareAlliance"
+                      ? "Unity Impact Alliance"
+                      : "Organization"
+                  }
+                  compact
+                  showHeading={false}
+                  onChange={(value) => setData("join_policy", value)}
+                />
+              </Section>
+
+              <Section title="Who can create posts? *">
+                <ChoiceGrid
+                  name="posting_policy"
+                  options={postingPolicyOptions}
+                  value={data.posting_policy}
+                  onChange={(value) => setData("posting_policy", value)}
+                  columns="sm:grid-cols-2 lg:grid-cols-4"
+                />
+              </Section>
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <Section title="Group Rules (optional)">

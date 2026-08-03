@@ -23,6 +23,7 @@ type Props = {
     visibility: string
     join_policy: string
     posting_policy: string
+    posting_policies?: string[]
     rules: string[]
     allow_photos: boolean
     allow_videos: boolean
@@ -121,13 +122,13 @@ export default function GroupSettings({
   ruleExamples,
   canDelete,
 }: Props) {
-  const { data, setData, post, processing, errors } = useForm<{
+  const { data, setData, post, processing, errors, transform } = useForm<{
     name: string
     description: string
     category: string
     visibility: string
     join_policy: string
-    posting_policy: string
+    posting_policies: string[]
     rules: string[]
     allow_photos: boolean
     allow_videos: boolean
@@ -142,7 +143,10 @@ export default function GroupSettings({
     category: group.category ?? "",
     visibility: group.visibility ?? "public",
     join_policy: group.join_policy ?? "anyone",
-    posting_policy: group.posting_policy ?? "members",
+    posting_policies:
+      group.posting_policies && group.posting_policies.length > 0
+        ? group.posting_policies
+        : [group.posting_policy ?? "members"],
     rules: group.rules ?? [],
     allow_photos: group.allow_photos,
     allow_videos: group.allow_videos,
@@ -156,6 +160,20 @@ export default function GroupSettings({
   const [iconPreview, setIconPreview] = useState<string | null>(group.icon_image)
   const [customRule, setCustomRule] = useState("")
   const [deleting, setDeleting] = useState(false)
+
+  const postingPolicies = Array.isArray(data.posting_policies)
+    ? data.posting_policies
+    : group.posting_policies && group.posting_policies.length > 0
+      ? group.posting_policies
+      : [group.posting_policy ?? "members"]
+
+  const togglePostingPolicy = (value: string) => {
+    const selected = postingPolicies.includes(value)
+    const next = selected
+      ? postingPolicies.filter((p) => p !== value)
+      : [...postingPolicies, value]
+    setData("posting_policies", next.length > 0 ? next : [value])
+  }
 
   const setVisibility = (value: string) => {
     setData({
@@ -183,6 +201,16 @@ export default function GroupSettings({
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    const policies =
+      Array.isArray(data.posting_policies) && data.posting_policies.length > 0
+        ? data.posting_policies
+        : ["members"]
+    setData("posting_policies", policies)
+    transform((form) => ({
+      ...form,
+      posting_policies: policies,
+      rules: Array.isArray(form.rules) ? form.rules : [],
+    }))
     post(route("groups.settings.update", group.slug), { forceFormData: true })
   }
 
@@ -364,14 +392,42 @@ export default function GroupSettings({
                 />
               </Section>
 
-              <Section title="Who can create posts? *">
-                <ChoiceGrid
-                  name="posting_policy"
-                  options={postingPolicyOptions}
-                  value={data.posting_policy}
-                  onChange={(value) => setData("posting_policy", value)}
-                  columns="sm:grid-cols-2 lg:grid-cols-4"
-                />
+              <Section
+                title="Who can create posts? *"
+                description="Select one or more. A member can post if they match any selected option."
+              >
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {Object.entries(postingPolicyOptions).map(([value, label]) => {
+                    const selected = postingPolicies.includes(value)
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => togglePostingPolicy(value)}
+                        className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                          selected
+                            ? "border-purple-500 bg-purple-50/80 font-medium text-purple-900 dark:border-purple-400 dark:bg-purple-500/15 dark:text-purple-100"
+                            : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full border-2 ${
+                            selected
+                              ? "border-purple-600 bg-purple-600 dark:border-purple-400 dark:bg-purple-400"
+                              : "border-slate-300 dark:border-slate-500"
+                          }`}
+                          aria-hidden
+                        >
+                          {selected ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
+                        </span>
+                        <span>{label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {errors.posting_policies && (
+                  <p className="mt-2 text-sm text-red-600">{errors.posting_policies}</p>
+                )}
               </Section>
 
               <div className="grid gap-4 lg:grid-cols-2">

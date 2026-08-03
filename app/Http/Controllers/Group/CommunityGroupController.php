@@ -217,6 +217,7 @@ class CommunityGroupController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $user = $request->user();
+        $this->normalizePostingPoliciesInput($request);
         $validated = $request->validate([
             'parent_type' => ['required', 'string', Rule::in(MembershipAccountType::values())],
             'parent_id' => ['required', 'integer'],
@@ -225,7 +226,8 @@ class CommunityGroupController extends Controller
             'category' => ['required', 'string', Rule::in(config('community.group_categories', []))],
             'visibility' => ['required', 'string', Rule::in(array_keys(config('community.group_visibility', [])))],
             'join_policy' => ['required', 'string', Rule::in(array_keys(config('community.group_join_policies', [])))],
-            'posting_policy' => ['required', 'string', Rule::in(array_keys(config('community.group_posting_policies', [])))],
+            'posting_policies' => ['required', 'array', 'min:1'],
+            'posting_policies.*' => ['string', Rule::in(array_keys(config('community.group_posting_policies', [])))],
             'rules' => ['nullable', 'array', 'max:20'],
             'rules.*' => ['string', 'max:255'],
             'allow_photos' => ['sometimes', 'boolean'],
@@ -283,7 +285,8 @@ class CommunityGroupController extends Controller
                 'category' => $validated['category'],
                 'visibility' => $visibility,
                 'join_policy' => $joinPolicy,
-                'posting_policy' => $validated['posting_policy'],
+                'posting_policies' => array_values(array_unique($validated['posting_policies'])),
+                'posting_policy' => $validated['posting_policies'][0] ?? 'members',
                 'rules' => $rules !== [] ? $rules : null,
                 'allow_photos' => $request->boolean('allow_photos', true),
                 'allow_videos' => $request->boolean('allow_videos', true),
@@ -589,7 +592,8 @@ class CommunityGroupController extends Controller
                 'category' => $group->category,
                 'visibility' => $group->visibility ?? 'public',
                 'join_policy' => $group->join_policy ?? 'anyone',
-                'posting_policy' => $group->posting_policy ?? 'members',
+                'posting_policy' => $group->normalizedPostingPolicies()[0] ?? 'members',
+                'posting_policies' => $group->normalizedPostingPolicies(),
                 'rules' => $group->rulesList(),
                 'allow_photos' => (bool) ($group->allow_photos ?? true),
                 'allow_videos' => (bool) ($group->allow_videos ?? true),
@@ -668,7 +672,8 @@ class CommunityGroupController extends Controller
                 'icon_image' => $group->icon_image ? asset('storage/'.$group->icon_image) : null,
                 'visibility' => $group->visibility ?? 'public',
                 'join_policy' => $group->join_policy ?? 'anyone',
-                'posting_policy' => $group->posting_policy ?? 'members',
+                'posting_policy' => $group->normalizedPostingPolicies()[0] ?? 'members',
+                'posting_policies' => $group->normalizedPostingPolicies(),
                 'rules' => $group->rulesList(),
                 'allow_photos' => (bool) ($group->allow_photos ?? true),
                 'allow_videos' => (bool) ($group->allow_videos ?? true),
@@ -696,6 +701,8 @@ class CommunityGroupController extends Controller
     {
         Gate::authorize('update', $group);
 
+        $this->normalizePostingPoliciesInput($request);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:5000'],
@@ -710,7 +717,8 @@ class CommunityGroupController extends Controller
             ],
             'visibility' => ['required', 'string', Rule::in(array_keys(config('community.group_visibility', [])))],
             'join_policy' => ['required', 'string', Rule::in(array_keys(config('community.group_join_policies', [])))],
-            'posting_policy' => ['required', 'string', Rule::in(array_keys(config('community.group_posting_policies', [])))],
+            'posting_policies' => ['required', 'array', 'min:1'],
+            'posting_policies.*' => ['string', Rule::in(array_keys(config('community.group_posting_policies', [])))],
             'rules' => ['nullable', 'array', 'max:20'],
             'rules.*' => ['string', 'max:255'],
             'allow_photos' => ['sometimes', 'boolean'],
@@ -741,7 +749,8 @@ class CommunityGroupController extends Controller
             'category' => $validated['category'],
             'visibility' => $visibility,
             'join_policy' => $joinPolicy,
-            'posting_policy' => $validated['posting_policy'],
+            'posting_policies' => array_values(array_unique($validated['posting_policies'])),
+            'posting_policy' => $validated['posting_policies'][0] ?? 'members',
             'rules' => $rules !== [] ? $rules : null,
             'allow_photos' => $request->boolean('allow_photos', true),
             'allow_videos' => $request->boolean('allow_videos', true),
@@ -1309,6 +1318,51 @@ class CommunityGroupController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Organization/Alliance group controls updated.');
+    }
+
+    /**
+     * FormData / single-value quirks → always a clean posting_policies array.
+     */
+    private function normalizePostingPoliciesInput(Request $request): void
+    {
+        $raw = $request->input('posting_policies');
+
+        // Single checkbox / legacy field / JSON string from older clients.
+        if ($raw === null || $raw === '') {
+            $raw = $request->input('posting_policy');
+        }
+
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $raw = $decoded;
+            } else {
+                $parts = preg_split('/\s*,\s*/', $raw);
+                $raw = ($parts !== false && $parts !== []) ? $parts : [$raw];
+            }
+        }
+
+        // PHP may expose object-like arrays from FormData; flatten scalars only.
+        if (is_array($raw)) {
+            $raw = array_values(array_filter($raw, static fn ($v) => is_string($v) || is_int($v)));
+            $raw = array_map(static fn ($v) => (string) $v, $raw);
+        } else {
+            $raw = [];
+        }
+
+        $allowed = array_keys(config('community.group_posting_policies', []));
+        $normalized = array_values(array_unique(array_filter(
+            $raw,
+            static fn (string $policy) => in_array($policy, $allowed, true)
+        )));
+
+        if ($normalized === []) {
+            $normalized = ['members'];
+        }
+
+        $request->merge([
+            'posting_policies' => $normalized,
+        ]);
     }
 
     private function resolveParent(string $type, int $id): Organization|CareAlliance|null

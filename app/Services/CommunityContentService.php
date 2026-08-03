@@ -46,14 +46,22 @@ class CommunityContentService
     {
         if ($parent instanceof Group) {
             $member = $this->membership($user, $parent);
-            if (! $member) {
+            if (! $member || ! $member->isActive()) {
                 return false;
             }
             if ($member->isPostingSuspended()) {
                 return false;
             }
 
-            return true;
+            $policy = $parent->posting_policy ?? 'members';
+            $role = $member->role;
+
+            return match ($policy) {
+                'admins' => $role === GroupMemberRole::Admin || $parent->isManagedBy($user),
+                'moderators' => ($role?->canModerate() ?? false) || $parent->isManagedBy($user),
+                'everyone', 'members' => true,
+                default => true,
+            };
         }
 
         if ($parent instanceof Organization) {
@@ -308,6 +316,8 @@ class CommunityContentService
 
     private function groupRole(User $user, Group $group): ?GroupMemberRole
     {
-        return $this->membership($user, $group)?->role;
+        $member = $this->membership($user, $group);
+
+        return $member && $member->isActive() ? $member->role : null;
     }
 }

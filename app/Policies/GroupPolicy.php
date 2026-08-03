@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Enums\GroupMemberRole;
 use App\Models\Group;
+use App\Models\GroupInvite;
 use App\Models\GroupMember;
 use App\Models\User;
 use App\Services\GroupEligibilityService;
@@ -16,7 +17,31 @@ class GroupPolicy
 
     public function view(?User $user, Group $group): bool
     {
-        return $group->status === 'active' || ($user && $this->isMember($user, $group));
+        $isActiveMember = $user && $this->isActiveMember($user, $group);
+        if ($group->status !== 'active' && ! $isActiveMember) {
+            return false;
+        }
+
+        if ($group->isHiddenVisibility()) {
+            if (! $user) {
+                return false;
+            }
+
+            if ($isActiveMember || $group->isManagedBy($user) || $user->hasRole('admin')) {
+                return true;
+            }
+
+            return GroupInvite::query()
+                ->where('group_id', $group->id)
+                ->where('status', 'pending')
+                ->where(function ($q) use ($user) {
+                    $q->where('invitee_user_id', $user->id)
+                        ->orWhere('invitee_email', $user->email);
+                })
+                ->exists();
+        }
+
+        return true;
     }
 
     public function create(User $user): bool
@@ -25,6 +50,11 @@ class GroupPolicy
     }
 
     public function update(User $user, Group $group): bool
+    {
+        return $this->isAdmin($user, $group) || $group->isManagedBy($user);
+    }
+
+    public function delete(User $user, Group $group): bool
     {
         return $this->isAdmin($user, $group) || $group->isManagedBy($user);
     }
@@ -43,7 +73,12 @@ class GroupPolicy
 
     public function join(User $user, Group $group): bool
     {
-        if ($this->isMember($user, $group)) {
+        if ($this->isActiveMember($user, $group) || $this->isPendingMember($user, $group)) {
+            return false;
+        }
+
+        $policy = $group->join_policy ?? 'anyone';
+        if ($policy === 'invite_only') {
             return false;
         }
 
@@ -52,7 +87,12 @@ class GroupPolicy
 
     public function leave(User $user, Group $group): bool
     {
-        $member = $this->membership($user, $group);
+        $anyMembership = $this->membership($user, $group);
+        if ($anyMembership?->isPending()) {
+            return true;
+        }
+
+        $member = $this->activeMembership($user, $group);
         if (! $member) {
             return false;
         }
@@ -61,6 +101,7 @@ class GroupPolicy
         if ($member->role === GroupMemberRole::Admin) {
             $adminCount = GroupMember::query()
                 ->where('group_id', $group->id)
+                ->where('membership_status', 'active')
                 ->where('role', GroupMemberRole::Admin)
                 ->count();
 
@@ -83,14 +124,28 @@ class GroupPolicy
             ->first();
     }
 
-    private function role(User $user, Group $group): ?GroupMemberRole
+    private function activeMembership(User $user, Group $group): ?GroupMember
     {
-        return $this->membership($user, $group)?->role;
+        $member = $this->membership($user, $group);
+
+        return $member && $member->isActive() ? $member : null;
     }
 
-    private function isMember(User $user, Group $group): bool
+    private function role(User $user, Group $group): ?GroupMemberRole
     {
-        return $this->membership($user, $group) !== null;
+        return $this->activeMembership($user, $group)?->role;
+    }
+
+    private function isActiveMember(User $user, Group $group): bool
+    {
+        return $this->activeMembership($user, $group) !== null;
+    }
+
+    private function isPendingMember(User $user, Group $group): bool
+    {
+        $member = $this->membership($user, $group);
+
+        return $member?->isPending() ?? false;
     }
 
     private function isAdmin(User $user, Group $group): bool

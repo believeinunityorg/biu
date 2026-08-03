@@ -12,6 +12,7 @@ class GroupMember extends Model
         'group_id',
         'user_id',
         'role',
+        'membership_status',
         'joined_at',
         'posting_suspended_until',
     ];
@@ -21,6 +22,16 @@ class GroupMember extends Model
         'joined_at' => 'datetime',
         'posting_suspended_until' => 'datetime',
     ];
+
+    public function isActive(): bool
+    {
+        return ($this->membership_status ?? 'active') === 'active';
+    }
+
+    public function isPending(): bool
+    {
+        return ($this->membership_status ?? 'active') === 'pending';
+    }
 
     public function group(): BelongsTo
     {

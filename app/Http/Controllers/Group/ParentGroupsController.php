@@ -10,6 +10,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Services\GroupEligibilityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -58,7 +59,7 @@ class ParentGroupsController extends Controller
             ->where('status', 'active')
             ->where(function ($q) use ($user) {
                 $q->where('creator_user_id', $user->id)
-                    ->orWhereHas('members', fn ($m) => $m->where('user_id', $user->id));
+                    ->orWhereHas('members', fn ($m) => $m->where('user_id', $user->id)->where('membership_status', 'active'));
             })
             ->with('parent')
             ->orderByDesc('is_pinned')
@@ -69,8 +70,9 @@ class ParentGroupsController extends Controller
             'parent' => null,
             'canCreate' => false,
             'createUrl' => null,
-            'groups' => $groups->map(fn (Group $g) => $this->groupCard($g))->values(),
+            'groups' => $groups->map(fn (Group $g) => $this->groupCard($g, $user))->values(),
             'title' => 'My Community Groups',
+            'canManageParent' => false,
             'reportReasons' => config('community.report_reasons'),
         ]);
     }
@@ -94,8 +96,8 @@ class ParentGroupsController extends Controller
 
         $canCreate = $this->eligibility->canCreateGroupUnder($user, $parent);
         $title = $parent instanceof CareAlliance
-            ? 'Unity Impact Alliance Community Groups'
-            : 'Community Groups';
+            ? 'Unity Impact Alliance Groups'
+            : 'Organization Groups';
 
         return Inertia::render('Group/Index', [
             'parent' => [
@@ -105,9 +107,13 @@ class ParentGroupsController extends Controller
             ],
             'canCreate' => $canCreate,
             'createUrl' => $canCreate
-                ? route('groups.create', ['parent_type' => $parentType, 'parent_id' => $parent->id])
+                ? route('groups.create', [
+                    'parent_type' => $parentType,
+                    'parent_id' => $parent->id,
+                    'org_dashboard' => 1,
+                ])
                 : null,
-            'groups' => $groups->map(fn (Group $g) => $this->groupCard($g, true))->values(),
+            'groups' => $groups->map(fn (Group $g) => $this->groupCard($g, $user))->values(),
             'title' => $title,
             'canManageParent' => true,
             'reportReasons' => config('community.report_reasons'),
@@ -117,8 +123,11 @@ class ParentGroupsController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function groupCard(Group $group, bool $includeHidden = false): array
+    private function groupCard(Group $group, User $user): array
     {
+        $canEdit = Gate::forUser($user)->allows('update', $group);
+        $canDelete = Gate::forUser($user)->allows('delete', $group);
+
         return [
             'id' => $group->id,
             'name' => $group->name,
@@ -131,6 +140,9 @@ class ParentGroupsController extends Controller
             'is_hidden_on_parent' => (bool) $group->is_hidden_on_parent,
             'members_count' => $group->members_count ?? $group->members()->count(),
             'url' => route('groups.show', $group),
+            'edit_url' => $canEdit ? route('groups.settings', $group) : null,
+            'can_edit' => $canEdit,
+            'can_delete' => $canDelete,
             'parent_name' => $group->relationLoaded('parent') ? ($group->parent->name ?? null) : null,
         ];
     }

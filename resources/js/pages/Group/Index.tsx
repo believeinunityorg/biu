@@ -20,11 +20,13 @@ import {
   Eye,
   EyeOff,
   MoreHorizontal,
+  Pencil,
   Pin,
   Plus,
   Search,
   Sparkles,
   Star,
+  Trash2,
   Users,
   UsersRound,
 } from "lucide-react"
@@ -41,6 +43,9 @@ type GroupCard = {
   is_hidden_on_parent: boolean
   members_count: number
   url: string
+  edit_url?: string | null
+  can_edit?: boolean
+  can_delete?: boolean
   parent_name?: string | null
 }
 
@@ -70,6 +75,16 @@ function updateParentControls(
     },
     { preserveScroll: true },
   )
+}
+
+function deleteGroup(group: GroupCard) {
+  const confirmed = window.confirm(
+    `Permanently delete “${group.name}”? This removes the group, members, and all posts. This cannot be undone.`,
+  )
+  if (!confirmed) {
+    return
+  }
+  router.delete(route("groups.destroy", group.slug), { preserveScroll: true })
 }
 
 export default function GroupIndex({
@@ -129,7 +144,7 @@ export default function GroupIndex({
   ]
 
   return (
-    <AppLayout breadcrumbs={[{ title: "Community Groups", href: "/organization/groups" }]}>
+    <AppLayout breadcrumbs={[{ title: "Groups", href: "/organization/groups" }]}>
       <Head title={title} />
 
       <div className="flex w-full flex-1 flex-col gap-6 p-4 sm:p-6">
@@ -140,12 +155,12 @@ export default function GroupIndex({
             <div className="min-w-0 space-y-2">
               <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
                 <Sparkles className="h-3.5 w-3.5" />
-                Community Groups
+                Groups
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
               <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
                 {parent
-                  ? `Groups under ${parent.name}. Followers and members can create groups instantly — no approval required.`
+                  ? `Groups under ${parent.name}. Create, edit, or delete groups from this page.`
                   : "Groups you created or joined across organizations and alliances."}
               </p>
             </div>
@@ -333,7 +348,7 @@ export default function GroupIndex({
                     {group.members_count} {group.members_count === 1 ? "member" : "members"}
                   </p>
 
-                  <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/60 pt-3">
+                  <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
                     <Button asChild size="sm" className="cursor-pointer bg-gradient-to-r from-purple-600 to-blue-600 text-white">
                       <Link href={group.url}>
                         Open
@@ -341,15 +356,47 @@ export default function GroupIndex({
                       </Link>
                     </Button>
 
+                    {group.can_edit && group.edit_url && (
+                      <Button asChild size="sm" variant="outline" className="cursor-pointer">
+                        <Link href={group.edit_url}>
+                          <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                          Edit
+                        </Link>
+                      </Button>
+                    )}
+
+                    {group.can_delete && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="cursor-pointer text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-500/10"
+                        onClick={() => deleteGroup(group)}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Delete
+                      </Button>
+                    )}
+
                     {canManageParent && parent ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="outline" className="cursor-pointer px-2">
+                          <Button size="sm" variant="outline" className="ml-auto cursor-pointer px-2">
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Manage group</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
+                          {group.can_edit && group.edit_url && (
+                            <>
+                              <DropdownMenuItem className="cursor-pointer" asChild>
+                                <Link href={group.edit_url}>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Edit group
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem
                             className="cursor-pointer"
                             onClick={() =>
@@ -389,6 +436,18 @@ export default function GroupIndex({
                               </>
                             )}
                           </DropdownMenuItem>
+                          {group.can_delete && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="cursor-pointer text-red-600 focus:text-red-700"
+                                onClick={() => deleteGroup(group)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete permanently
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           {Object.keys(reportReasons).length > 0 && (
                             <>
                               <DropdownMenuSeparator />

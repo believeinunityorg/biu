@@ -68,6 +68,192 @@ function formatWhen(iso: string | null) {
   })
 }
 
+/** Group photos uploaded together (same uploader, within a short window). */
+function groupPhotosByUploadBatch(items: GroupLibraryItem[], windowMs = 3 * 60 * 1000): GroupLibraryItem[][] {
+  const sorted = [...items].sort((a, b) => {
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+    return tb - ta
+  })
+
+  const batches: GroupLibraryItem[][] = []
+  for (const item of sorted) {
+    const t = item.created_at ? new Date(item.created_at).getTime() : 0
+    const uploaderId = item.uploader?.id ?? 0
+    const last = batches[batches.length - 1]
+    if (last && last.length > 0) {
+      const head = last[0]
+      const headT = head.created_at ? new Date(head.created_at).getTime() : 0
+      const sameUploader = (head.uploader?.id ?? 0) === uploaderId
+      if (sameUploader && Math.abs(headT - t) <= windowMs) {
+        last.push(item)
+        continue
+      }
+    }
+    batches.push([item])
+  }
+  return batches
+}
+
+function PhotoTile({
+  item,
+  className = "",
+  onRemove,
+  overlay,
+}: {
+  item: GroupLibraryItem
+  className?: string
+  onRemove?: (item: GroupLibraryItem) => void
+  overlay?: string | null
+}) {
+  return (
+    <div className={`group/tile relative min-h-0 min-w-0 overflow-hidden bg-slate-900 ${className}`}>
+      <a href={item.url} target="_blank" rel="noreferrer" className="absolute inset-0 block">
+        <img
+          src={item.url}
+          alt={item.title || item.original_name}
+          className="h-full w-full object-cover transition duration-200 group-hover/tile:scale-[1.02]"
+          loading="lazy"
+        />
+        {overlay ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+            <span className="text-3xl font-bold tracking-tight text-white sm:text-4xl">{overlay}</span>
+          </div>
+        ) : (
+          <div className="pointer-events-none absolute inset-0 bg-black/0 transition group-hover/tile:bg-black/10" />
+        )}
+      </a>
+      {item.can_manage && onRemove && (
+        <button
+          type="button"
+          title="Remove"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onRemove(item)
+          }}
+          className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/65 text-white opacity-0 transition group-hover/tile:opacity-100 hover:bg-red-600"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Facebook feed-style multi-photo collage inside a full card. */
+function FacebookPhotoCollageCard({
+  photos,
+  onRemove,
+}: {
+  photos: GroupLibraryItem[]
+  onRemove: (item: GroupLibraryItem) => void
+}) {
+  if (photos.length === 0) return null
+
+  const head = photos[0]
+  const fifthOverlay = photos.length > 5 ? `+${photos.length - 5}` : null
+
+  return (
+    <article className="overflow-hidden rounded-xl border border-purple-100 bg-white shadow-sm dark:border-purple-500/20 dark:bg-[#111827]">
+      <div className="flex items-center gap-3 border-b border-purple-50 px-4 py-3 dark:border-purple-500/15">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-blue-600 text-sm font-bold text-white">
+          {(head.uploader?.name || "M").charAt(0).toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
+            {head.uploader?.name || "Member"}
+          </p>
+          <p className="text-[12px] text-slate-500">
+            {photos.length === 1 ? "added a photo" : `added ${photos.length} photos`}
+            {head.created_at ? ` · ${new Date(head.created_at).toLocaleString()}` : ""}
+          </p>
+        </div>
+      </div>
+
+      {photos.length === 1 && (
+        <div className="relative max-h-[min(70vh,560px)] w-full bg-black">
+          <a href={photos[0].url} target="_blank" rel="noreferrer" className="block">
+            <img
+              src={photos[0].url}
+              alt={photos[0].title || photos[0].original_name}
+              className="mx-auto max-h-[min(70vh,560px)] w-full object-contain"
+              loading="lazy"
+            />
+          </a>
+          {photos[0].can_manage && (
+            <button
+              type="button"
+              title="Remove"
+              onClick={() => onRemove(photos[0])}
+              className="absolute right-3 top-3 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-black/65 text-white hover:bg-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {photos.length === 2 && (
+        <div className="grid h-[min(52vw,360px)] grid-cols-2 gap-[3px] bg-slate-200 dark:bg-slate-800">
+          {photos.map((item) => (
+            <PhotoTile key={item.id} item={item} onRemove={onRemove} />
+          ))}
+        </div>
+      )}
+
+      {photos.length === 3 && (
+        <div className="grid h-[min(58vw,420px)] grid-cols-2 grid-rows-2 gap-[3px] bg-slate-200 dark:bg-slate-800">
+          <PhotoTile item={photos[0]} onRemove={onRemove} className="row-span-2" />
+          <PhotoTile item={photos[1]} onRemove={onRemove} />
+          <PhotoTile item={photos[2]} onRemove={onRemove} />
+        </div>
+      )}
+
+      {photos.length === 4 && (
+        <div className="grid h-[min(64vw,460px)] grid-cols-2 grid-rows-2 gap-[3px] bg-slate-200 dark:bg-slate-800">
+          {photos.map((item) => (
+            <PhotoTile key={item.id} item={item} onRemove={onRemove} />
+          ))}
+        </div>
+      )}
+
+      {photos.length >= 5 && (
+        <div className="grid h-[min(68vw,500px)] grid-cols-2 grid-rows-2 gap-[3px] bg-slate-200 dark:bg-slate-800">
+          <PhotoTile item={photos[0]} onRemove={onRemove} />
+          <PhotoTile item={photos[1]} onRemove={onRemove} />
+          <div className="col-span-2 grid grid-cols-3 gap-[3px]">
+            <PhotoTile item={photos[2]} onRemove={onRemove} />
+            <PhotoTile item={photos[3]} onRemove={onRemove} />
+            <PhotoTile
+              item={photos[4]}
+              onRemove={onRemove}
+              overlay={fifthOverlay}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Hidden extras still reachable when +N shown — list under card for manage */}
+      {photos.length > 5 && (
+        <div className="flex flex-wrap gap-2 border-t border-purple-50 px-3 py-2 dark:border-purple-500/15">
+          {photos.slice(5).map((item) => (
+            <a
+              key={item.id}
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="relative h-14 w-14 overflow-hidden rounded-md bg-slate-200 dark:bg-slate-700"
+            >
+              <img src={item.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
+    </article>
+  )
+}
+
 type LibraryProps = {
   groupSlug: string
   type: "photo" | "video" | "document"
@@ -374,35 +560,13 @@ export function GroupLibraryPanel({ groupSlug, type, items, canUpload }: Library
           </p>
         </div>
       ) : type === "photo" ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {items.map((item) => (
-            <div
-              key={item.id}
-              className="group relative overflow-hidden rounded-xl border border-purple-100 bg-white shadow-sm dark:border-purple-500/20 dark:bg-[#0d1424]"
-            >
-              <a href={item.url} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden">
-                <img src={item.url} alt={item.title || item.original_name} className="h-full w-full object-cover" />
-              </a>
-              <div className="space-y-0.5 p-2.5">
-                <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
-                  {item.title || item.original_name}
-                </p>
-                <p className="truncate text-[11px] text-slate-500">
-                  {item.uploader?.name || "Member"}
-                  {item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString()}` : ""}
-                </p>
-              </div>
-              {item.can_manage && (
-                <button
-                  type="button"
-                  title="Remove"
-                  onClick={() => removeItem(item)}
-                  className="absolute right-2 top-2 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition group-hover:opacity-100"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+        <div className="space-y-4">
+          {groupPhotosByUploadBatch(items).map((batch) => (
+            <FacebookPhotoCollageCard
+              key={batch.map((p) => p.id).join("-")}
+              photos={batch}
+              onRemove={removeItem}
+            />
           ))}
         </div>
       ) : type === "video" ? (

@@ -64,6 +64,7 @@ return [
 
     'group_posting_policies' => [
         'everyone' => 'Everyone',
+        'followers' => 'Followers',
         'members' => 'Members only',
         'moderators' => 'Moderators only',
         'admins' => 'Admin only',

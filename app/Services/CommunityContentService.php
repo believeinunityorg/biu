@@ -53,24 +53,16 @@ class CommunityContentService
                 return false;
             }
 
-            $policy = $parent->posting_policy ?? 'members';
+            $policies = $parent->normalizedPostingPolicies();
             $role = $member->role;
 
-            // Admins / moderators / host managers always keep posting access.
-            if (($role?->canModerate() ?? false) || $parent->isManagedBy($user)) {
-                return match ($policy) {
-                    'admins' => $role === GroupMemberRole::Admin || $parent->isManagedBy($user),
-                    'moderators', 'everyone', 'members', 'followers' => true,
-                    default => true,
-                };
+            foreach ($policies as $policy) {
+                if ($this->matchesGroupPostingPolicy($user, $parent, $role, $policy)) {
+                    return true;
+                }
             }
 
-            return match ($policy) {
-                'admins', 'moderators' => false,
-                'followers' => $this->groupMemberFollowsHost($user, $parent),
-                'everyone', 'members' => true,
-                default => true,
-            };
+            return false;
         }
 
         if ($parent instanceof Organization) {
@@ -82,6 +74,23 @@ class CommunityContentService
         }
 
         return false;
+    }
+
+    /**
+     * Whether an active group member satisfies one posting-policy option.
+     */
+    private function matchesGroupPostingPolicy(User $user, Group $group, ?GroupMemberRole $role, string $policy): bool
+    {
+        $isModerator = ($role?->canModerate() ?? false) || $group->isManagedBy($user);
+        $isAdmin = $role === GroupMemberRole::Admin || $group->isManagedBy($user);
+
+        return match ($policy) {
+            'everyone', 'members' => true,
+            'followers' => $isModerator || $this->groupMemberFollowsHost($user, $group),
+            'moderators' => $isModerator,
+            'admins' => $isAdmin,
+            default => false,
+        };
     }
 
     /**

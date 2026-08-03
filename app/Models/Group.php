@@ -24,6 +24,7 @@ class Group extends Model
         'visibility',
         'join_policy',
         'posting_policy',
+        'posting_policies',
         'rules',
         'allow_photos',
         'allow_videos',
@@ -51,8 +52,34 @@ class Group extends Model
         'allow_polls' => 'boolean',
         'allow_events' => 'boolean',
         'rules' => 'array',
+        'posting_policies' => 'array',
         'parent_type' => MembershipAccountType::class,
     ];
+
+    /**
+     * Normalized list of who may create discussion posts (multi-select, OR match).
+     *
+     * @return list<string>
+     */
+    public function normalizedPostingPolicies(): array
+    {
+        $allowed = array_keys(config('community.group_posting_policies', []));
+        $policies = $this->posting_policies;
+
+        if (! is_array($policies) || $policies === []) {
+            $legacy = is_string($this->posting_policy) && $this->posting_policy !== ''
+                ? $this->posting_policy
+                : 'members';
+            $policies = [$legacy];
+        }
+
+        $normalized = array_values(array_unique(array_filter(
+            $policies,
+            fn ($policy) => is_string($policy) && in_array($policy, $allowed, true)
+        )));
+
+        return $normalized !== [] ? $normalized : ['members'];
+    }
 
     public function activeMembers(): HasMany
     {

@@ -86,6 +86,7 @@ type Props = {
     visibility: string
     join_policy: string
     posting_policy: string
+    posting_policies?: string[]
     rules: string[]
     allow_photos: boolean
     allow_videos: boolean
@@ -319,16 +320,22 @@ export default function GroupShow({
               ? "Followers & members"
               : "Anyone can join"
 
-  const postingLabel =
-    group.posting_policy === "admins"
-      ? "Admins only"
-      : group.posting_policy === "moderators"
-        ? "Moderators only"
-        : group.posting_policy === "followers"
-          ? "Followers"
-          : group.posting_policy === "everyone"
-            ? "Everyone"
-            : "Members only"
+  const postingLabels = (() => {
+    const options = {
+      everyone: "Everyone",
+      followers: "Followers",
+      members: "Members only",
+      moderators: "Moderators only",
+      admins: "Admins only",
+    } as Record<string, string>
+    const policies =
+      group.posting_policies && group.posting_policies.length > 0
+        ? group.posting_policies
+        : [group.posting_policy || "members"]
+    return policies.map((p) => options[p] ?? p).join(", ")
+  })()
+
+  const postingLabel = postingLabels || "Members only"
 
   const visibleTabs = tabs.filter((t) => {
     if (t.key === "events") return group.allow_events && canViewFeeds

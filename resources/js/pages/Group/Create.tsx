@@ -79,12 +79,12 @@ export default function GroupCreate({
   categories,
   visibilityOptions,
   joinPolicyOptions,
-  postingPolicyOptions,
+  postingPolicyOptions = {},
   ruleExamples,
   backUrl = "/groups",
   consumer = false,
 }: Props) {
-  const { data, setData, post, processing, errors } = useForm<{
+  const { data, setData, post, processing, errors, transform } = useForm<{
     parent_type: string
     parent_id: number
     name: string
@@ -92,7 +92,7 @@ export default function GroupCreate({
     category: string
     visibility: string
     join_policy: string
-    posting_policy: string
+    posting_policies: string[]
     rules: string[]
     allow_photos: boolean
     allow_videos: boolean
@@ -109,7 +109,7 @@ export default function GroupCreate({
     category: "",
     visibility: "public",
     join_policy: "anyone",
-    posting_policy: "members",
+    posting_policies: ["members"],
     rules: [],
     allow_photos: true,
     allow_videos: true,
@@ -124,6 +124,16 @@ export default function GroupCreate({
   const [customRule, setCustomRule] = useState("")
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [step, setStep] = useState<1 | 2 | 3>(1)
+
+  const postingPolicies = Array.isArray(data.posting_policies) ? data.posting_policies : ["members"]
+
+  const togglePostingPolicy = (value: string) => {
+    const selected = postingPolicies.includes(value)
+    const next = selected
+      ? postingPolicies.filter((p) => p !== value)
+      : [...postingPolicies, value]
+    setData("posting_policies", next.length > 0 ? next : [value])
+  }
 
   const selectParent = (option: ParentOption) => {
     router.get(
@@ -223,6 +233,16 @@ export default function GroupCreate({
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    const policies =
+      Array.isArray(data.posting_policies) && data.posting_policies.length > 0
+        ? data.posting_policies
+        : ["members"]
+    setData("posting_policies", policies)
+    transform((form) => ({
+      ...form,
+      posting_policies: policies,
+      rules: Array.isArray(form.rules) ? form.rules : [],
+    }))
     post(route("groups.store"), { forceFormData: true })
   }
 
@@ -521,9 +541,12 @@ export default function GroupCreate({
                   />
 
                   <FieldBlock title="Who can create posts?">
+                    <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                      Select one or more. A member can post if they match any selected option.
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(postingPolicyOptions).map(([value, label]) => {
-                        const selected = data.posting_policy === value
+                        const selected = postingPolicies.includes(value)
                         const Icon =
                           value === "everyone"
                             ? UsersRound
@@ -538,7 +561,7 @@ export default function GroupCreate({
                           <button
                             key={value}
                             type="button"
-                            onClick={() => setData("posting_policy", value)}
+                            onClick={() => togglePostingPolicy(value)}
                             className={`flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                               selected
                                 ? "border-purple-500 bg-gradient-to-br from-purple-50 to-blue-50 dark:border-purple-400 dark:from-purple-500/20 dark:to-blue-500/15"
@@ -554,19 +577,30 @@ export default function GroupCreate({
                             >
                               <Icon className="h-3.5 w-3.5" />
                             </span>
-                            <span>
-                              <span
-                                className={`block text-[13px] font-bold leading-none ${
-                                  selected ? "text-purple-900 dark:text-purple-50" : "text-slate-900 dark:text-white"
-                                }`}
-                              >
-                                {label}
-                              </span>
+                            <span
+                              className={`block min-w-0 flex-1 text-[13px] font-bold leading-none ${
+                                selected ? "text-purple-900 dark:text-purple-50" : "text-slate-900 dark:text-white"
+                              }`}
+                            >
+                              {label}
+                            </span>
+                            <span
+                              className={`flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full border-2 ${
+                                selected
+                                  ? "border-purple-600 bg-purple-600 dark:border-purple-400 dark:bg-purple-400"
+                                  : "border-slate-300 dark:border-slate-500"
+                              }`}
+                              aria-hidden
+                            >
+                              {selected ? <span className="h-1.5 w-1.5 rounded-full bg-white" /> : null}
                             </span>
                           </button>
                         )
                       })}
                     </div>
+                    {errors.posting_policies && (
+                      <p className="mt-1 text-sm text-red-600">{errors.posting_policies}</p>
+                    )}
                   </FieldBlock>
 
                   <FieldBlock title="What members can share">

@@ -56,9 +56,18 @@ class CommunityContentService
             $policy = $parent->posting_policy ?? 'members';
             $role = $member->role;
 
+            // Admins / moderators / host managers always keep posting access.
+            if (($role?->canModerate() ?? false) || $parent->isManagedBy($user)) {
+                return match ($policy) {
+                    'admins' => $role === GroupMemberRole::Admin || $parent->isManagedBy($user),
+                    'moderators', 'everyone', 'members', 'followers' => true,
+                    default => true,
+                };
+            }
+
             return match ($policy) {
-                'admins' => $role === GroupMemberRole::Admin || $parent->isManagedBy($user),
-                'moderators' => ($role?->canModerate() ?? false) || $parent->isManagedBy($user),
+                'admins', 'moderators' => false,
+                'followers' => $this->groupMemberFollowsHost($user, $parent),
                 'everyone', 'members' => true,
                 default => true,
             };
@@ -73,6 +82,20 @@ class CommunityContentService
         }
 
         return false;
+    }
+
+    /**
+     * Active group member who also follows the group's host Organization / Alliance.
+     */
+    private function groupMemberFollowsHost(User $user, Group $group): bool
+    {
+        $host = $group->relationLoaded('parent') ? $group->parent : $group->parent()->first();
+
+        if (! ($host instanceof Organization || $host instanceof CareAlliance)) {
+            return false;
+        }
+
+        return $this->eligibility->isParentFollower($user, $host);
     }
 
     public function canModerate(User $user, Model $parent): bool

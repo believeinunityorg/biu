@@ -20,6 +20,7 @@ import {
   Lock,
   MessageSquare,
   Shield,
+  UserRound,
   Users,
   UsersRound,
 } from "lucide-react"
@@ -526,11 +527,13 @@ export default function GroupCreate({
                         const Icon =
                           value === "everyone"
                             ? UsersRound
-                            : value === "members"
-                              ? Users
-                              : value === "moderators"
-                                ? Shield
-                                : MessageSquare
+                            : value === "followers"
+                              ? UserRound
+                              : value === "members"
+                                ? Users
+                                : value === "moderators"
+                                  ? Shield
+                                  : MessageSquare
                         return (
                           <button
                             key={value}

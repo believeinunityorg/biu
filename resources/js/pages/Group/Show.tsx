@@ -324,9 +324,11 @@ export default function GroupShow({
       ? "Admins only"
       : group.posting_policy === "moderators"
         ? "Moderators only"
-        : group.posting_policy === "everyone"
-          ? "Everyone"
-          : "Members only"
+        : group.posting_policy === "followers"
+          ? "Followers"
+          : group.posting_policy === "everyone"
+            ? "Everyone"
+            : "Members only"
 
   const visibleTabs = tabs.filter((t) => {
     if (t.key === "events") return group.allow_events && canViewFeeds

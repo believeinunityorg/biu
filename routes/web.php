@@ -102,6 +102,9 @@ use App\Http\Controllers\Community\CommunityContentController;
 use App\Http\Controllers\Community\CommunityParentController;
 use App\Http\Controllers\Community\CommunityReportController;
 use App\Http\Controllers\Group\CommunityGroupController;
+use App\Http\Controllers\Group\GroupEventController;
+use App\Http\Controllers\Group\GroupLibraryController;
+use App\Http\Controllers\Group\GroupPollController;
 use App\Http\Controllers\Group\GroupProfileController;
 use App\Http\Controllers\Group\ParentGroupsController;
 use App\Http\Controllers\Membership\MembershipInvitationController;
@@ -588,8 +591,8 @@ Route::post('/explore-by-cause/toggle-interest/{category}', [ExploreByCauseContr
     ->middleware(['auth', 'EnsureEmailIsVerified'])
     ->name('explore-by-cause.toggle-interest');
 
-// Public short URL: group chats are served from /chat (auth + topics). Explore-by-cause links here as "Join Group".
-Route::redirect('/groups', '/chat', 302)->name('groups');
+// Community Groups directory (header → Community → Groups)
+Route::get('/groups', [CommunityGroupController::class, 'index'])->name('groups');
 
 // Care Alliance â€” public campaign donation + preview (no auth)
 Route::get('/care-alliance/{allianceSlug}/campaigns/{campaign}/donate', [CareAllianceDonationController::class, 'donatePage'])
@@ -2525,14 +2528,28 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'topics.selected'])->group(f
     Route::get('/groups/invites/{token}', [CommunityGroupController::class, 'acceptInvite'])->name('groups.invites.accept');
     Route::get('/groups/{group:slug}/settings', [CommunityGroupController::class, 'settings'])->name('groups.settings');
     Route::post('/groups/{group:slug}/settings', [CommunityGroupController::class, 'updateSettings'])->name('groups.settings.update');
+    Route::post('/groups/{group:slug}/media', [CommunityGroupController::class, 'updateMedia'])->name('groups.media.update');
+    Route::delete('/groups/{group:slug}', [CommunityGroupController::class, 'destroy'])->name('groups.destroy');
     Route::post('/groups/{group:slug}/join', [CommunityGroupController::class, 'join'])->name('groups.join');
     Route::post('/groups/{group:slug}/leave', [CommunityGroupController::class, 'leave'])->name('groups.leave');
+    Route::post('/groups/{group:slug}/members/{member}/approve', [CommunityGroupController::class, 'approveMember'])->name('groups.members.approve');
+    Route::post('/groups/{group:slug}/members/{member}/reject', [CommunityGroupController::class, 'rejectMember'])->name('groups.members.reject');
     Route::get('/groups/{group:slug}/invite-recipients', [CommunityGroupController::class, 'searchInviteRecipients'])->name('groups.invite-recipients');
     Route::post('/groups/{group:slug}/invite', [CommunityGroupController::class, 'invite'])->name('groups.invite');
+    Route::post('/groups/{group:slug}/invites/{invite}/resend', [CommunityGroupController::class, 'resendInvite'])->name('groups.invites.resend');
     Route::post('/groups/{group:slug}/members/{member}/role', [CommunityGroupController::class, 'updateMemberRole'])->name('groups.members.role');
     Route::post('/groups/{group:slug}/members/{member}/suspend', [CommunityGroupController::class, 'suspendMember'])->name('groups.members.suspend');
     Route::delete('/groups/{group:slug}/members/{member}', [CommunityGroupController::class, 'removeMember'])->name('groups.members.remove');
     Route::post('/groups/{group:slug}/parent-controls', [CommunityGroupController::class, 'updateParentControls'])->name('groups.parent-controls');
+    Route::post('/groups/{group:slug}/polls', [GroupPollController::class, 'store'])->name('groups.polls.store');
+    Route::post('/groups/{group:slug}/polls/{poll}/vote', [GroupPollController::class, 'vote'])->name('groups.polls.vote');
+    Route::post('/groups/{group:slug}/polls/{poll}/close', [GroupPollController::class, 'close'])->name('groups.polls.close');
+    Route::delete('/groups/{group:slug}/polls/{poll}', [GroupPollController::class, 'destroy'])->name('groups.polls.destroy');
+    Route::post('/groups/{group:slug}/library', [GroupLibraryController::class, 'store'])->name('groups.library.store');
+    Route::delete('/groups/{group:slug}/library/{item}', [GroupLibraryController::class, 'destroy'])->name('groups.library.destroy');
+    Route::post('/groups/{group:slug}/events', [GroupEventController::class, 'store'])->name('groups.events.store');
+    Route::post('/groups/{group:slug}/events/{groupEvent}/cancel', [GroupEventController::class, 'cancel'])->name('groups.events.cancel');
+    Route::delete('/groups/{group:slug}/events/{groupEvent}', [GroupEventController::class, 'destroy'])->name('groups.events.destroy');
 
 
     Route::get('/community/mentionables', [CommunityContentController::class, 'searchMentionables'])->name('community.mentionables');

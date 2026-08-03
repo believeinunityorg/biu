@@ -51,6 +51,11 @@ return [
 
     // FFmpeg source URL template for worker jobs.
     // Placeholders: {room} {room_slug} {livestream_id} {user_id} {organization_id} {mediamtx_path}
+    //
+    // Do not add an `_aac` suffix here. StreamingWorkerSourceUrl::resolve()
+    // appends exactly one to every rtmp:// result (and collapses a duplicate),
+    // because only the bridge's transcoded `<path>_aac` is RTMP-readable —
+    // {mediamtx_path} on its own is the raw VP8 WHIP ingest.
     'worker_source_url_template' => env('STREAMING_WORKER_SOURCE_URL_TEMPLATE', ''),
     // RTMP base URL worker can pull from when no template is provided.
     // If empty, falls back to MEDIAMTX_RTMP_PUBLIC from config/services.php.

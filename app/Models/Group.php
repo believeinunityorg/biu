@@ -19,7 +19,17 @@ class Group extends Model
         'slug',
         'description',
         'cover_image',
+        'icon_image',
         'category',
+        'visibility',
+        'join_policy',
+        'posting_policy',
+        'rules',
+        'allow_photos',
+        'allow_videos',
+        'allow_documents',
+        'allow_polls',
+        'allow_events',
         'parent_type',
         'parent_id',
         'creator_user_id',
@@ -35,8 +45,51 @@ class Group extends Model
         'is_featured' => 'boolean',
         'is_pinned' => 'boolean',
         'is_hidden_on_parent' => 'boolean',
+        'allow_photos' => 'boolean',
+        'allow_videos' => 'boolean',
+        'allow_documents' => 'boolean',
+        'allow_polls' => 'boolean',
+        'allow_events' => 'boolean',
+        'rules' => 'array',
         'parent_type' => MembershipAccountType::class,
     ];
+
+    public function activeMembers(): HasMany
+    {
+        return $this->hasMany(GroupMember::class)->where('membership_status', 'active');
+    }
+
+    public function isPublicVisibility(): bool
+    {
+        return ($this->visibility ?? 'public') === 'public';
+    }
+
+    public function isPrivateVisibility(): bool
+    {
+        return ($this->visibility ?? 'public') === 'private';
+    }
+
+    public function isHiddenVisibility(): bool
+    {
+        return ($this->visibility ?? 'public') === 'hidden';
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function rulesList(): array
+    {
+        $rules = $this->rules;
+
+        if (! is_array($rules)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn ($rule) => is_string($rule) ? trim($rule) : '',
+            $rules
+        )));
+    }
 
     public function parent(): MorphTo
     {
@@ -61,6 +114,21 @@ class Group extends Model
     public function communityContents(): MorphMany
     {
         return $this->morphMany(CommunityContent::class, 'parent');
+    }
+
+    public function polls(): HasMany
+    {
+        return $this->hasMany(GroupPoll::class);
+    }
+
+    public function libraryItems(): HasMany
+    {
+        return $this->hasMany(GroupLibraryItem::class);
+    }
+
+    public function groupEvents(): HasMany
+    {
+        return $this->hasMany(GroupEvent::class);
     }
 
     public function reports(): MorphMany

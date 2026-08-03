@@ -29,4 +29,47 @@ return [
         'hidden' => 'Hidden',
         'removed' => 'Removed from public view',
     ],
+
+    'group_categories' => [
+        'Bible Study',
+        'Prayer',
+        'Volunteers',
+        'Youth',
+        "Men's Ministry",
+        "Women's Ministry",
+        'Family',
+        'Sports',
+        'Music',
+        'Business',
+        'Marketplace',
+        'Fundraising',
+        'General Discussion',
+        'Other',
+    ],
+
+    'group_visibility' => [
+        'public' => 'Public',
+        'private' => 'Private',
+        'hidden' => 'Hidden (invite only)',
+    ],
+
+    'group_join_policies' => [
+        'anyone' => 'Anyone',
+        'approval' => 'Approval Required',
+        'invite_only' => 'Invite Only',
+    ],
+
+    'group_posting_policies' => [
+        'everyone' => 'Everyone',
+        'members' => 'Members only',
+        'moderators' => 'Moderators only',
+        'admins' => 'Admin only',
+    ],
+
+    'group_rule_examples' => [
+        'Be respectful',
+        'Stay on topic',
+        'No advertising',
+        'No profanity',
+    ],
 ];

@@ -14,16 +14,45 @@ final class StreamingWorkerSourceUrl
     {
         $template = (string) config('streaming.worker_source_url_template', '');
         if ($template !== '') {
-            return self::applyTemplate($template, $livestream);
+            return self::withAacSuffix(self::applyTemplate($template, $livestream));
         }
 
         $rtmpBase = self::workerRtmpPullBase();
         if ($rtmpBase !== '') {
-            return rtrim($rtmpBase, '/').'/'.self::streamPath($livestream);
+            return self::withAacSuffix(rtrim($rtmpBase, '/').'/'.self::streamPath($livestream));
         }
 
         // Backward-compatible fallback (not FFmpeg readable).
         return (string) $livestream->getHostPushUrl(false);
+    }
+
+    /**
+     * The worker pulls `<path>_aac`, never the raw `<path>`.
+     *
+     * The browser WHIP-publishes VP8 + Opus to streamPath(); RTMP/FLV cannot
+     * carry VP8, so ffmpeg reading the raw path dies in under a second with
+     * "Input/output error" — indistinguishable from "the host never went live".
+     * The bridge's runOnReady transcoder republishes every ready path as
+     * H.264/AAC on `<path>_aac`, and that is the only RTMP-readable one.
+     *
+     * Applied to the finished URL rather than to streamPath() because
+     * streamPath() is also the WHIP publish identity (whipUrl, push, seat
+     * paths) — the publisher must keep using the raw path.
+     *
+     * Idempotent, and collapses accidental double-suffixing: a stale
+     * STREAMING_WORKER_SOURCE_URL_TEMPLATE that already ends in `_aac` yields
+     * one suffix, not `_aac_aac` (a path that does not exist on the bridge).
+     */
+    private static function withAacSuffix(string $url): string
+    {
+        if (! preg_match('#^rtmps?://#i', $url)) {
+            return $url;
+        }
+
+        [$path, $query] = array_pad(explode('?', $url, 2), 2, null);
+        $path = preg_replace('/(?:_aac)+$/', '', rtrim($path, '/')).'_aac';
+
+        return $query === null ? $path : $path.'?'.$query;
     }
 
     public static function hasWorkerIngestConfigured(): bool

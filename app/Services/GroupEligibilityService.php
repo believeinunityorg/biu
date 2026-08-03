@@ -31,6 +31,126 @@ class GroupEligibilityService
         return false;
     }
 
+    /**
+     * Parents the user can create a community group under (orgs/alliances they follow or belong to).
+     *
+     * @return list<array{type: string, id: int, name: string, label: string}>
+     */
+    public function creatableParentsFor(User $user): array
+    {
+        $items = [];
+
+        $ownOrg = Organization::forAuthUser($user);
+        if ($ownOrg) {
+            $items[$this->parentKey(MembershipAccountType::Organization->value, $ownOrg->id)] = [
+                'type' => MembershipAccountType::Organization->value,
+                'id' => (int) $ownOrg->id,
+                'name' => (string) $ownOrg->name,
+                'label' => 'Organization',
+            ];
+        }
+
+        $favoriteOrgIds = UserFavoriteOrganization::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('organization_id')
+            ->pluck('organization_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $membershipOrgIds = SupporterMembership::query()
+            ->where('supporter_id', $user->id)
+            ->where('account_type', MembershipAccountType::Organization->value)
+            ->where('status', SupporterMembershipStatus::Verified)
+            ->pluck('account_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $orgIds = array_values(array_unique(array_filter([...$favoriteOrgIds, ...$membershipOrgIds])));
+        if ($orgIds !== []) {
+            Organization::query()
+                ->whereIn('id', $orgIds)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->each(function (Organization $organization) use (&$items) {
+                    $items[$this->parentKey(MembershipAccountType::Organization->value, $organization->id)] = [
+                        'type' => MembershipAccountType::Organization->value,
+                        'id' => (int) $organization->id,
+                        'name' => (string) $organization->name,
+                        'label' => 'Organization',
+                    ];
+                });
+        }
+
+        CareAlliance::query()
+            ->where('creator_user_id', $user->id)
+            ->where('status', 'active')
+            ->get(['id', 'name'])
+            ->each(function (CareAlliance $alliance) use (&$items) {
+                $items[$this->parentKey(MembershipAccountType::UnityImpactAlliance->value, $alliance->id)] = [
+                    'type' => MembershipAccountType::UnityImpactAlliance->value,
+                    'id' => (int) $alliance->id,
+                    'name' => (string) $alliance->name,
+                    'label' => 'Unity Impact Alliance',
+                ];
+            });
+
+        $favoriteAllianceIds = UserFavoriteOrganization::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('care_alliance_id')
+            ->pluck('care_alliance_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $membershipAllianceIds = SupporterMembership::query()
+            ->where('supporter_id', $user->id)
+            ->where('account_type', MembershipAccountType::UnityImpactAlliance->value)
+            ->where('status', SupporterMembershipStatus::Verified)
+            ->pluck('account_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $allianceIdsViaOrg = [];
+        if ($ownOrg) {
+            $allianceIdsViaOrg = CareAllianceMembership::query()
+                ->where('organization_id', $ownOrg->id)
+                ->where('status', 'active')
+                ->pluck('care_alliance_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        $allianceIds = array_values(array_unique(array_filter([
+            ...$favoriteAllianceIds,
+            ...$membershipAllianceIds,
+            ...$allianceIdsViaOrg,
+        ])));
+
+        if ($allianceIds !== []) {
+            CareAlliance::query()
+                ->whereIn('id', $allianceIds)
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->each(function (CareAlliance $alliance) use (&$items) {
+                    $items[$this->parentKey(MembershipAccountType::UnityImpactAlliance->value, $alliance->id)] = [
+                        'type' => MembershipAccountType::UnityImpactAlliance->value,
+                        'id' => (int) $alliance->id,
+                        'name' => (string) $alliance->name,
+                        'label' => 'Unity Impact Alliance',
+                    ];
+                });
+        }
+
+        usort($items, fn (array $a, array $b) => strcasecmp($a['name'], $b['name']));
+
+        return array_values($items);
+    }
+
+    private function parentKey(string $type, int $id): string
+    {
+        return $type.':'.$id;
+    }
+
     public function isOrgFollowerOrMember(User $user, Organization $organization): bool
     {
         if (Organization::forAuthUser($user)?->id === $organization->id) {

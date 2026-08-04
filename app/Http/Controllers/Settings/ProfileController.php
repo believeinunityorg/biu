@@ -7,10 +7,13 @@ use App\Http\Requests\Settings\CareAllianceFinancialSettingsRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\CareAlliance;
 use App\Models\CareAllianceMembership;
+use App\Models\CommunityOrganizationType;
 use App\Models\Organization;
 use App\Models\PrimaryActionCategory;
 use App\Services\CareAllianceGeneralDonationDistributionService;
 use App\Services\CauseGroupChatService;
+use App\Services\FamilyReunion\FamilyReunionService;
+use App\Support\CommunityOrganizationTypes;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,6 +33,8 @@ class ProfileController extends Controller
         $organizationPrimaryActionCategoryIds = [];
         $careAlliance = null;
         $profileSettingsVariant = 'standard';
+        $communityOrganizationTypes = [];
+        $familyReunion = null;
 
         $needsOrgCategories = $user?->hasRole('care_alliance') || $user?->role === 'organization';
 
@@ -71,6 +76,7 @@ class ProfileController extends Controller
         } elseif ($user?->role === 'organization') {
             $profileSettingsVariant = 'organization';
             $user->load('organization.primaryActionCategories');
+            $communityOrganizationTypes = CommunityOrganizationTypes::forSelect();
 
             $organization = Organization::forAuthUser($user);
             if ($organization) {
@@ -87,6 +93,43 @@ class ProfileController extends Controller
                         ->values()
                         ->all();
                 }
+
+                $organization->loadMissing(['familyFounder', 'familyReunionProfile', 'communityOrganizationType']);
+                $organization->load([
+                    'familyBranches' => fn ($q) => $q->with(['headMember', 'adminUser'])->withCount(['members' => fn ($m) => $m->visible()])->orderBy('sort_order'),
+                ]);
+                $founder = $organization->familyFounder;
+                $profile = $organization->familyReunionProfile;
+
+                $familyReunion = [
+                    'is_family_reunion' => $organization->isFamilyReunion(),
+                    'community_organization_type_id' => $organization->community_organization_type_id,
+                    'community_organization_type_slug' => $organization->communityOrganizationType?->slug,
+                    'community_organization_type_other' => $organization->community_organization_type_other,
+                    'family_name' => $profile?->family_name ?: $organization->name,
+                    'family_motto' => $profile?->family_motto,
+                    'family_history' => $profile?->family_history,
+                    'reunion_established' => $profile?->reunion_established?->format('Y-m-d'),
+                    'reunion_frequency' => $profile?->reunion_frequency ?: 'annual',
+                    'reunion_location' => $profile?->reunion_location,
+                    'tree_visibility' => $profile?->tree_visibility ?: 'family_members_only',
+                    'allow_members_add_children' => $profile?->allow_members_add_children ?? true,
+                    'allow_members_invite_relatives' => $profile?->allow_members_invite_relatives ?? true,
+                    'require_member_approval' => $profile?->require_member_approval ?? false,
+                    'allow_branch_administrators' => $profile?->allow_branch_administrators ?? true,
+                    'grandfather_name' => $founder?->grandfather_name ?? '',
+                    'grandmother_name' => $founder?->grandmother_name ?? '',
+                    'branches' => $organization->familyBranches
+                        ->values()
+                        ->map(fn ($b) => [
+                            'id' => $b->id,
+                            'name' => $b->name,
+                            'admin_name' => $b->admin_name ?: $b->adminUser?->name ?: $b->headMember?->full_name,
+                            'admin_email' => $b->admin_email ?: $b->adminUser?->email,
+                            'members_count' => $b->members_count ?? 0,
+                        ])
+                        ->all(),
+                ];
             }
         }
 
@@ -97,6 +140,8 @@ class ProfileController extends Controller
             'organizationPrimaryActionCategoryIds' => $organizationPrimaryActionCategoryIds,
             'careAlliance' => $careAlliance,
             'profileSettingsVariant' => $profileSettingsVariant,
+            'communityOrganizationTypes' => $communityOrganizationTypes,
+            'familyReunion' => $familyReunion,
         ]);
     }
 
@@ -163,6 +208,12 @@ class ProfileController extends Controller
                 $request->user()->load('organization');
             }
         } elseif ($request->user()->role === 'organization') {
+            $organization = Organization::forAuthUser($request->user());
+            if (! $organization) {
+                return to_route('profile.edit');
+            }
+
+            $validated = $request->validated();
             $updateData = [
                 'contact_name' => $request->input('name'),
                 'contact_title' => $request->input('contact_title'),
@@ -174,21 +225,64 @@ class ProfileController extends Controller
                 'phone' => $request->input('phone') ?? null,
             ];
 
+            if (array_key_exists('community_organization_type_id', $validated) && $validated['community_organization_type_id']) {
+                $typeId = (int) $validated['community_organization_type_id'];
+                $updateData['community_organization_type_id'] = $typeId;
+                $updateData['community_organization_type_other'] = $typeId === (int) CommunityOrganizationType::otherId()
+                    ? ($validated['community_organization_type_other'] ?? null)
+                    : null;
+            }
+
             // Handle gift card terms approval
             if ($request->has('gift_card_terms_approved')) {
                 $updateData['gift_card_terms_approved'] = (bool) $request->input('gift_card_terms_approved');
-                if ($updateData['gift_card_terms_approved'] && ! $request->user()->organization->gift_card_terms_approved) {
+                if ($updateData['gift_card_terms_approved'] && ! $organization->gift_card_terms_approved) {
                     $updateData['gift_card_terms_approved_at'] = now();
                 }
             }
 
-            $request->user()->organization()->update($updateData);
+            $organization->update($updateData);
+            $organization->load('communityOrganizationType');
+
+            if ($organization->isFamilyReunion()) {
+                $grandfather = trim((string) ($validated['grandfather_name'] ?? ''));
+                $grandmother = trim((string) ($validated['grandmother_name'] ?? ''));
+                if ($grandfather !== '' && $grandmother !== '') {
+                    app(FamilyReunionService::class)->saveFoundingCouple(
+                        $organization,
+                        [
+                            'grandfather_name' => $grandfather,
+                            'grandmother_name' => $grandmother,
+                        ],
+                        null,
+                        null,
+                        $request->user(),
+                    );
+                }
+
+                $organization->familyReunionProfile()->updateOrCreate(
+                    ['organization_id' => $organization->id],
+                    [
+                        'family_name' => $validated['family_name'] ?? $organization->name,
+                        'family_motto' => $validated['family_motto'] ?? null,
+                        'family_history' => $validated['family_history'] ?? null,
+                        'reunion_established' => $validated['reunion_established'] ?? null,
+                        'reunion_frequency' => $validated['reunion_frequency'] ?? null,
+                        'reunion_location' => $validated['reunion_location'] ?? null,
+                        'tree_visibility' => $validated['tree_visibility'] ?? 'family_members_only',
+                        'allow_members_add_children' => (bool) ($validated['allow_members_add_children'] ?? true),
+                        'allow_members_invite_relatives' => (bool) ($validated['allow_members_invite_relatives'] ?? true),
+                        'require_member_approval' => (bool) ($validated['require_member_approval'] ?? false),
+                        'allow_branch_administrators' => (bool) ($validated['allow_branch_administrators'] ?? true),
+                    ]
+                );
+            }
 
             // Refresh the organization relationship to ensure updated data is available
             $request->user()->load('organization');
 
-            $pacIds = $request->validated('primary_action_category_ids');
-            $request->user()->organization->primaryActionCategories()->sync(
+            $pacIds = $validated['primary_action_category_ids'];
+            $organization->primaryActionCategories()->sync(
                 array_values(array_unique(array_map('intval', $pacIds)))
             );
             app(CauseGroupChatService::class)->ensureForUser($request->user());

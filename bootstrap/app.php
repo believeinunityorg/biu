@@ -16,6 +16,7 @@ use App\Http\Middleware\CheckTopicsSelected;
 use App\Http\Middleware\DenyCareAllianceHubUser;
 use App\Http\Middleware\DetectTimezone;
 use App\Http\Middleware\EnsureBridgeVerified;
+use App\Http\Middleware\EnsureFamilyReunionOrganization;
 use App\Http\Middleware\ForceHttps;
 use App\Http\Middleware\GrantMeetingEmbedPermissions;
 use App\Http\Middleware\EnsureApiEmailVerified;
@@ -122,6 +123,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'can.create.events' => EnsureCanCreateEvents::class,
             'ensure.service.hub.seller' => EnsureServiceHubSeller::class,
             'allow.donate.widget.embed' => AllowDonateWidgetEmbed::class,
+            'family.reunion' => EnsureFamilyReunionOrganization::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

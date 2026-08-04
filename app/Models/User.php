@@ -519,6 +519,21 @@ class User extends Authenticatable implements MustVerifyEmail
         if (Schema::hasColumn('organizations', 'membership_type')) {
             $base .= ', organizations.membership_type';
         }
+        if (Schema::hasColumn('organizations', 'community_organization_type_id')) {
+            $base .= ', organizations.community_organization_type_id, organizations.community_organization_type_other';
+        }
+        if (Schema::hasColumn('organizations', 'registered_user_image')) {
+            $base .= ', organizations.registered_user_image';
+        }
+        if (Schema::hasColumn('organizations', 'street')) {
+            $base .= ', organizations.street';
+        }
+        if (Schema::hasColumn('organizations', 'gift_card_terms_approved')) {
+            $base .= ', organizations.gift_card_terms_approved, organizations.gift_card_terms_approved_at';
+        }
+        if (Schema::hasColumn('organizations', 'wefunder_project_url')) {
+            $base .= ', organizations.wefunder_project_url';
+        }
         $youtube = Schema::hasColumn('organizations', 'youtube_channel_url') ? ', organizations.youtube_channel_url' : '';
         $youtubeOAuth = '';
         if (Schema::hasColumn('organizations', 'youtube_access_token')) {

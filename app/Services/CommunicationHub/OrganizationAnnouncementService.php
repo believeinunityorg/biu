@@ -3,6 +3,7 @@
 namespace App\Services\CommunicationHub;
 
 use App\Enums\OrganizationAnnouncementStatus;
+use App\Jobs\SendAnnouncementNotification;
 use App\Models\Organization;
 use App\Models\OrganizationAnnouncement;
 use App\Models\OrganizationAnnouncementComment;
@@ -63,7 +64,13 @@ class OrganizationAnnouncementService
 
         $this->logActivity($announcement, $author, 'announcement.created');
 
-        return $announcement->fresh(['creator']);
+        $announcement = $announcement->fresh(['creator']);
+
+        if ($status === OrganizationAnnouncementStatus::Published) {
+            SendAnnouncementNotification::dispatch($announcement);
+        }
+
+        return $announcement;
     }
 
     /**
@@ -147,6 +154,8 @@ class OrganizationAnnouncementService
     {
         $this->authorizeManage($actor, $announcement);
 
+        $wasPublished = $announcement->status === OrganizationAnnouncementStatus::Published;
+
         $announcement->update([
             'status' => OrganizationAnnouncementStatus::Published->value,
             'published_at' => $announcement->published_at ?? now(),
@@ -156,7 +165,13 @@ class OrganizationAnnouncementService
 
         $this->logModeration($announcement, $actor, 'announcement.published');
 
-        return $announcement->fresh();
+        $announcement = $announcement->fresh();
+
+        if (! $wasPublished) {
+            SendAnnouncementNotification::dispatch($announcement);
+        }
+
+        return $announcement;
     }
 
     public function schedule(OrganizationAnnouncement $announcement, User $actor, string|Carbon $scheduledAt): OrganizationAnnouncement

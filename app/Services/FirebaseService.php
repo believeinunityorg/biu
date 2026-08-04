@@ -117,18 +117,45 @@ class FirebaseService
         }
 
         try {
+            if (! is_string($this->credentialsPath) || $this->credentialsPath === '' || ! is_file($this->credentialsPath)) {
+                Log::error('Firebase credentials file missing', [
+                    'credentials_path' => $this->credentialsPath,
+                    'hint' => 'Place the Firebase service account JSON at storage/'.ltrim((string) config('services.firebase.credentials'), '/').' (or update FIREBASE_CREDENTIALS in .env).',
+                ]);
+
+                return null;
+            }
+
+            $decoded = json_decode((string) file_get_contents($this->credentialsPath), true);
+            if (! is_array($decoded) || empty($decoded['private_key']) || empty($decoded['client_email'])) {
+                Log::error('Firebase credentials JSON is invalid or incomplete', [
+                    'credentials_path' => $this->credentialsPath,
+                ]);
+
+                return null;
+            }
+
             $credentials = new GoogleServiceAccountCredentials(
                 'https://www.googleapis.com/auth/cloud-platform',
-                json_decode(file_get_contents($this->credentialsPath), true)
+                $decoded
             );
 
             $handler = $this->googleAuthHttpHandler();
             $tokenData = $credentials->fetchAuthToken($handler);
             $this->accessToken = $tokenData['access_token'] ?? null;
 
+            if (! $this->accessToken) {
+                Log::error('Firebase OAuth returned no access_token', [
+                    'token_keys' => is_array($tokenData) ? array_keys($tokenData) : [],
+                ]);
+            }
+
             return $this->accessToken;
         } catch (\Exception $e) {
-            Log::error('Firebase token error: ' . $e->getMessage());
+            Log::error('Firebase token error: '.$e->getMessage(), [
+                'credentials_path' => $this->credentialsPath,
+            ]);
+
             return null;
         }
     }
@@ -426,6 +453,8 @@ class FirebaseService
             'social_feed', 'post', 'group' => 'social_feed',
             'membership' => 'membership',
             'wallet', 'believe_points', 'gift' => 'wallet_rewards',
+            'announcement', 'announcements' => 'announcements',
+            'discussion', 'discussions' => 'discussions',
             'admin_test' => 'system',
             default => 'system',
         };

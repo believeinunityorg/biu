@@ -44,6 +44,10 @@ class ShortChannelNotification
 
     public const LABEL_CAMPAIGN = 'Campaign';
 
+    public const LABEL_ANNOUNCEMENT = 'Announcement';
+
+    public const LABEL_DISCUSSION = 'Discussion';
+
     /**
      * Map PushNotificationModule (and common aliases) to client teaser labels.
      *
@@ -69,6 +73,10 @@ class ShortChannelNotification
         'wallet' => self::LABEL_WALLET,
         'campaigns' => self::LABEL_CAMPAIGN,
         'campaign' => self::LABEL_CAMPAIGN,
+        'announcements' => self::LABEL_ANNOUNCEMENT,
+        'announcement' => self::LABEL_ANNOUNCEMENT,
+        'discussions' => self::LABEL_DISCUSSION,
+        'discussion' => self::LABEL_DISCUSSION,
     ];
 
     public static function moduleLabel(PushNotificationModule|string $module): string

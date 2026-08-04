@@ -2,6 +2,7 @@
 
 namespace App\Services\CommunicationHub;
 
+use App\Jobs\SendDiscussionNotification;
 use App\Models\Organization;
 use App\Models\OrganizationDiscussion;
 use App\Models\OrganizationDiscussionCategory;
@@ -87,7 +88,13 @@ class OrganizationDiscussionService
         $this->follow($discussion, $author);
         $this->logActivity($discussion, $author, 'discussion.created');
 
-        return $discussion->fresh(['author', 'category']);
+        $discussion = $discussion->fresh(['author', 'category']);
+
+        if ($discussion->approved_at !== null) {
+            SendDiscussionNotification::dispatch($discussion);
+        }
+
+        return $discussion;
     }
 
     /**
@@ -444,10 +451,18 @@ class OrganizationDiscussionService
     {
         $this->authorizeModerate($moderator, $discussion);
 
+        $wasUnapproved = $discussion->approved_at === null;
+
         $discussion->update(['approved_at' => now(), 'approved_by' => $moderator->id]);
         $this->logModeration($discussion, $moderator, 'discussion.approved');
 
-        return $discussion->fresh();
+        $discussion = $discussion->fresh();
+
+        if ($wasUnapproved) {
+            SendDiscussionNotification::dispatch($discussion);
+        }
+
+        return $discussion;
     }
 
     /**

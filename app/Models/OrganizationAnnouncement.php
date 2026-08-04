@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\OrganizationAnnouncementStatus;
+use App\Jobs\SendAnnouncementNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -153,18 +154,32 @@ class OrganizationAnnouncement extends Model
     }
 
     /**
-     * Promote due scheduled announcements to published.
+     * Promote due scheduled announcements to published and notify organization followers.
      */
     public static function promoteScheduledForOrganization(int $organizationId): int
     {
-        return static::query()
+        $due = static::query()
             ->forOrganization($organizationId)
             ->where('status', OrganizationAnnouncementStatus::Scheduled)
             ->whereNotNull('scheduled_at')
             ->where('scheduled_at', '<=', now())
-            ->update([
+            ->get();
+
+        if ($due->isEmpty()) {
+            return 0;
+        }
+
+        $now = now();
+
+        foreach ($due as $announcement) {
+            $announcement->update([
                 'status' => OrganizationAnnouncementStatus::Published->value,
-                'published_at' => now(),
+                'published_at' => $now,
             ]);
+
+            SendAnnouncementNotification::dispatch($announcement->fresh());
+        }
+
+        return $due->count();
     }
 }

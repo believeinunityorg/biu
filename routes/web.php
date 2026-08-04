@@ -914,6 +914,7 @@ Route::get('/organizations/{slug}/supporters', [OrganizationController::class, '
 Route::get('/organizations/{slug}/impact', [OrganizationController::class, 'impact'])->name('organizations.impact');
 Route::get('/organizations/{slug}/details', [OrganizationController::class, 'details'])->name('organizations.details');
 Route::get('/organizations/{slug}/contact', [OrganizationController::class, 'contact'])->name('organizations.contact');
+Route::get('/organizations/{slug}/communication-hub', [\App\Http\Controllers\Organization\CommunicationHubController::class, 'publicShow'])->name('organizations.communication-hub');
 
 // Unity Meet â€” public guest join (Connection Hub, invitations; same handler as legacy path)
 Route::get('/unity-meet/join/{roomName}', [LivestreamController::class, 'guestJoin'])
@@ -1454,6 +1455,52 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|care_alli
             Route::put('/{campaign}', [\App\Http\Controllers\Organization\OrganizationFeedbackRewardsController::class, 'update'])->name('update');
             Route::post('/{campaign}/launch', [\App\Http\Controllers\Organization\OrganizationFeedbackRewardsController::class, 'launch'])->name('launch');
             Route::post('/{campaign}/end', [\App\Http\Controllers\Organization\OrganizationFeedbackRewardsController::class, 'end'])->name('end');
+        });
+
+    // Organization Communication Hub (announcements + discussions)
+    Route::prefix('organization/communication-hub')
+        ->name('org.communication-hub.')
+        ->group(function () {
+            $hub = \App\Http\Controllers\Organization\CommunicationHubController::class;
+            $announcements = \App\Http\Controllers\Organization\OrganizationAnnouncementController::class;
+            $discussions = \App\Http\Controllers\Organization\OrganizationDiscussionController::class;
+
+            Route::get('/', [$hub, 'index'])->name('index');
+            Route::get('/settings', [$hub, 'settings'])->name('settings');
+            Route::put('/settings', [$hub, 'updateSettings'])->name('settings.update');
+
+            Route::get('/announcements', [$announcements, 'index'])->name('announcements.index');
+            Route::get('/announcements/create', [$announcements, 'create'])->name('announcements.create');
+            Route::post('/announcements', [$announcements, 'store'])->name('announcements.store');
+            Route::get('/announcements/{announcement:slug}', [$announcements, 'show'])->name('announcements.show');
+            Route::get('/announcements/{announcement:slug}/edit', [$announcements, 'edit'])->name('announcements.edit');
+            Route::post('/announcements/{announcement:slug}', [$announcements, 'update'])->name('announcements.update');
+            Route::delete('/announcements/{announcement:slug}', [$announcements, 'destroy'])->name('announcements.destroy');
+            Route::post('/announcements/{announcement:slug}/moderate', [$announcements, 'moderate'])->name('announcements.moderate');
+            Route::post('/announcements/{announcement:slug}/comments', [$announcements, 'storeComment'])->name('announcements.comments.store');
+            Route::put('/announcements/{announcement:slug}/comments/{comment}', [$announcements, 'updateComment'])->name('announcements.comments.update');
+            Route::delete('/announcements/{announcement:slug}/comments/{comment}', [$announcements, 'destroyComment'])->name('announcements.comments.destroy');
+            Route::post('/announcements/{announcement:slug}/comments/{comment}/moderate', [$announcements, 'moderateComment'])->name('announcements.comments.moderate');
+
+            Route::get('/discussions', [$discussions, 'index'])->name('discussions.index');
+            Route::get('/discussions/create', [$discussions, 'create'])->name('discussions.create');
+            Route::post('/discussions', [$discussions, 'store'])->name('discussions.store');
+            Route::get('/discussions/{discussion:slug}', [$discussions, 'show'])->name('discussions.show');
+            Route::get('/discussions/{discussion:slug}/edit', [$discussions, 'edit'])->name('discussions.edit');
+            Route::post('/discussions/{discussion:slug}', [$discussions, 'update'])->name('discussions.update');
+            Route::delete('/discussions/{discussion:slug}', [$discussions, 'destroy'])->name('discussions.destroy');
+            Route::post('/discussions/{discussion:slug}/reply', [$discussions, 'reply'])->name('discussions.reply');
+            Route::put('/discussions/{discussion:slug}/replies/{reply}', [$discussions, 'updateReply'])->name('discussions.replies.update');
+            Route::delete('/discussions/{discussion:slug}/replies/{reply}', [$discussions, 'destroyReply'])->name('discussions.replies.destroy');
+            Route::post('/discussions/{discussion:slug}/react', [$discussions, 'react'])->name('discussions.react');
+            Route::post('/discussions/{discussion:slug}/replies/{reply}/react', [$discussions, 'reactReply'])->name('discussions.replies.react');
+            Route::post('/discussions/{discussion:slug}/follow', [$discussions, 'follow'])->name('discussions.follow');
+            Route::delete('/discussions/{discussion:slug}/follow', [$discussions, 'unfollow'])->name('discussions.unfollow');
+            Route::post('/discussions/{discussion:slug}/mute', [$discussions, 'mute'])->name('discussions.mute');
+            Route::delete('/discussions/{discussion:slug}/mute', [$discussions, 'unmute'])->name('discussions.unmute');
+            Route::post('/discussions/{discussion:slug}/moderate', [$discussions, 'moderate'])->name('discussions.moderate');
+            Route::post('/discussions/{discussion:slug}/report', [$discussions, 'report'])->name('discussions.report');
+            Route::post('/discussions/{discussion:slug}/replies/{reply}/report', [$discussions, 'reportReply'])->name('discussions.replies.report');
         });
 
     // Organization Project Management (Kanban)

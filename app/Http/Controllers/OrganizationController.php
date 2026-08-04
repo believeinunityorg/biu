@@ -1139,7 +1139,20 @@ class OrganizationController extends BaseController
             'canCreateCommunityGroup' => $communityGroupsPayload['can_create'],
             'createCommunityGroupUrl' => $communityGroupsPayload['create_url'],
             ...($registeredOrg
-                ? app(CommunityContentService::class)->publicParentFeedProps($registeredOrg, $request->user())
+                ? array_merge(
+                    app(CommunityContentService::class)->publicParentFeedProps($registeredOrg, $request->user()),
+                    [
+                        'communicationHub' => app(\App\Services\CommunicationHub\CommunicationHubPageService::class)->hubProps(
+                            $registeredOrg,
+                            $request->user(),
+                            [
+                                'activeTab' => 'announcements',
+                                'announcementsLimit' => 5,
+                                'discussionsLimit' => 5,
+                            ]
+                        ),
+                    ]
+                )
                 : [
                     'communityDiscussions' => [],
                     'communityAnnouncements' => [],
@@ -1149,6 +1162,7 @@ class OrganizationController extends BaseController
                     'communityParentType' => null,
                     'communityParentId' => null,
                     'communityReportReasons' => config('community.report_reasons'),
+                    'communicationHub' => null,
                 ]),
         ]);
     }

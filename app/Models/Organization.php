@@ -119,6 +119,7 @@ class Organization extends Model implements HasPreferredPayoutMethod
         'authorized_signer_info',
         'onboarding_completed_at',
         'memberships_enabled',
+        'communication_settings',
     ];
 
     protected $hidden = [
@@ -151,7 +152,7 @@ class Organization extends Model implements HasPreferredPayoutMethod
         'dropbox_governance_provisioned_at' => 'datetime',
         'authorized_signer_info' => 'array',
         'onboarding_completed_at' => 'datetime',
-        'memberships_enabled' => 'boolean',
+        'communication_settings' => 'array',
     ];
 
     public function onboardingDocuments()
@@ -904,5 +905,29 @@ class Organization extends Model implements HasPreferredPayoutMethod
     public function aiVideos()
     {
         return $this->hasMany(AiVideo::class);
+    }
+
+    /**
+     * Communication Hub: announcements posted by this organization.
+     */
+    public function announcements(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(OrganizationAnnouncement::class);
+    }
+
+    /**
+     * Communication Hub: discussion threads for this organization.
+     */
+    public function discussions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(OrganizationDiscussion::class);
+    }
+
+    /**
+     * Communication Hub: discussion categories configured for this organization.
+     */
+    public function discussionCategories(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(OrganizationDiscussionCategory::class);
     }
 }

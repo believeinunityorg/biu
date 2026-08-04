@@ -463,6 +463,12 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 role: ['organization', 'care_alliance', 'user'],
             },
             {
+                title: 'Communication Hub',
+                href: '/organization/communication-hub',
+                icon: MessagesSquare,
+                role: ['organization', 'care_alliance'],
+            },
+            {
                 title: 'Followers',
                 href: route('organization.followers.index'),
                 icon: UserCheck,

@@ -19,6 +19,7 @@ use App\Services\FamilyReunion\FamilyReunionService;
 use App\Services\MembershipAccountService;
 use App\Services\OrgClaim990Service;
 use App\Services\TaxComplianceService;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -263,7 +264,7 @@ class OrganizationRegisterController extends Controller
             ]);
 
             // Manual validation — simplified 3-step registration (docs / officer ID optional)
-            $validator = Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), array_merge([
                 'ein' => 'required|string|size:9|unique:organizations,ein',
                 'has_ein' => 'required|boolean',
                 'has_members' => 'required|boolean',
@@ -352,7 +353,7 @@ class OrganizationRegisterController extends Controller
                 'primary_action_category_ids.*' => ['integer', 'distinct', Rule::exists('primary_action_categories', 'id')->where('is_active', true)],
                 'preferred_payout_method' => 'nullable|string|in:stripe,paypal',
                 'referralCode' => 'nullable|string|max:64',
-            ]);
+            ], TurnstileService::rules()));
 
             if ($validator->fails()) {
                 return response()->json([

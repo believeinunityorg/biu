@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Livestock\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\TurnstileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
@@ -28,9 +29,9 @@ class LivestockPasswordResetLinkController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'email' => 'required|email',
-        ]);
+        ], TurnstileService::rules()));
 
         // Use the 'livestock_users' password broker
         $status = Password::broker('livestock_users')->sendResetLink(

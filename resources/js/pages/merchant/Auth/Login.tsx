@@ -1,6 +1,7 @@
 import React, { FormEventHandler } from 'react'
 import { Head, Link, useForm } from '@inertiajs/react'
 import InputError from '@/components/input-error'
+import TurnstileField, { useTurnstileGate } from '@/components/TurnstileField'
 import { MerchantButton } from '@/components/merchant-ui'
 import { MerchantInput } from '@/components/merchant-ui'
 import { MerchantLabel } from '@/components/merchant-ui'
@@ -20,7 +21,10 @@ export default function MerchantLogin({ status, canResetPassword }: LoginProps) 
     email: '',
     password: '',
     remember: true,
+    cf_turnstile_response: '',
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
   const submit: FormEventHandler = (e) => {
     e.preventDefault()
@@ -125,10 +129,16 @@ export default function MerchantLogin({ status, canResetPassword }: LoginProps) 
                   </MerchantLabel>
                 </div>
 
+                <TurnstileField
+                  onToken={(token) => setData('cf_turnstile_response', token)}
+                  error={errors.cf_turnstile_response}
+                  theme="dark"
+                />
+
                 <MerchantButton
                   type="submit"
                   className="w-full"
-                  disabled={processing}
+                  disabled={processing || turnstileBlocksSubmit}
                 >
                   {processing ? (
                     <>

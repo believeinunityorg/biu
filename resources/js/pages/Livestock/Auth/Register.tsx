@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import InputError from "@/components/input-error"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import LivestockLayout from "@/layouts/livestock/LivestockLayout"
 
 type RegisterForm = {
@@ -16,6 +17,7 @@ type RegisterForm = {
     password: string
     password_confirmation: string
     ref?: string
+    cf_turnstile_response: string
 }
 
 export default function LivestockRegister() {
@@ -25,7 +27,10 @@ export default function LivestockRegister() {
         password: "",
         password_confirmation: "",
         ref: "",
+        cf_turnstile_response: "",
     })
+
+    const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -136,10 +141,15 @@ export default function LivestockRegister() {
                                 )}
                             </div>
 
+                            <TurnstileField
+                                onToken={(token) => setData("cf_turnstile_response", token)}
+                                error={errors.cf_turnstile_response}
+                            />
+
                             <Button
                                 type="submit"
                                 className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white"
-                                disabled={processing}
+                                disabled={processing || turnstileBlocksSubmit}
                             >
                                 {processing ? (
                                     <>

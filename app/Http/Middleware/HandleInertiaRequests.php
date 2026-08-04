@@ -15,6 +15,7 @@ use App\Services\Payments\BelievePointsRewardService;
 use App\Support\BrpParticipationModule;
 use App\Services\SeoService;
 use App\Services\StripeProcessingFeeEstimator;
+use App\Services\TurnstileService;
 use App\Support\AppVersion;
 use App\Support\SupporterSubscriptionService;
 use Carbon\Carbon;
@@ -415,6 +416,7 @@ class HandleInertiaRequests extends Middleware
                 'appId' => config('services.firebase.app_id'),
                 'vapidKey' => config('services.firebase.vapid_key'),
             ],
+            'turnstile' => fn () => app(TurnstileService::class)->sharedProps(),
             'mobileNav' => fn () => ($user instanceof \App\Models\User && ! $isLivestockDomain && ! $isMerchantDomain && app(\App\Services\FavoriteMenuService::class)->mobileNavRoleKey($user) !== null)
                 ? app(\App\Services\FavoriteMenuService::class)->payloadForUser($user)
                 : null,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Livestock\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,11 +36,11 @@ class LivestockNewPasswordController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'token' => 'required',
             'email' => 'required|email',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+        ], TurnstileService::rules()));
 
         // Use the 'livestock_users' password broker
         $status = Password::broker('livestock_users')->reset(

@@ -4,6 +4,7 @@ import { FormEventHandler } from 'react';
 
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
+import TurnstileField, { useTurnstileGate } from '@/components/TurnstileField';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ type LoginForm = {
     email: string;
     password: string;
     remember: boolean;
+    cf_turnstile_response: string;
 };
 
 interface LoginProps {
@@ -26,7 +28,10 @@ export default function Login({ status, canResetPassword }: LoginProps) {
         email: '',
         password: '',
         remember: true,
+        cf_turnstile_response: '',
     });
+
+    const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response);
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -90,7 +95,12 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                         <Label htmlFor="remember">Remember me</Label>
                     </div>
 
-                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing}>
+                    <TurnstileField
+                        onToken={(token) => setData('cf_turnstile_response', token)}
+                        error={errors.cf_turnstile_response}
+                    />
+
+                    <Button type="submit" className="mt-4 w-full" tabIndex={4} disabled={processing || turnstileBlocksSubmit}>
                         {processing && <LoaderCircle className="h-4 w-4 animate-spin" />}
                         Log in
                     </Button>

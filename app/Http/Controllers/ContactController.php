@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ContactPageContent;
 use App\Models\ContactSubmission;
 use App\Services\SeoService;
+use App\Services\TurnstileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -33,13 +34,13 @@ class ContactController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|max:255',
             'subject' => 'required|string|max:255',
             'message' => 'required|string|max:5000',
-        ]);
+        ], TurnstileService::rules()));
 
         try {
             // Save submission to database

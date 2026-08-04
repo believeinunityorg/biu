@@ -7,6 +7,7 @@ use App\Models\Merchant;
 use App\Models\User;
 use App\Services\ParticipationActivityService;
 use App\Support\BrpParticipationModule;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,14 +33,14 @@ class MerchantAuthController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:merchants'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'business_name' => ['nullable', 'string', 'max:255'],
             'preferred_payout_method' => ['nullable', 'string', 'in:stripe,paypal'],
             'referralCode' => ['nullable', 'string', 'max:64'],
-        ]);
+        ], TurnstileService::rules()));
 
         $referrerUserId = null;
         if ($request->filled('referralCode')) {
@@ -108,10 +109,10 @@ class MerchantAuthController extends Controller
      */
     public function login(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
-        ]);
+        ], TurnstileService::rules()));
 
         if (Auth::guard('merchant')->attempt($request->only('email', 'password'), $request->boolean('remember', true))) {
             $request->session()->regenerate();

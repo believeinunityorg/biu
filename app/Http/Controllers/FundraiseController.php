@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\FundMeCampaign;
 use App\Models\FundraiseLead;
 use App\Services\SeoService;
+use App\Services\TurnstileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -72,12 +73,12 @@ class FundraiseController extends Controller
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $validated = $request->validate(array_merge([
             'name' => 'required|string|max:255',
             'company' => 'required|string|max:255',
             'email' => 'required|email|max:255',
             'project_summary' => 'required|string|max:2000',
-        ]);
+        ], TurnstileService::rules()));
 
         try {
             FundraiseLead::create($validated);

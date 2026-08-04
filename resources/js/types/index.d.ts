@@ -51,6 +51,10 @@ export interface SharedData {
     ziggy: { location: string; [key: string]: unknown };
     sidebarOpen: boolean;
     pwaVersion?: string;
+    turnstile?: {
+        enabled: boolean;
+        siteKey: string | null;
+    };
     [key: string]: unknown;
 }
 

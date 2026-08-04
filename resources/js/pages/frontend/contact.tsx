@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Link, useForm } from "@inertiajs/react"
 import { useState } from "react"
 import { PageHead } from "@/components/frontend/PageHead"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 
 interface ContactPageProps {
   seo?: { title: string; description?: string }
@@ -91,7 +92,10 @@ export default function ContactPage({
     email: '',
     subject: '',
     message: '',
+    cf_turnstile_response: '',
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -276,10 +280,15 @@ export default function ContactPage({
                           )}
                     </div>
 
+                        <TurnstileField
+                          onToken={(token) => setData('cf_turnstile_response', token)}
+                          error={errors.cf_turnstile_response}
+                        />
+
                         <Button
                           type="submit"
                           size="lg"
-                          disabled={processing}
+                          disabled={processing || turnstileBlocksSubmit}
                           className="w-full h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
                         >
                           {processing ? (

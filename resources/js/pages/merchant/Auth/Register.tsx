@@ -6,6 +6,7 @@ import { MerchantLabel } from '@/components/merchant-ui'
 import { MerchantCard, MerchantCardContent } from '@/components/merchant-ui'
 import { MerchantHeader, MerchantFooter } from '@/components/merchant'
 import InputError from '@/components/input-error'
+import TurnstileField, { useTurnstileGate } from '@/components/TurnstileField'
 import { LoaderCircle, Shield, Zap, BarChart3, Users, ArrowLeft, ArrowRight, CheckCircle2, Store, Target, Gift } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -16,7 +17,10 @@ export default function MerchantRegister() {
     password: '',
     password_confirmation: '',
     preferred_payout_method: '' as '' | 'stripe' | 'paypal',
+    cf_turnstile_response: '',
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
   const submit: FormEventHandler = (e) => {
     e.preventDefault()
@@ -291,11 +295,17 @@ export default function MerchantRegister() {
                         transition={{ duration: 0.4, delay: 0.5 }}
                         className="pt-2 sm:pt-4"
                       >
+                        <TurnstileField
+                          onToken={(token) => setData('cf_turnstile_response', token)}
+                          error={errors.cf_turnstile_response}
+                          theme="dark"
+                          className="mb-4"
+                        />
                         <MerchantButton
                           type="submit"
                           size="lg"
                           className="w-full text-base sm:text-lg py-6 sm:py-7 shadow-2xl shadow-[#2563EB]/50 hover:shadow-[#2563EB]/70 transition-all duration-300"
-                          disabled={processing}
+                          disabled={processing || turnstileBlocksSubmit}
                         >
                           {processing ? (
                             <>

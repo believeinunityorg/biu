@@ -71,7 +71,7 @@ class Organization extends Model implements HasPreferredPayoutMethod
         'tax_period',
         'filing_req',
         'ntee_code',
-        'community_organization_type',
+        'community_organization_type_id',
         'community_organization_type_other',
         'legal_entity_status',
         'legal_entity_status_other',
@@ -195,6 +195,49 @@ class Organization extends Model implements HasPreferredPayoutMethod
     {
         return $this->hasMany(Group::class, 'parent_id')
             ->where('parent_type', \App\Enums\MembershipAccountType::Organization->value);
+    }
+
+    public function isFamilyReunion(): bool
+    {
+        if ($this->relationLoaded('communityOrganizationType')) {
+            return (bool) $this->communityOrganizationType?->isFamilyReunion();
+        }
+
+        if ($this->community_organization_type_id) {
+            return $this->communityOrganizationType()->where('slug', CommunityOrganizationType::SLUG_FAMILY_REUNION)->exists();
+        }
+
+        return false;
+    }
+
+    public function communityOrganizationType(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(CommunityOrganizationType::class, 'community_organization_type_id');
+    }
+
+    public function familyFounder(): HasOne
+    {
+        return $this->hasOne(FamilyFounder::class);
+    }
+
+    public function familyReunionProfile(): HasOne
+    {
+        return $this->hasOne(FamilyReunionProfile::class);
+    }
+
+    public function familyBranches(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FamilyBranch::class);
+    }
+
+    public function familyMembers(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FamilyMember::class);
+    }
+
+    public function familyRelationshipAudits(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FamilyRelationshipAudit::class);
     }
 
     public function careAllianceMemberships(): \Illuminate\Database\Eloquent\Relations\HasMany

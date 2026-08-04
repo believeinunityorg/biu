@@ -114,6 +114,7 @@ class AppServiceProvider extends ServiceProvider
         // Register event listener for email verification
         Event::listen(Login::class, AwardDailyLoginBrp::class);
         Event::listen(Registered::class, \App\Listeners\ClaimBelievePointGiftInvites::class);
+        Event::listen(Registered::class, \App\Listeners\ClaimFamilyMemberRecords::class);
         Event::listen(Verified::class, AwardInviteRewardPoints::class);
         Event::listen(Verified::class, AwardSupporterReferralBrp::class);
 

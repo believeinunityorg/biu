@@ -112,6 +112,14 @@ use App\Http\Controllers\Membership\MembershipManagementController;
 use App\Http\Controllers\Membership\MembershipPaymentController;
 use App\Http\Controllers\Membership\SupporterMembershipActionController;
 use App\Http\Controllers\Membership\SupporterMembershipRequestController;
+use App\Http\Controllers\Organization\FamilyReunion\AdminController as FamilyReunionAdminController;
+use App\Http\Controllers\Organization\FamilyReunion\BranchController as FamilyReunionBranchController;
+use App\Http\Controllers\Organization\FamilyReunion\DirectoryController as FamilyReunionDirectoryController;
+use App\Http\Controllers\Organization\FamilyReunion\FounderController as FamilyReunionFounderController;
+use App\Http\Controllers\Organization\FamilyReunion\MemberController as FamilyReunionMemberController;
+use App\Http\Controllers\Organization\FamilyReunion\OverviewController as FamilyReunionOverviewController;
+use App\Http\Controllers\Organization\FamilyReunion\TreeController as FamilyReunionTreeController;
+use App\Http\Controllers\Organization\FamilyReunion\UpgradeController as FamilyReunionUpgradeController;
 use App\Http\Controllers\FractionalCertificateController;
 use App\Http\Controllers\FractionalOwnershipController;
 use App\Http\Controllers\FrontendCourseController;
@@ -2561,6 +2569,32 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
     Route::post('/organization/care-alliance-invitations/{invitation}/accept', [CareAllianceOrgInvitationController::class, 'accept'])->name('organization.care-alliance.invitations.accept');
     Route::post('/organization/care-alliance-invitations/{invitation}/decline', [CareAllianceOrgInvitationController::class, 'decline'])->name('organization.care-alliance.invitations.decline');
     Route::get('/organization/membership', [MembershipManagementController::class, 'organization'])->name('organization.membership.index');
+
+    Route::get('/organization/family-reunion/upgrade', [FamilyReunionUpgradeController::class, 'show'])
+        ->name('organization.family-reunion.upgrade');
+    Route::post('/organization/family-reunion/upgrade', [FamilyReunionUpgradeController::class, 'store'])
+        ->name('organization.family-reunion.upgrade.store');
+
+    Route::prefix('organization/family-reunion')
+        ->name('organization.family-reunion.')
+        ->middleware('family.reunion')
+        ->group(function () {
+            Route::get('/', [FamilyReunionOverviewController::class, 'index'])->name('overview');
+            Route::get('/founders', [FamilyReunionFounderController::class, 'edit'])->name('founders.edit');
+            Route::post('/founders', [FamilyReunionFounderController::class, 'update'])->name('founders.update');
+            Route::get('/branches', [FamilyReunionBranchController::class, 'index'])->name('branches.index');
+            Route::post('/branches', [FamilyReunionBranchController::class, 'store'])->name('branches.store');
+            Route::put('/branches/{branch}', [FamilyReunionBranchController::class, 'update'])->name('branches.update');
+            Route::get('/members', [FamilyReunionMemberController::class, 'index'])->name('members.index');
+            Route::post('/members', [FamilyReunionMemberController::class, 'store'])->name('members.store');
+            Route::post('/members/setup-profile', [FamilyReunionMemberController::class, 'setupProfile'])->name('members.setup-profile');
+            Route::get('/members/search', [FamilyReunionMemberController::class, 'search'])->name('members.search');
+            Route::put('/members/{member}/relationships', [FamilyReunionMemberController::class, 'updateRelationships'])->name('members.relationships');
+            Route::get('/tree', [FamilyReunionTreeController::class, 'index'])->name('tree');
+            Route::get('/directory', [FamilyReunionDirectoryController::class, 'index'])->name('directory');
+            Route::get('/admin', [FamilyReunionAdminController::class, 'index'])->name('admin');
+            Route::post('/admin/merge', [FamilyReunionAdminController::class, 'merge'])->name('admin.merge');
+        });
 });
 
 Route::get('/community/contents/{content:slug}', [CommunityContentController::class, 'show'])->name('community.contents.show');

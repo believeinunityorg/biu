@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Livestock\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\LivestockUser;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,11 +32,11 @@ class LivestockRegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:livestock_users,email',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+        ], TurnstileService::rules()));
 
         $user = LivestockUser::create([
             'name' => $request->name,

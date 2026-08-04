@@ -19,6 +19,7 @@ import {
 import { Link, router, usePage } from "@inertiajs/react"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import { PageHead } from "@/components/frontend/PageHead"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { Button } from "@/components/frontend/ui/button"
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/frontend/ui/card"
 import { Input } from "@/components/frontend/ui/input"
@@ -82,6 +83,8 @@ export default function OrganizationRegisterPage({
     prefilledEin ? prefilledEin.replace(/\D/g, "").slice(0, 9) : ""
   )
   const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [turnstileToken, setTurnstileToken] = useState("")
+  const { turnstileBlocksSubmit } = useTurnstileGate(turnstileToken)
 
   const [form, setForm] = useState({
     has_ein: true,
@@ -295,6 +298,9 @@ export default function OrganizationRegisterPage({
     payload.append("attestation_officer_on_990", "1")
     payload.append("legal_name_confirmation", form.name)
     payload.append("has_edited_irs_data", form.has_edited_irs_data ? "1" : "0")
+    if (turnstileToken) {
+      payload.append("cf_turnstile_response", turnstileToken)
+    }
     ;[
       "ico",
       "classification",
@@ -903,13 +909,18 @@ export default function OrganizationRegisterPage({
                       <p className="text-sm text-red-600">{errors.agree_to_terms}</p>
                     )}
 
+                    <TurnstileField
+                      onToken={setTurnstileToken}
+                      error={errors.cf_turnstile_response}
+                    />
+
                     <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                       <Button type="button" variant="outline" className="h-11 cursor-pointer" onClick={() => setStep(2)}>
                         Back
                       </Button>
                       <Button
                         type="button"
-                        disabled={!validateStep(3) || isLoading}
+                        disabled={!validateStep(3) || isLoading || turnstileBlocksSubmit}
                         onClick={submitRegistration}
                         className="h-11 cursor-pointer bg-gradient-to-r from-emerald-600 to-green-700 font-bold text-white"
                       >

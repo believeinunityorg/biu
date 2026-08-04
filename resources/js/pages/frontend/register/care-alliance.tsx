@@ -15,6 +15,7 @@ import {
 } from "@/components/frontend/ui/select"
 import { Link, useForm, usePage } from "@inertiajs/react"
 import { PageHead } from "@/components/frontend/PageHead"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   AlertCircle,
@@ -106,6 +107,7 @@ type CareAllianceForm = {
   membership_type: "free" | "paid"
   membership_name: string
   join_method: (typeof MEMBERSHIP_JOIN_METHODS)[number]["value"]
+  cf_turnstile_response: string
 }
 
 export default function RegisterCareAlliancePage() {
@@ -134,7 +136,10 @@ export default function RegisterCareAlliancePage() {
     membership_type: "free",
     membership_name: "",
     join_method: "request_to_join",
+    cf_turnstile_response: "",
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(form.data.cf_turnstile_response)
 
   const inputClass =
     "pl-10 h-12 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 transition-all duration-200"
@@ -840,6 +845,10 @@ export default function RegisterCareAlliancePage() {
                     <p className="text-xs text-center text-muted-foreground">
                       {form.data.primary_action_category_ids.length} of 8 categories selected
                     </p>
+                    <TurnstileField
+                      onToken={(token) => form.setData("cf_turnstile_response", token)}
+                      error={errors.cf_turnstile_response}
+                    />
                     <div className="flex flex-col sm:flex-row gap-3">
                       <Button
                         type="button"
@@ -853,7 +862,7 @@ export default function RegisterCareAlliancePage() {
                         type="button"
                         className="flex-1 h-12 sm:h-14 bg-gradient-to-r from-violet-600 to-purple-700 hover:from-violet-700 hover:to-purple-800 text-white font-bold rounded-lg shadow-lg inline-flex items-center justify-center gap-2 disabled:opacity-50"
                         onClick={() => void submit()}
-                        disabled={form.processing || !validateStep(3)}
+                        disabled={form.processing || !validateStep(3) || turnstileBlocksSubmit}
                       >
                         {form.processing ? (
                           <>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Livestock;
 
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -26,10 +27,10 @@ class LoginRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        return array_merge([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
-        ];
+        ], TurnstileService::rules());
     }
 
     /**

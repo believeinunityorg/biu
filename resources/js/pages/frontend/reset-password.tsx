@@ -10,6 +10,7 @@ import { Input } from "@/components/frontend/ui/input"
 import { Label } from "@/components/frontend/ui/label"
 import { Link, useForm } from "@inertiajs/react"
 import InputError from "@/components/input-error"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { PageHead } from "@/components/frontend/PageHead"
 
 interface ResetPasswordProps {
@@ -23,6 +24,7 @@ type ResetPasswordForm = {
   email: string
   password: string
   password_confirmation: string
+  cf_turnstile_response: string
 }
 
 export default function ResetPasswordPage({ seo, token, email }: ResetPasswordProps) {
@@ -34,7 +36,10 @@ export default function ResetPasswordPage({ seo, token, email }: ResetPasswordPr
     email,
     password: "",
     password_confirmation: "",
+    cf_turnstile_response: "",
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
   const submit: FormEventHandler = (e) => {
     e.preventDefault()
@@ -155,10 +160,15 @@ export default function ResetPasswordPage({ seo, token, email }: ResetPasswordPr
                     </div>
                   </div>
 
+                  <TurnstileField
+                    onToken={(token) => setData("cf_turnstile_response", token)}
+                    error={errors.cf_turnstile_response}
+                  />
+
                   <Button
                     type="submit"
                     className="w-full h-12 sm:h-14 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-base sm:text-lg rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
-                    disabled={processing}
+                    disabled={processing || turnstileBlocksSubmit}
                   >
                     {processing && <LoaderCircle className="h-5 w-5 animate-spin mr-2" />}
                     Reset password

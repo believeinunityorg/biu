@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import InputError from "@/components/input-error"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import LivestockLayout from "@/layouts/livestock/LivestockLayout"
 
 type ResetPasswordForm = {
@@ -15,6 +16,7 @@ type ResetPasswordForm = {
     email: string
     password: string
     password_confirmation: string
+    cf_turnstile_response: string
 }
 
 export default function LivestockResetPassword({ token, email }: { token: string; email: string }) {
@@ -23,7 +25,10 @@ export default function LivestockResetPassword({ token, email }: { token: string
         email,
         password: "",
         password_confirmation: "",
+        cf_turnstile_response: "",
     })
+
+    const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault()
@@ -94,10 +99,15 @@ export default function LivestockResetPassword({ token, email }: { token: string
                                 </div>
                             </div>
 
+                            <TurnstileField
+                                onToken={(token) => setData("cf_turnstile_response", token)}
+                                error={errors.cf_turnstile_response}
+                            />
+
                             <Button
                                 type="submit"
                                 className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white"
-                                disabled={processing}
+                                disabled={processing || turnstileBlocksSubmit}
                             >
                                 {processing ? (
                                     <>

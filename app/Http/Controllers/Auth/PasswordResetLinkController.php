@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\SeoService;
+use App\Services\TurnstileService;
 use App\Support\PasswordResetCooldown;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,9 +36,9 @@ class PasswordResetLinkController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'email' => 'required|email',
-        ]);
+        ], TurnstileService::rules()));
 
         $email = (string) $request->input('email');
 

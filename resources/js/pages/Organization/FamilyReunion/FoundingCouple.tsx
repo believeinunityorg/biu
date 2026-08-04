@@ -58,7 +58,7 @@ export default function FoundingCouple({ organization, founders }: Props) {
       ]}
     >
       <Head title="Founding Couple" />
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell organizationName={organization.name}>
           <Card className="border-border shadow-sm">
             <CardHeader>
@@ -160,7 +160,7 @@ export default function FoundingCouple({ organization, founders }: Props) {
                 </div>
 
                 <div className="md:col-span-2">
-                  <Button type="submit" disabled={processing} className={fr.btn}>
+                  <Button type="submit" disabled={processing} className={`w-full sm:w-auto ${fr.btn}`}>
                     {processing ? 'Saving…' : 'Save Founding Couple'}
                   </Button>
                 </div>

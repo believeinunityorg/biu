@@ -45,9 +45,9 @@ export default function Admin({ organization, audits, stats }: Props) {
       ]}
     >
       <Head title="Family Administration" />
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell organizationName={organization.name}>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               { label: 'Visible members', value: stats.members },
               { label: 'Unclaimed records', value: stats.unclaimed },
@@ -92,7 +92,7 @@ export default function Admin({ organization, audits, stats }: Props) {
                       <p className="text-sm text-red-600">{errors.duplicate_member_id}</p>
                     )}
                   </div>
-                  <Button type="submit" disabled={processing} className={fr.btn}>
+                  <Button type="submit" disabled={processing} className={`w-full sm:w-auto ${fr.btn}`}>
                     Merge Records
                   </Button>
                 </form>

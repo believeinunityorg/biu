@@ -35,8 +35,8 @@ export default function Upgrade({ organization }: Props) {
       <Head title="Family Reunion Upgrade" />
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 md:p-8">
         <Card className="overflow-hidden border-border shadow-sm">
-          <div className={`${fr.banner} px-6 py-8`}>
-            <h1 className="text-2xl font-semibold">Family Reunion Upgrade</h1>
+          <div className={`${fr.banner} px-4 py-6 sm:px-6 sm:py-8`}>
+            <h1 className="text-xl font-semibold sm:text-2xl">Family Reunion Upgrade</h1>
             <p className="mt-2 text-sm text-white/85">
               Enable Family Reunion tools for <span className="font-medium">{organization.name}</span>. You keep all
               existing BIU features — announcements, events, media, donations, and more.
@@ -64,7 +64,7 @@ export default function Upgrade({ organization }: Props) {
             </div>
 
             <form onSubmit={submit}>
-              <Button type="submit" disabled={processing} className={fr.btn}>
+              <Button type="submit" disabled={processing} className={`w-full sm:w-auto ${fr.btn}`}>
                 {processing ? 'Enabling…' : 'Enable Family Reunion'}
               </Button>
             </form>

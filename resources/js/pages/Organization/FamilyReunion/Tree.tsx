@@ -53,9 +53,9 @@ type Props = {
 
 function MemberCard({ member, compact = false }: { member: TreeMember; compact?: boolean }) {
   return (
-    <div className={`rounded-xl border border-border bg-card ${compact ? 'px-3 py-2' : 'px-4 py-3'} shadow-sm`}>
-      <div className="flex items-center gap-3">
-        <div className={`${compact ? 'h-8 w-8' : 'h-11 w-11'} overflow-hidden rounded-full ${fr.avatar}`}>
+    <div className={`min-w-0 rounded-xl border border-border bg-card ${compact ? 'px-3 py-2' : 'px-4 py-3'} shadow-sm`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`${compact ? 'h-8 w-8' : 'h-11 w-11'} shrink-0 overflow-hidden rounded-full ${fr.avatar}`}>
           {member.photo_url ? (
             <img src={member.photo_url} alt="" className="h-full w-full object-cover" />
           ) : (
@@ -64,9 +64,9 @@ function MemberCard({ member, compact = false }: { member: TreeMember; compact?:
             </div>
           )}
         </div>
-        <div>
-          <div className="text-sm font-semibold text-foreground">{member.full_name}</div>
-          <div className="text-xs text-muted-foreground">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-foreground">{member.full_name}</div>
+          <div className="truncate text-xs text-muted-foreground">
             {member.birth_year || member.death_year
               ? `${member.birth_year ?? '?'} – ${member.death_year ?? 'Present'}`
               : member.branch || 'Family member'}
@@ -104,11 +104,11 @@ export default function Tree({ organization, tree, filters, branches }: Props) {
       ]}
     >
       <Head title="Family Tree" />
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell organizationName={organization.name}>
           <Card className="border-border shadow-sm">
-            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
+            <CardHeader className="flex flex-col gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
                 <CardTitle>Family Tree</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Starts with the founding couple, expands into branches, and links parents to children.
@@ -118,7 +118,7 @@ export default function Tree({ organization, tree, filters, branches }: Props) {
                 value={filters.branch_id ? String(filters.branch_id) : 'all'}
                 onValueChange={setBranchFilter}
               >
-                <SelectTrigger className="w-[220px]">
+                <SelectTrigger className="w-full sm:w-[220px]">
                   <SelectValue placeholder="Filter by branch" />
                 </SelectTrigger>
                 <SelectContent>
@@ -152,20 +152,20 @@ export default function Tree({ organization, tree, filters, branches }: Props) {
                     {(tree.branches ?? []).map((branch) => {
                       const open = expanded[branch.id] !== false
                       return (
-                        <div key={branch.id} className="rounded-2xl border border-border bg-muted/70 p-4">
+                        <div key={branch.id} className="rounded-2xl border border-border bg-muted/70 p-3 sm:p-4">
                           <button
                             type="button"
-                            className="flex w-full items-center justify-between gap-3 text-left"
+                            className="flex w-full min-w-0 items-center justify-between gap-3 text-left"
                             onClick={() => setExpanded((prev) => ({ ...prev, [branch.id]: !open }))}
                           >
-                            <div className="flex items-center gap-2">
-                              {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                              <div>
-                                <div className="font-semibold text-foreground">{branch.name}</div>
+                            <div className="flex min-w-0 items-center gap-2">
+                              {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                              <div className="min-w-0">
+                                <div className="truncate font-semibold text-foreground">{branch.name}</div>
                                 <div className="text-xs text-muted-foreground">{branch.members_count} members</div>
                               </div>
                             </div>
-                            <Badge variant="secondary">{branch.members_count}</Badge>
+                            <Badge variant="secondary" className="shrink-0">{branch.members_count}</Badge>
                           </button>
 
                           {open && (

@@ -71,7 +71,7 @@ export default function Directory({ organization, members, branches, filters }: 
       ]}
     >
       <Head title="Family Directory" />
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell organizationName={organization.name}>
           <Card className="border-border shadow-sm">
             <CardHeader>
@@ -80,9 +80,9 @@ export default function Directory({ organization, members, branches, filters }: 
                 Searchable directory with member name, family branch, generation, and claimed status.
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="relative md:col-span-2">
+            <CardContent className="space-y-4 px-4 sm:px-6">
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+                <div className="relative sm:col-span-2">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     className="pl-9"
@@ -99,7 +99,7 @@ export default function Directory({ organization, members, branches, filters }: 
                   value={filters.branch_id ? String(filters.branch_id) : 'all'}
                   onValueChange={(v) => applyFilters({ branch_id: v === 'all' ? null : Number(v) })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Branches" />
                   </SelectTrigger>
                   <SelectContent>
@@ -115,7 +115,7 @@ export default function Directory({ organization, members, branches, filters }: 
                   value={filters.status || 'all'}
                   onValueChange={(v) => applyFilters({ status: v === 'all' ? null : v })}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Statuses" />
                   </SelectTrigger>
                   <SelectContent>
@@ -128,79 +128,135 @@ export default function Directory({ organization, members, branches, filters }: 
                 </Select>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2 font-medium">Member Name</th>
-                      <th className="px-2 py-2 font-medium">Branch</th>
-                      <th className="px-2 py-2 font-medium">Generation</th>
-                      <th className="px-2 py-2 font-medium">Parents</th>
-                      <th className="px-2 py-2 font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.data.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-2 py-10 text-center text-muted-foreground">
-                          No members match these filters.
-                        </td>
-                      </tr>
-                    ) : (
-                      members.data.map((member) => (
-                        <tr key={member.id} className="border-b border-border">
-                          <td className="px-2 py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 overflow-hidden rounded-full bg-slate-100">
+              {members.data.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">No members match these filters.</p>
+              ) : (
+                <>
+                  {/* Desktop/Tablet */}
+                  <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                          <th className="px-4 py-3 font-medium">Member Name</th>
+                          <th className="px-4 py-3 font-medium">Branch</th>
+                          <th className="px-4 py-3 font-medium">Generation</th>
+                          <th className="px-4 py-3 font-medium">Parents</th>
+                          <th className="px-4 py-3 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.data.map((member) => (
+                          <tr key={member.id} className="border-b border-border last:border-0">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 overflow-hidden rounded-full bg-slate-100">
+                                  {member.photo_url ? (
+                                    <img src={member.photo_url} alt="" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
+                                      {member.full_name.slice(0, 1)}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-foreground">{member.full_name}</div>
+                                  {member.email && <div className="text-xs text-muted-foreground">{member.email}</div>}
+                                </div>
+                              </div>
+                            </td>
+                            <td className={`px-4 py-3 ${fr.text}`}>{member.branch || '—'}</td>
+                            <td className="px-4 py-3">{member.generation ?? '—'}</td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {[member.father, member.mother].filter(Boolean).join(' / ') || '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge
+                                variant="secondary"
+                                className={
+                                  member.is_claimed || member.status === 'active'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : member.status === 'unclaimed'
+                                      ? 'bg-amber-50 text-amber-700'
+                                      : 'bg-slate-100 text-muted-foreground'
+                                }
+                              >
+                                {member.is_claimed ? 'Claimed' : member.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile cards — same pattern as Supporters / Followers */}
+                  <div className="space-y-3 md:hidden">
+                    {members.data.map((member) => (
+                      <Card key={member.id} className="border-border/60">
+                        <CardContent className="space-y-3 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-100">
                                 {member.photo_url ? (
                                   <img src={member.photo_url} alt="" className="h-full w-full object-cover" />
                                 ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
+                                  <div className="flex h-full w-full items-center justify-center text-sm font-medium text-muted-foreground">
                                     {member.full_name.slice(0, 1)}
                                   </div>
                                 )}
                               </div>
-                              <div>
-                                <div className="font-medium text-foreground">{member.full_name}</div>
-                                {member.email && <div className="text-xs text-muted-foreground">{member.email}</div>}
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-foreground">{member.full_name}</div>
+                                {member.email && (
+                                  <div className="truncate text-xs text-muted-foreground">{member.email}</div>
+                                )}
                               </div>
                             </div>
-                          </td>
-                          <td className={`px-2 py-3 ${fr.text}`}>{member.branch || '—'}</td>
-                          <td className="px-2 py-3">{member.generation ?? '—'}</td>
-                          <td className="px-2 py-3 text-muted-foreground">
-                            {[member.father, member.mother].filter(Boolean).join(' / ') || '—'}
-                          </td>
-                          <td className="px-2 py-3">
                             <Badge
                               variant="secondary"
                               className={
                                 member.is_claimed || member.status === 'active'
-                                  ? 'bg-emerald-50 text-emerald-700'
+                                  ? 'shrink-0 bg-emerald-50 text-emerald-700'
                                   : member.status === 'unclaimed'
-                                    ? 'bg-amber-50 text-amber-700'
-                                    : 'bg-slate-100 text-muted-foreground'
+                                    ? 'shrink-0 bg-amber-50 text-amber-700'
+                                    : 'shrink-0 bg-slate-100 text-muted-foreground'
                               }
                             >
                               {member.is_claimed ? 'Claimed' : member.status}
                             </Badge>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Branch</p>
+                              <p className={`font-medium ${fr.text}`}>{member.branch || '—'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Generation</p>
+                              <p className="font-medium">{member.generation ?? '—'}</p>
+                            </div>
+                            <div className="col-span-2">
+                              <p className="text-muted-foreground">Parents</p>
+                              <p className="font-medium">
+                                {[member.father, member.mother].filter(Boolean).join(' / ') || '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {members.links?.length > 3 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
                   {members.links.map((link, idx) => (
                     <button
                       key={idx}
                       type="button"
                       disabled={!link.url}
                       onClick={() => link.url && router.get(link.url)}
-                      className={`rounded-md px-3 py-1 text-sm ${
+                      className={`rounded-md px-3 py-1.5 text-sm ${
                         link.active
                           ? `${fr.btn}`
                           : 'border border-border text-foreground hover:bg-muted'

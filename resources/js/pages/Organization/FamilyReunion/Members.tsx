@@ -71,7 +71,7 @@ export default function Members({ organization, branches }: Props) {
       ]}
     >
       <Head title="Family Members" />
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell organizationName={organization.name}>
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="border-border shadow-sm">
@@ -105,7 +105,7 @@ export default function Members({ organization, branches }: Props) {
                       value={childForm.data.branch_id || undefined}
                       onValueChange={(v) => childForm.setData('branch_id', v)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select branch" />
                       </SelectTrigger>
                       <SelectContent>
@@ -117,14 +117,14 @@ export default function Members({ organization, branches }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Father</Label>
                       <Select
                         value={childForm.data.father_id || undefined}
                         onValueChange={(v) => childForm.setData('father_id', v)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select father" />
                         </SelectTrigger>
                         <SelectContent>
@@ -142,7 +142,7 @@ export default function Members({ organization, branches }: Props) {
                         value={childForm.data.mother_id || undefined}
                         onValueChange={(v) => childForm.setData('mother_id', v)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select mother" />
                         </SelectTrigger>
                         <SelectContent>
@@ -155,7 +155,7 @@ export default function Members({ organization, branches }: Props) {
                       </Select>
                     </div>
                   </div>
-                  <Button type="submit" disabled={childForm.processing} className={fr.btn}>
+                  <Button type="submit" disabled={childForm.processing} className={`w-full sm:w-auto ${fr.btn}`}>
                     Add Child
                   </Button>
                 </form>
@@ -177,7 +177,7 @@ export default function Members({ organization, branches }: Props) {
                       value={profileForm.data.branch_id || undefined}
                       onValueChange={(v) => profileForm.setData('branch_id', v)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select branch" />
                       </SelectTrigger>
                       <SelectContent>
@@ -192,7 +192,7 @@ export default function Members({ organization, branches }: Props) {
                       <p className="text-sm text-red-600">{profileForm.errors.branch_id}</p>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Father</Label>
                       <Select
@@ -200,7 +200,7 @@ export default function Members({ organization, branches }: Props) {
                         onValueChange={(v) => profileForm.setData('father_id', v)}
                         disabled={profileForm.data.parent_not_listed}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select father" />
                         </SelectTrigger>
                         <SelectContent>
@@ -222,7 +222,7 @@ export default function Members({ organization, branches }: Props) {
                         onValueChange={(v) => profileForm.setData('mother_id', v)}
                         disabled={profileForm.data.parent_not_listed}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           <SelectValue placeholder="Select mother" />
                         </SelectTrigger>
                         <SelectContent>
@@ -252,7 +252,7 @@ export default function Members({ organization, branches }: Props) {
                   <p className="text-xs text-muted-foreground">
                     Need to add a missing parent? Use Add Children first, then select them here.
                   </p>
-                  <Button type="submit" disabled={profileForm.processing} className={fr.btn}>
+                  <Button type="submit" disabled={profileForm.processing} className={`w-full sm:w-auto ${fr.btn}`}>
                     Save Family Profile
                   </Button>
                 </form>

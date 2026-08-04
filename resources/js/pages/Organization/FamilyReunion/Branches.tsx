@@ -45,7 +45,7 @@ export default function Branches({ organization, branches, has_founders }: Props
       ]}
     >
       <Head title="Family Branches" />
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell organizationName={organization.name}>
           <div className="grid gap-6 lg:grid-cols-3">
             <Card className="border-border shadow-sm lg:col-span-1">
@@ -79,7 +79,7 @@ export default function Branches({ organization, branches, has_founders }: Props
                         onChange={(e) => setData('head_member_full_name', e.target.value)}
                       />
                     </div>
-                    <Button type="submit" disabled={processing} className={fr.btn}>
+                    <Button type="submit" disabled={processing} className={`w-full sm:w-auto ${fr.btn}`}>
                       {processing ? 'Adding…' : 'Add Branch'}
                     </Button>
                   </form>
@@ -96,8 +96,11 @@ export default function Branches({ organization, branches, has_founders }: Props
                   <p className="text-sm text-muted-foreground">No branches yet.</p>
                 ) : (
                   branches.map((branch) => (
-                    <div key={branch.id} className="flex items-center justify-between gap-4 rounded-xl border border-border p-4">
-                      <div>
+                    <div
+                      key={branch.id}
+                      className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                    >
+                      <div className="min-w-0">
                         <div className="font-medium text-foreground">{branch.name}</div>
                         <div className="mt-1 text-sm text-muted-foreground">
                           {branch.head_member?.full_name ? `Head: ${branch.head_member.full_name} · ` : ''}
@@ -105,7 +108,7 @@ export default function Branches({ organization, branches, has_founders }: Props
                           {branch.admin_user ? ` · Admin: ${branch.admin_user.name}` : ''}
                         </div>
                       </div>
-                      <Badge variant="secondary" className="capitalize">
+                      <Badge variant="secondary" className="w-fit capitalize">
                         {branch.status}
                       </Badge>
                     </div>

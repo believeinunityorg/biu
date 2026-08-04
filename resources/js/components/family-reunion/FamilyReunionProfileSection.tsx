@@ -277,34 +277,52 @@ export function FamilyReunionProfileSection({
             </div>
           </form>
 
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2 font-medium">Branch Name</th>
-                  <th className="px-3 py-2 font-medium">Branch Administrator</th>
-                  <th className="px-3 py-2 font-medium">Email</th>
-                </tr>
-              </thead>
-              <tbody>
-                {branches.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-3 py-6 text-center text-muted-foreground">
-                      No branches yet. Add a branch above.
-                    </td>
-                  </tr>
-                ) : (
-                  branches.map((branch) => (
-                    <tr key={branch.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2.5 font-medium text-foreground">{branch.name}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground">{branch.admin_name || '—'}</td>
-                      <td className="px-3 py-2.5 text-muted-foreground">{branch.admin_email || '—'}</td>
+          {branches.length === 0 ? (
+            <p className="rounded-xl border border-border px-3 py-6 text-center text-sm text-muted-foreground">
+              No branches yet. Add a branch above.
+            </p>
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2 font-medium">Branch Name</th>
+                      <th className="px-3 py-2 font-medium">Branch Administrator</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {branches.map((branch) => (
+                      <tr key={branch.id} className="border-b border-border last:border-0">
+                        <td className="px-3 py-2.5 font-medium text-foreground">{branch.name}</td>
+                        <td className="px-3 py-2.5 text-muted-foreground">{branch.admin_name || '—'}</td>
+                        <td className="px-3 py-2.5 text-muted-foreground">{branch.admin_email || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-3 md:hidden">
+                {branches.map((branch) => (
+                  <div key={branch.id} className="rounded-xl border border-border p-3">
+                    <div className="font-medium text-foreground">{branch.name}</div>
+                    <div className="mt-2 grid grid-cols-1 gap-2 text-sm">
+                      <div>
+                        <p className="text-muted-foreground">Administrator</p>
+                        <p className="font-medium">{branch.admin_name || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Email</p>
+                        <p className="break-all font-medium">{branch.admin_email || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </section>
 
         {/* Family Privacy */}
@@ -318,7 +336,7 @@ export function FamilyReunionProfileSection({
               value={data.tree_visibility || 'family_members_only'}
               onValueChange={(v) => setData('tree_visibility', v)}
             >
-              <SelectTrigger className="mt-1.5 max-w-md">
+              <SelectTrigger className="mt-1.5 w-full max-w-md">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -361,11 +379,11 @@ export function FamilyReunionProfileSection({
           all other BIU features remain available as usual.
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button asChild type="button" variant="outline" size="sm">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          <Button asChild type="button" variant="outline" size="sm" className="w-full sm:w-auto">
             <Link href="/organization/family-reunion">Open Family Reunion Hub</Link>
           </Button>
-          <Button asChild type="button" variant="outline" size="sm">
+          <Button asChild type="button" variant="outline" size="sm" className="w-full sm:w-auto">
             <Link href="/organization/family-reunion/tree">View Family Tree</Link>
           </Button>
         </div>

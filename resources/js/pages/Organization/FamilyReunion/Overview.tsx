@@ -81,7 +81,7 @@ export default function Overview({ organization, founders, branches, stats, dire
     <AppLayout breadcrumbs={[{ title: 'Family Reunion', href: '/organization/family-reunion' }]}>
       <Head title={`${organization.name} · Family Reunion`} />
 
-      <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FamilyReunionShell
           organizationName={organization.name}
           subtitle="Connect your family branches, share history, and keep everyone in one place."
@@ -89,9 +89,9 @@ export default function Overview({ organization, founders, branches, stats, dire
         >
           <div className="grid gap-6 xl:grid-cols-3">
             <Card className="xl:col-span-2 overflow-hidden border-border shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-lg">Family Tree Overview</CardTitle>
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
                   <Link href="/organization/family-reunion/tree">View Full Tree</Link>
                 </Button>
               </CardHeader>
@@ -147,8 +147,8 @@ export default function Overview({ organization, founders, branches, stats, dire
                       ) : (
                         branches.map((branch) => (
                           <div key={branch.id} className="rounded-xl border border-border p-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                              <div className="min-w-0">
                                 <div className="font-medium text-foreground">{branch.name}</div>
                                 <div className="mt-1 text-xs text-muted-foreground">{branch.members_count} members</div>
                               </div>
@@ -166,16 +166,16 @@ export default function Overview({ organization, founders, branches, stats, dire
                   </>
                 )}
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
                   {[
                     { label: 'Total Members', value: stats.total_members },
                     { label: 'Family Branches', value: stats.family_branches },
                     { label: 'Generations', value: stats.generations },
                     { label: 'Connected Members', value: stats.connected_members },
                   ].map((item) => (
-                    <div key={item.label} className="rounded-xl bg-muted px-3 py-3 text-center">
-                      <div className="text-xl font-semibold text-foreground">{item.value}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{item.label}</div>
+                    <div key={item.label} className="rounded-xl bg-muted px-2 py-3 text-center sm:px-3">
+                      <div className="text-lg font-semibold text-foreground sm:text-xl">{item.value}</div>
+                      <div className="mt-1 text-[11px] leading-tight text-muted-foreground sm:text-xs">{item.label}</div>
                     </div>
                   ))}
                 </div>
@@ -187,7 +187,7 @@ export default function Overview({ organization, founders, branches, stats, dire
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">Quick Actions</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-2">
+                <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-2">
                   {[
                     { label: 'Add Branch', href: '/organization/family-reunion/branches', icon: GitBranch },
                     { label: 'Add Member', href: '/organization/family-reunion/members', icon: UserPlus },
@@ -200,12 +200,12 @@ export default function Overview({ organization, founders, branches, stats, dire
                       <Link
                         key={action.label}
                         href={action.href}
-                        className={`flex flex-col items-center gap-2 rounded-xl border border-border bg-card px-3 py-4 text-center transition ${fr.hoverCard}`}
+                        className={`flex flex-col items-center gap-2 rounded-xl border border-border bg-card px-2 py-3 text-center transition sm:px-3 sm:py-4 ${fr.hoverCard}`}
                       >
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${fr.iconBg}`}>
-                          <Icon className="h-5 w-5" />
+                        <div className={`flex h-9 w-9 items-center justify-center rounded-lg sm:h-10 sm:w-10 ${fr.iconBg}`}>
+                          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                         </div>
-                        <span className="text-xs font-medium text-foreground">{action.label}</span>
+                        <span className="text-[11px] font-medium leading-tight text-foreground sm:text-xs">{action.label}</span>
                       </Link>
                     )
                   })}
@@ -216,15 +216,15 @@ export default function Overview({ organization, founders, branches, stats, dire
 
           <div className="grid gap-6 xl:grid-cols-3">
             <Card className="xl:col-span-2 border-border shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardHeader className="flex flex-col gap-3 space-y-0 pb-3 sm:flex-row sm:items-center sm:justify-between">
                 <CardTitle className="text-lg">Member Directory</CardTitle>
-                <Button asChild variant="outline" size="sm">
+                <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
                   <Link href="/organization/family-reunion/directory">View All</Link>
                 </Button>
               </CardHeader>
               <CardContent>
                 <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-                  <div className="relative flex-1">
+                  <div className="relative min-w-0 flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       className="pl-9"
@@ -239,62 +239,106 @@ export default function Overview({ organization, founders, branches, stats, dire
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="px-2 py-2 font-medium">Member Name</th>
-                        <th className="px-2 py-2 font-medium">Branch</th>
-                        <th className="px-2 py-2 font-medium">Generation</th>
-                        <th className="px-2 py-2 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {directory_preview.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-2 py-8 text-center text-muted-foreground">
-                            No members yet. Add branches and children to populate the directory.
-                          </td>
-                        </tr>
-                      ) : (
-                        directory_preview.map((member) => (
-                          <tr key={member.id} className="border-b border-border">
-                            <td className="px-2 py-3">
-                              <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 overflow-hidden rounded-full bg-muted">
-                                  {member.photo_url ? (
-                                    <img src={member.photo_url} alt="" className="h-full w-full object-cover" />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
-                                      {member.full_name.slice(0, 1)}
-                                    </div>
-                                  )}
-                                </div>
-                                <span className="font-medium text-foreground">{member.full_name}</span>
-                              </div>
-                            </td>
-                            <td className={`px-2 py-3 ${fr.text}`}>{member.branch || '—'}</td>
-                            <td className="px-2 py-3 text-muted-foreground">{member.generation ?? '—'}</td>
-                            <td className="px-2 py-3">
-                              <Badge
-                                variant="secondary"
-                                className={
-                                  member.status === 'active'
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : member.status === 'unclaimed'
-                                      ? 'bg-amber-50 text-amber-700'
-                                      : 'bg-muted text-muted-foreground'
-                                }
-                              >
-                                {member.is_claimed ? 'Active' : member.status}
-                              </Badge>
-                            </td>
+                {directory_preview.length === 0 ? (
+                  <p className="px-2 py-8 text-center text-sm text-muted-foreground">
+                    No members yet. Add branches and children to populate the directory.
+                  </p>
+                ) : (
+                  <>
+                    {/* Desktop/Tablet table — same pattern as Supporters / Followers */}
+                    <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
+                            <th className="px-4 py-3 font-medium">Member Name</th>
+                            <th className="px-4 py-3 font-medium">Branch</th>
+                            <th className="px-4 py-3 font-medium">Generation</th>
+                            <th className="px-4 py-3 font-medium">Status</th>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody>
+                          {directory_preview.map((member) => (
+                            <tr key={member.id} className="border-b border-border last:border-0">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-8 w-8 overflow-hidden rounded-full bg-muted">
+                                    {member.photo_url ? (
+                                      <img src={member.photo_url} alt="" className="h-full w-full object-cover" />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-xs font-medium text-muted-foreground">
+                                        {member.full_name.slice(0, 1)}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <span className="font-medium text-foreground">{member.full_name}</span>
+                                </div>
+                              </td>
+                              <td className={`px-4 py-3 ${fr.text}`}>{member.branch || '—'}</td>
+                              <td className="px-4 py-3 text-muted-foreground">{member.generation ?? '—'}</td>
+                              <td className="px-4 py-3">
+                                <Badge
+                                  variant="secondary"
+                                  className={
+                                    member.status === 'active'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : member.status === 'unclaimed'
+                                        ? 'bg-amber-50 text-amber-700'
+                                        : 'bg-muted text-muted-foreground'
+                                  }
+                                >
+                                  {member.is_claimed ? 'Active' : member.status}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile cards */}
+                    <div className="space-y-3 md:hidden">
+                      {directory_preview.map((member) => (
+                        <div key={member.id} className="rounded-xl border border-border p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted">
+                                {member.photo_url ? (
+                                  <img src={member.photo_url} alt="" className="h-full w-full object-cover" />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center text-sm font-medium text-muted-foreground">
+                                    {member.full_name.slice(0, 1)}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="truncate font-medium text-foreground">{member.full_name}</div>
+                                <div className={`truncate text-xs ${fr.text}`}>{member.branch || 'No branch'}</div>
+                              </div>
+                            </div>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                member.status === 'active'
+                                  ? 'shrink-0 bg-emerald-50 text-emerald-700'
+                                  : member.status === 'unclaimed'
+                                    ? 'shrink-0 bg-amber-50 text-amber-700'
+                                    : 'shrink-0 bg-muted text-muted-foreground'
+                              }
+                            >
+                              {member.is_claimed ? 'Active' : member.status}
+                            </Badge>
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                            <div>
+                              <span className="block text-[11px] uppercase tracking-wide">Generation</span>
+                              <span className="font-medium text-foreground">{member.generation ?? '—'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -325,15 +369,15 @@ export default function Overview({ organization, founders, branches, stats, dire
             </Card>
           </div>
 
-          <div className={`rounded-2xl ${fr.banner} px-6 py-5 shadow-sm`}>
+          <div className={`rounded-2xl ${fr.banner} px-4 py-4 shadow-sm sm:px-6 sm:py-5`}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Welcome to Your Family Reunion Hub</h2>
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold sm:text-lg">Welcome to Your Family Reunion Hub</h2>
                 <p className="mt-1 max-w-2xl text-sm text-white/85">
                   Use founding couple setup, branches, the tree, and directory to organize your family — while continuing to use BIU announcements, events, media, and donations as usual.
                 </p>
               </div>
-              <Button asChild variant="secondary" className="shrink-0">
+              <Button asChild variant="secondary" className="w-full shrink-0 sm:w-auto">
                 <Link href="/organization/family-reunion/founders">Getting Started Guide</Link>
               </Button>
             </div>

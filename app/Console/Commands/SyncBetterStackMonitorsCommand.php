@@ -27,7 +27,7 @@ class SyncBetterStackMonitorsCommand extends Command
                 'pronounceable_name' => "{$name} liveness (/up)",
                 'url' => "{$base}/up",
                 'monitor_type' => 'status',
-                'check_frequency' => 60,
+                'check_frequency' => 180, // Better Stack free tier: 3-minute interval
                 'request_timeout' => 30,
                 'recovery_period' => 0,
                 'confirmation_period' => 0,
@@ -36,7 +36,7 @@ class SyncBetterStackMonitorsCommand extends Command
                 'pronounceable_name' => "{$name} readiness (/api/health)",
                 'url' => "{$base}/api/health",
                 'monitor_type' => 'status',
-                'check_frequency' => 60,
+                'check_frequency' => 180, // Better Stack free tier: 3-minute interval
                 'request_timeout' => 30,
                 'expected_status_codes' => [200],
                 'recovery_period' => 0,

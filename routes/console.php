@@ -8,6 +8,11 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// Horizon metrics snapshots (queue health dashboard)
+Schedule::command('horizon:snapshot')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
 // Schedule IRS BMF import every 72 hours (update-only mode)
 Schedule::command('irs:bmf:import --update-only --chunk=1000 --skip-if-busy')
     ->cron('0 2 */3 * *')

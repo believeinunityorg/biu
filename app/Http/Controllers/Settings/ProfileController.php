@@ -35,6 +35,7 @@ class ProfileController extends Controller
         $profileSettingsVariant = 'standard';
         $communityOrganizationTypes = [];
         $familyReunion = null;
+        $churchProfile = null;
 
         $needsOrgCategories = $user?->hasRole('care_alliance') || $user?->role === 'organization';
 
@@ -94,12 +95,13 @@ class ProfileController extends Controller
                         ->all();
                 }
 
-                $organization->loadMissing(['familyFounder', 'familyReunionProfile', 'communityOrganizationType']);
+                $organization->loadMissing(['familyFounder', 'familyReunionProfile', 'churchProfile', 'communityOrganizationType']);
                 $organization->load([
                     'familyBranches' => fn ($q) => $q->with(['headMember', 'adminUser'])->withCount(['members' => fn ($m) => $m->visible()])->orderBy('sort_order'),
                 ]);
                 $founder = $organization->familyFounder;
                 $profile = $organization->familyReunionProfile;
+                $church = $organization->churchProfile;
 
                 $familyReunion = [
                     'is_family_reunion' => $organization->isFamilyReunion(),
@@ -130,6 +132,15 @@ class ProfileController extends Controller
                         ])
                         ->all(),
                 ];
+
+                $churchProfile = [
+                    'is_church' => $organization->isChurchReligious(),
+                    'denomination' => $church?->denomination,
+                    'senior_pastor_name' => $church?->senior_pastor_name,
+                    'service_times' => $church?->service_times,
+                    'ministries' => $church?->ministries,
+                    'worship_location' => $church?->worship_location,
+                ];
             }
         }
 
@@ -142,6 +153,7 @@ class ProfileController extends Controller
             'profileSettingsVariant' => $profileSettingsVariant,
             'communityOrganizationTypes' => $communityOrganizationTypes,
             'familyReunion' => $familyReunion,
+            'churchProfile' => $churchProfile,
         ]);
     }
 
@@ -274,6 +286,19 @@ class ProfileController extends Controller
                         'allow_members_invite_relatives' => (bool) ($validated['allow_members_invite_relatives'] ?? true),
                         'require_member_approval' => (bool) ($validated['require_member_approval'] ?? false),
                         'allow_branch_administrators' => (bool) ($validated['allow_branch_administrators'] ?? true),
+                    ]
+                );
+            }
+
+            if ($organization->isChurchReligious()) {
+                $organization->churchProfile()->updateOrCreate(
+                    ['organization_id' => $organization->id],
+                    [
+                        'denomination' => $validated['denomination'] ?? null,
+                        'senior_pastor_name' => $validated['senior_pastor_name'] ?? null,
+                        'service_times' => $validated['service_times'] ?? null,
+                        'ministries' => $validated['ministries'] ?? null,
+                        'worship_location' => $validated['worship_location'] ?? null,
                     ]
                 );
             }

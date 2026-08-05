@@ -210,6 +210,19 @@ class Organization extends Model implements HasPreferredPayoutMethod
         return false;
     }
 
+    public function isChurchReligious(): bool
+    {
+        if ($this->relationLoaded('communityOrganizationType')) {
+            return (bool) $this->communityOrganizationType?->isChurchReligious();
+        }
+
+        if ($this->community_organization_type_id) {
+            return $this->communityOrganizationType()->where('slug', CommunityOrganizationType::SLUG_CHURCH_RELIGIOUS)->exists();
+        }
+
+        return false;
+    }
+
     public function communityOrganizationType(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(CommunityOrganizationType::class, 'community_organization_type_id');
@@ -223,6 +236,11 @@ class Organization extends Model implements HasPreferredPayoutMethod
     public function familyReunionProfile(): HasOne
     {
         return $this->hasOne(FamilyReunionProfile::class);
+    }
+
+    public function churchProfile(): HasOne
+    {
+        return $this->hasOne(ChurchProfile::class);
     }
 
     public function familyBranches(): \Illuminate\Database\Eloquent\Relations\HasMany

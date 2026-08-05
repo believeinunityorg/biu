@@ -215,8 +215,6 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
-// edesh e sei
-
 // ============================================
 // MERCHANT DOMAIN ROUTES - MUST BE FIRST
 // ============================================

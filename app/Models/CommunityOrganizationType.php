@@ -10,6 +10,8 @@ class CommunityOrganizationType extends Model
 {
     public const SLUG_FAMILY_REUNION = 'family_reunion';
 
+    public const SLUG_CHURCH_RELIGIOUS = 'church_religious';
+
     public const SLUG_OTHER = 'other';
 
     protected $fillable = [
@@ -39,6 +41,11 @@ class CommunityOrganizationType extends Model
         return $this->slug === self::SLUG_FAMILY_REUNION;
     }
 
+    public function isChurchReligious(): bool
+    {
+        return $this->slug === self::SLUG_CHURCH_RELIGIOUS;
+    }
+
     public function isOther(): bool
     {
         return $this->slug === self::SLUG_OTHER;
@@ -47,6 +54,11 @@ class CommunityOrganizationType extends Model
     public static function familyReunionId(): ?int
     {
         return static::query()->where('slug', self::SLUG_FAMILY_REUNION)->value('id');
+    }
+
+    public static function churchReligiousId(): ?int
+    {
+        return static::query()->where('slug', self::SLUG_CHURCH_RELIGIOUS)->value('id');
     }
 
     public static function otherId(): ?int

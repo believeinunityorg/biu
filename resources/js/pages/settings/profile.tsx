@@ -50,6 +50,10 @@ import {
   FamilyReunionProfileSection,
   type FamilyReunionProfileData,
 } from "@/components/family-reunion/FamilyReunionProfileSection"
+import {
+  ChurchProfileSection,
+  type ChurchProfileData,
+} from "@/components/organization-profile/ChurchProfileSection"
 
 type ProfileForm = {
   name: string
@@ -82,6 +86,11 @@ type ProfileForm = {
   allow_branch_administrators?: boolean
   grandfather_name?: string
   grandmother_name?: string
+  denomination?: string
+  senior_pastor_name?: string
+  service_times?: string
+  ministries?: string
+  worship_location?: string
 }
 
 type CareAlliancePayload = {
@@ -104,6 +113,7 @@ export default function ProfileEdit({
   profileSettingsVariant = "standard",
   communityOrganizationTypes = [],
   familyReunion = null,
+  churchProfile = null,
 }: {
   mustVerifyEmail: boolean
   status?: string
@@ -113,6 +123,7 @@ export default function ProfileEdit({
   profileSettingsVariant?: ProfileSettingsVariant
   communityOrganizationTypes?: { id: number; slug: string; name: string; label: string }[]
   familyReunion?: FamilyReunionProfileData | null
+  churchProfile?: ChurchProfileData | null
 }) {
   const page = usePage<SharedData & { success?: string }>()
   const { auth } = page.props
@@ -202,6 +213,11 @@ export default function ProfileEdit({
     allow_branch_administrators: familyReunion?.allow_branch_administrators ?? true,
     grandfather_name: familyReunion?.grandfather_name || "",
     grandmother_name: familyReunion?.grandmother_name || "",
+    denomination: churchProfile?.denomination || "",
+    senior_pastor_name: churchProfile?.senior_pastor_name || "",
+    service_times: churchProfile?.service_times || "",
+    ministries: churchProfile?.ministries || "",
+    worship_location: churchProfile?.worship_location || "",
   })
 
   const selectedOrgType = communityOrganizationTypes.find(
@@ -209,6 +225,8 @@ export default function ProfileEdit({
   )
   const showFamilyReunionExtension =
     isOrganizationProfile && selectedOrgType?.slug === "family_reunion"
+  const showChurchExtension =
+    isOrganizationProfile && selectedOrgType?.slug === "church_religious"
   const isOtherOrgType = selectedOrgType?.slug === "other"
 
   const primaryCategoryIdsKey = (organizationPrimaryActionCategoryIds ?? []).join(",")
@@ -1006,7 +1024,7 @@ const getCroppedImage = async (
                   </Select>
                   <InputError message={errors.community_organization_type_id} className="mt-1" />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Family Reunion unlocks founding couple, branches, and family tree settings below.
+                    Some types unlock a profile extension (Family Reunion, Church / Religious, and more).
                   </p>
                 </div>
                 {isOtherOrgType && (
@@ -1359,6 +1377,20 @@ const getCroppedImage = async (
               errors={errors as Record<string, string>}
               branches={familyReunion?.branches || []}
               canManageBranches={!!familyReunion?.is_family_reunion}
+            />
+          )}
+
+          {showChurchExtension && (
+            <ChurchProfileSection
+              data={{
+                denomination: data.denomination || "",
+                senior_pastor_name: data.senior_pastor_name || "",
+                service_times: data.service_times || "",
+                ministries: data.ministries || "",
+                worship_location: data.worship_location || "",
+              }}
+              setData={(key, value) => setData(key as keyof ProfileForm, value as never)}
+              errors={errors as Record<string, string>}
             />
           )}
 

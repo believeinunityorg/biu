@@ -89,6 +89,11 @@ class ProfileUpdateRequest extends FormRequest
                     'string',
                     'max:255',
                 ],
+                'denomination' => ['nullable', 'string', 'max:255'],
+                'senior_pastor_name' => ['nullable', 'string', 'max:255'],
+                'service_times' => ['nullable', 'string', 'max:5000'],
+                'ministries' => ['nullable', 'string', 'max:5000'],
+                'worship_location' => ['nullable', 'string', 'max:255'],
             ]);
         }
 

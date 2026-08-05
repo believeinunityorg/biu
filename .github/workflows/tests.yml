@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup PHP
-        uses: shivamathur/setup-php@v2
+        uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, sqlite, pdo_sqlite, redis, pcntl, posix

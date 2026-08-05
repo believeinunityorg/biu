@@ -1,4 +1,8 @@
 # Pest / PHPUnit — Production Roadmap: Automated Testing via GitHub Actions
+#
+# IMPORTANT: This job uses ONLY the GitHub Actions MySQL service container
+# (believe_testing). It never connects to production/staging VPS databases
+# and never runs migrate:fresh against live data.
 name: Tests
 
 on:
@@ -14,7 +18,7 @@ concurrency:
 
 jobs:
   pest:
-    name: Pest (PHP ${{ matrix.php }} / MySQL)
+    name: Pest CI suite (PHP ${{ matrix.php }} / GHA MySQL only)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -84,5 +88,6 @@ jobs:
           php artisan key:generate --force
           php artisan config:clear
 
-      - name: Run Pest
-        run: php artisan test --compact
+      # Stable CI gate only (no migrate:fresh / RefreshDatabase). Full Unit+Feature suite remains available locally.
+      - name: Run Pest CI suite
+        run: php artisan test --compact --testsuite=CI

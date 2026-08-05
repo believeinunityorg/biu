@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\KnowledgeBaseController;
 use App\Http\Controllers\Api\PushNotificationOpenController;
+use App\Http\Controllers\Api\HealthController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
@@ -18,9 +19,8 @@ Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index'])->middle
 Route::post('/knowledge-base/learn', [KnowledgeBaseController::class, 'learn'])->middleware('throttle:10,1');
 Route::get('/organizations/lookup', [OrganizationLookupController::class, 'lookup'])->middleware('throttle:30,1');
 
-Route::get('/health', function () {
-    return response()->json(['status' => 'ok', 'timestamp' => now()]);
-})->middleware('throttle:60,1');
+// Better Stack / uptime probes (DB + Redis when configured) — also keep Laravel /up as liveness
+Route::get('/health', HealthController::class)->middleware('throttle:60,1');
 
 // Shippo webhook (no auth; Shippo will call it directly)
 Route::post('/webhooks/shippo', [ShippoWebhookController::class, 'handle']);

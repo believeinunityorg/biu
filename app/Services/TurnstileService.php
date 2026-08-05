@@ -13,6 +13,12 @@ class TurnstileService
 
     public function isEnabled(): bool
     {
+        // Staging (501c3ers.com) uses a developer login shell — skip Turnstile there so
+        // hostname allowlist / missing widget never blocks sign-in during deploy testing.
+        if (function_exists('is_development_site') && is_development_site()) {
+            return false;
+        }
+
         return filled(config('services.turnstile.site_key'))
             && filled(config('services.turnstile.secret_key'));
     }

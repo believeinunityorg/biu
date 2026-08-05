@@ -18,7 +18,7 @@ class SyncBetterStackMonitorsCommand extends Command
 
     public function handle(): int
     {
-        $token = (string) env('BETTER_STACK_UPTIME_API_TOKEN', '');
+        $token = (string) config('services.betterstack.uptime_api_token', '');
         $base = rtrim((string) config('app.url'), '/');
         $name = (string) config('app.name', 'BIU');
 

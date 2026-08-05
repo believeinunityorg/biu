@@ -427,4 +427,9 @@ return [
         'cafile' => env('IRS_CAFILE', null), // optional: path to cacert.pem (e.g. from https://curl.se/ca/cacert.pem)
     ],
 
+    'betterstack' => [
+        'uptime_api_token' => env('BETTER_STACK_UPTIME_API_TOKEN'),
+        'alert_email' => env('BETTER_STACK_ALERT_EMAIL'),
+    ],
+
 ];

@@ -93,11 +93,15 @@
         ],
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test --testsuite=CI"
         ],
         "test:ci": [
             "@php artisan config:clear --ansi",
             "@php artisan test --testsuite=CI"
+        ],
+        "test:all": [
+            "@php artisan config:clear --ansi",
+            "@php artisan test"
         ]
     },
     "extra": {

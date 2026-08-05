@@ -430,6 +430,9 @@ return [
     'betterstack' => [
         'uptime_api_token' => env('BETTER_STACK_UPTIME_API_TOKEN'),
         'alert_email' => env('BETTER_STACK_ALERT_EMAIL'),
+        'source_token' => env('BETTER_STACK_SOURCE_TOKEN'),
+        'source_endpoint' => env('BETTER_STACK_SOURCE_ENDPOINT'),
+        'log_level' => env('BETTER_STACK_LOG_LEVEL', 'warning'),
     ],
 
 ];

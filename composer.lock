@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5e8dd4297fa2376beab6be5272d63697",
+    "content-hash": "a9ed9e58b553a9fef86e10b014c0287c",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -5695,6 +5695,54 @@
                 }
             ],
             "time": "2026-03-08T20:05:35+00:00"
+        },
+        {
+            "name": "logtail/monolog-logtail",
+            "version": "v3.3.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/logtail/monolog-logtail.git",
+                "reference": "c6526b79293026b7efff0f3de4dc05240200c9e6"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/logtail/monolog-logtail/zipball/c6526b79293026b7efff0f3de4dc05240200c9e6",
+                "reference": "c6526b79293026b7efff0f3de4dc05240200c9e6",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "monolog/monolog": "^3",
+                "php": ">=8.1"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^8"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Logtail\\Monolog\\": "src/Monolog"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "ISC"
+            ],
+            "description": "Logtail handler for Monolog",
+            "homepage": "https://github.com/logtail/logtail-php",
+            "keywords": [
+                "handler",
+                "log",
+                "logger",
+                "logging",
+                "monolog",
+                "php"
+            ],
+            "support": {
+                "issues": "https://github.com/logtail/monolog-logtail/issues",
+                "source": "https://github.com/logtail/monolog-logtail/tree/v3.3.1"
+            },
+            "time": "2026-07-08T13:52:27+00:00"
         },
         {
             "name": "maatwebsite/excel",

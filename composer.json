@@ -28,6 +28,7 @@
         "laravel/scout": "^10.19",
         "laravel/tinker": "^2.10.1",
         "league/csv": "^9.24",
+        "logtail/monolog-logtail": "^3.3",
         "maatwebsite/excel": "^3.1.68",
         "phpoffice/phpspreadsheet": "^1.30",
         "predis/predis": "^3.0",

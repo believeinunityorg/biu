@@ -38,7 +38,10 @@ class HealthController extends Controller
         if ($shouldCheckRedis) {
             try {
                 $pong = Redis::connection()->ping();
-                $checks['redis'] = $pong === true || $pong === 'PONG' || $pong === '+PONG';
+                $normalized = is_object($pong) ? (string) $pong : $pong;
+                $checks['redis'] = $pong === true
+                    || $normalized === 'PONG'
+                    || $normalized === '+PONG';
                 if (! $checks['redis']) {
                     $errors['redis'] = 'unexpected_pong';
                 }

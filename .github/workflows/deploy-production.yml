@@ -134,14 +134,27 @@ jobs:
       - name: Prepare build tools (self-hosted VPS)
         run: |
           set -euo pipefail
-          php --version | grep -E '^PHP 8\.(3|4)\.' || { echo "::error::PHP 8.3+ required on VPS"; exit 1; }
-          mkdir -p "${HOME}/bin"
-          if ! command -v composer >/dev/null 2>&1; then
-            curl -fsSL https://getcomposer.org/download/latest-stable/composer.phar -o "${HOME}/bin/composer.phar"
-            printf '%s\n' '#!/usr/bin/env bash' 'exec php "${HOME}/bin/composer.phar" "$@"' > "${HOME}/bin/composer"
-            chmod +x "${HOME}/bin/composer"
+          # cPanel often exposes cgi-fcgi `php` first; Composer requires CLI.
+          PHP_CLI="/opt/cpanel/ea-php$(echo "${PHP_VERSION}" | tr -d '.')/root/usr/bin/php"
+          if [ ! -x "${PHP_CLI}" ]; then
+            echo "::error::Missing EA PHP CLI at ${PHP_CLI}"
+            exit 1
           fi
-          export PATH="${HOME}/bin:${PATH}"
+          mkdir -p "${HOME}/bin"
+          ln -sfn "${PHP_CLI}" "${HOME}/bin/php"
+          export PATH="${HOME}/bin:$(dirname "${PHP_CLI}"):${PATH}"
+          SAPI="$("${HOME}/bin/php" -r 'echo PHP_SAPI;')"
+          if [ "${SAPI}" != "cli" ]; then
+            echo "::error::PHP must be CLI (got ${SAPI} from $(command -v php))"
+            exit 1
+          fi
+          "${HOME}/bin/php" --version | grep -E '^PHP 8\.(3|4)\.' || { echo "::error::PHP 8.3+ required on VPS"; exit 1; }
+          if [ ! -f "${HOME}/bin/composer.phar" ]; then
+            curl -fsSL https://getcomposer.org/download/latest-stable/composer.phar -o "${HOME}/bin/composer.phar"
+          fi
+          # Always point composer at CLI php (old wrappers used bare `php` → cgi-fcgi).
+          printf '%s\n' '#!/usr/bin/env bash' "exec \"${PHP_CLI}\" \"\${HOME}/bin/composer.phar\" \"\$@\"" > "${HOME}/bin/composer"
+          chmod +x "${HOME}/bin/composer"
           if ! command -v node >/dev/null 2>&1 || ! node --version | grep -qE '^v(20|22|24)\.'; then
             export NVM_DIR="${HOME}/.nvm"
             if [ ! -s "${NVM_DIR}/nvm.sh" ]; then
@@ -153,6 +166,7 @@ jobs:
             nvm use 24
           fi
           echo "${HOME}/bin" >> "${GITHUB_PATH}"
+          echo "$(dirname "${PHP_CLI}")" >> "${GITHUB_PATH}"
           if [ -s "${HOME}/.nvm/nvm.sh" ]; then
             echo "NVM_DIR=${HOME}/.nvm" >> "${GITHUB_ENV}"
           fi
@@ -162,7 +176,7 @@ jobs:
 
       - name: Install PHP dependencies
         run: |
-          export PATH="${HOME}/bin:${PATH}"
+          export PATH="${HOME}/bin:/opt/cpanel/ea-php$(echo "${PHP_VERSION}" | tr -d '.')/root/usr/bin:${PATH}"
           if [ -s "${HOME}/.nvm/nvm.sh" ]; then . "${HOME}/.nvm/nvm.sh"; fi
           composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-ansi --ignore-platform-req=ext-sodium
           mkdir -p resources/views storage/framework/views

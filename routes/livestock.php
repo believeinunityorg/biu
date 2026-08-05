@@ -146,13 +146,15 @@ Route::middleware(['auth:livestock', 'EnsureEmailIsVerified'])->prefix('admin')-
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LivestockAuthenticatedSessionController::class, 'create'])->name('livestock.login');
 
-    Route::post('login', [LivestockAuthenticatedSessionController::class, 'store']);
+    Route::post('login', [LivestockAuthenticatedSessionController::class, 'store'])
+        ->middleware('throttle:10,1');
 
     Route::get('/register', function () {
         return Inertia::render('Livestock/Auth/Register');
     })->name('livestock.register');
 
-    Route::post('register', [LivestockRegisteredUserController::class, 'store']);
+    Route::post('register', [LivestockRegisteredUserController::class, 'store'])
+        ->middleware('throttle:5,1');
 
     Route::get('forgot-password', function () {
         return Inertia::render('Livestock/Auth/ForgotPassword', [
@@ -161,12 +163,14 @@ Route::middleware('guest')->group(function () {
     })->name('livestock.password.request');
 
     Route::post('forgot-password', [LivestockPasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('livestock.password.email');
 
     Route::get('reset-password/{token}', [LivestockNewPasswordController::class, 'create'])
         ->name('livestock.password.reset');
 
     Route::post('reset-password', [LivestockNewPasswordController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('livestock.password.store');
 });
 

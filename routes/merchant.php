@@ -25,10 +25,13 @@ Route::get('/', function () {
 // Auth Routes (Login/Register) - Merchant branded pages
 Route::middleware('guest:merchant')->group(function () {
     Route::get('/login', [MerchantAuthController::class, 'showLoginForm'])->name('merchant.login');
-    Route::post('login', [MerchantAuthController::class, 'login'])->name('merchant.login.store');
+    Route::post('login', [MerchantAuthController::class, 'login'])
+        ->middleware('throttle:10,1')
+        ->name('merchant.login.store');
 
     Route::get('/register', [MerchantAuthController::class, 'create'])->name('merchant.register');
-    Route::post('register', [MerchantAuthController::class, 'store']);
+    Route::post('register', [MerchantAuthController::class, 'store'])
+        ->middleware('throttle:5,1');
 
     Route::get('forgot-password', function (Request $request) {
         return Inertia::render('merchant/Auth/ForgotPassword', [
@@ -39,12 +42,14 @@ Route::middleware('guest:merchant')->group(function () {
     })->name('merchant.password.request');
 
     Route::post('forgot-password', [\App\Http\Controllers\Auth\PasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('merchant.password.email');
 
     Route::get('reset-password/{token}', [\App\Http\Controllers\Auth\NewPasswordController::class, 'create'])
         ->name('merchant.password.reset');
 
     Route::post('reset-password', [\App\Http\Controllers\Auth\NewPasswordController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('merchant.password.store');
 });
 

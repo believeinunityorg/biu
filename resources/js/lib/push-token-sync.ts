@@ -81,12 +81,18 @@ async function postPushTokenToServer(token: string): Promise<void> {
             payload = null;
         }
 
+        // Guest / expired session — route is auth-only; do not throw (avoids console noise).
+        if (response.status === 401) {
+            console.info("[Push] Token sync skipped — session unauthenticated");
+            return;
+        }
+
         if (response.status === 403 && payload?.requires_bridge_verification) {
             console.info("[Push] Token sync blocked until Bridge verification completes");
             return;
         }
 
-        if (response.status !== 401 && response.status !== 403) {
+        if (response.status !== 403) {
             localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
         }
         throw new Error(`Push token save failed (${response.status}): ${text}`);

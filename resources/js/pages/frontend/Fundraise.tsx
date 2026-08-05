@@ -16,6 +16,7 @@ import { useForm } from "@inertiajs/react";
 import { motion } from "framer-motion";
 import { ArrowRight, Sparkles, FileText, Send } from "lucide-react";
 import InputError from "@/components/input-error";
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField";
 
 const WEFUNDER_URL = "https://wefunder.com/raise?utm_source=believeinunity&utm_medium=partner&utm_campaign=qualified_founders";
 
@@ -30,7 +31,10 @@ export default function FundraisePage({ seo, wefunderUrl = WEFUNDER_URL }: Fundr
     company: "",
     email: "",
     project_summary: "",
+    cf_turnstile_response: "",
   });
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +145,11 @@ export default function FundraisePage({ seo, wefunderUrl = WEFUNDER_URL }: Fundr
                     <InputError message={errors.project_summary} className="mt-1" />
                   </div>
 
+                  <TurnstileField
+                    onToken={(token) => setData("cf_turnstile_response", token)}
+                    error={errors.cf_turnstile_response}
+                  />
+
                   {/* Step 3 – Then redirect to Wefunder */}
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -149,7 +158,7 @@ export default function FundraisePage({ seo, wefunderUrl = WEFUNDER_URL }: Fundr
                     <Button
                       type="submit"
                       className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-3 rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
-                      disabled={processing}
+                      disabled={processing || turnstileBlocksSubmit}
                     >
                       {processing ? (
                         <>

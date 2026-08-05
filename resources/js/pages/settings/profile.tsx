@@ -46,7 +46,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/frontend/ui/select"
-// import { TextArea } from "@/components/ui/textarea"
+import {
+  FamilyReunionProfileSection,
+  type FamilyReunionProfileData,
+} from "@/components/family-reunion/FamilyReunionProfileSection"
+import {
+  ChurchProfileSection,
+  type ChurchProfileData,
+} from "@/components/organization-profile/ChurchProfileSection"
 
 type ProfileForm = {
   name: string
@@ -64,6 +71,26 @@ type ProfileForm = {
   alliance_name?: string
   alliance_city?: string
   alliance_state?: string
+  community_organization_type_id?: number | string
+  community_organization_type_other?: string
+  family_name?: string
+  family_motto?: string
+  family_history?: string
+  reunion_established?: string
+  reunion_frequency?: string
+  reunion_location?: string
+  tree_visibility?: string
+  allow_members_add_children?: boolean
+  allow_members_invite_relatives?: boolean
+  require_member_approval?: boolean
+  allow_branch_administrators?: boolean
+  grandfather_name?: string
+  grandmother_name?: string
+  denomination?: string
+  senior_pastor_name?: string
+  service_times?: string
+  ministries?: string
+  worship_location?: string
 }
 
 type CareAlliancePayload = {
@@ -84,6 +111,9 @@ export default function ProfileEdit({
   organizationPrimaryActionCategoryIds = [],
   careAlliance = null,
   profileSettingsVariant = "standard",
+  communityOrganizationTypes = [],
+  familyReunion = null,
+  churchProfile = null,
 }: {
   mustVerifyEmail: boolean
   status?: string
@@ -91,6 +121,9 @@ export default function ProfileEdit({
   organizationPrimaryActionCategoryIds?: number[]
   careAlliance?: CareAlliancePayload
   profileSettingsVariant?: ProfileSettingsVariant
+  communityOrganizationTypes?: { id: number; slug: string; name: string; label: string }[]
+  familyReunion?: FamilyReunionProfileData | null
+  churchProfile?: ChurchProfileData | null
 }) {
   const page = usePage<SharedData & { success?: string }>()
   const { auth } = page.props
@@ -158,7 +191,43 @@ export default function ProfileEdit({
     alliance_name: careAlliance?.name ?? "",
     alliance_city: careAlliance?.city ?? "",
     alliance_state: careAlliance?.state ?? "",
+    community_organization_type_id:
+      familyReunion?.community_organization_type_id != null
+        ? String(familyReunion.community_organization_type_id)
+        : auth.user?.organization?.community_organization_type_id != null
+          ? String(auth.user.organization.community_organization_type_id)
+          : "",
+    community_organization_type_other: familyReunion?.community_organization_type_other
+      || auth.user?.organization?.community_organization_type_other
+      || "",
+    family_name: familyReunion?.family_name || auth.user?.organization?.name || "",
+    family_motto: familyReunion?.family_motto || "",
+    family_history: familyReunion?.family_history || "",
+    reunion_established: familyReunion?.reunion_established || "",
+    reunion_frequency: familyReunion?.reunion_frequency || "annual",
+    reunion_location: familyReunion?.reunion_location || "",
+    tree_visibility: familyReunion?.tree_visibility || "family_members_only",
+    allow_members_add_children: familyReunion?.allow_members_add_children ?? true,
+    allow_members_invite_relatives: familyReunion?.allow_members_invite_relatives ?? true,
+    require_member_approval: familyReunion?.require_member_approval ?? false,
+    allow_branch_administrators: familyReunion?.allow_branch_administrators ?? true,
+    grandfather_name: familyReunion?.grandfather_name || "",
+    grandmother_name: familyReunion?.grandmother_name || "",
+    denomination: churchProfile?.denomination || "",
+    senior_pastor_name: churchProfile?.senior_pastor_name || "",
+    service_times: churchProfile?.service_times || "",
+    ministries: churchProfile?.ministries || "",
+    worship_location: churchProfile?.worship_location || "",
   })
+
+  const selectedOrgType = communityOrganizationTypes.find(
+    (t) => String(t.id) === String(data.community_organization_type_id)
+  )
+  const showFamilyReunionExtension =
+    isOrganizationProfile && selectedOrgType?.slug === "family_reunion"
+  const showChurchExtension =
+    isOrganizationProfile && selectedOrgType?.slug === "church_religious"
+  const isOtherOrgType = selectedOrgType?.slug === "other"
 
   const primaryCategoryIdsKey = (organizationPrimaryActionCategoryIds ?? []).join(",")
 
@@ -914,7 +983,7 @@ const getCroppedImage = async (
                           {showOrgProfileCard && !isCareAllianceHub && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <Label htmlFor="name" className="text-gray-900 dark:text-white font-medium">
+                  <Label htmlFor="contact_title" className="text-gray-900 dark:text-white font-medium">
                     Contact Title *
                   </Label>
                   <Input
@@ -923,11 +992,53 @@ const getCroppedImage = async (
                     value={data.contact_title}
                     onChange={(e) => setData("contact_title", e.target.value)}
                     className="mt-1 bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Excutive Director, Ceo, Manager, etc.."
+                    placeholder="Executive Director, CEO, Manager, etc."
                     required={profileSettingsVariant === "organization"}
                   />
                   <InputError message={errors.contact_title} className="mt-1" />
                 </div>
+                <div className="sm:col-span-2">
+                  <Label className="text-gray-900 dark:text-white font-medium">
+                    Organization Type *
+                  </Label>
+                  <Select
+                    value={data.community_organization_type_id ? String(data.community_organization_type_id) : undefined}
+                    onValueChange={(value) => {
+                      setData("community_organization_type_id", value)
+                      const next = communityOrganizationTypes.find((t) => String(t.id) === value)
+                      if (next?.slug !== "other") {
+                        setData("community_organization_type_other", "")
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="mt-1 bg-white dark:bg-gray-900 border-gray-300 dark:border-gray-600">
+                      <SelectValue placeholder="Select organization type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {communityOrganizationTypes.map((type) => (
+                        <SelectItem key={type.id} value={String(type.id)}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <InputError message={errors.community_organization_type_id} className="mt-1" />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Some types unlock a profile extension (Family Reunion, Church / Religious, and more).
+                  </p>
+                </div>
+                {isOtherOrgType && (
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="community_organization_type_other">Describe your organization type *</Label>
+                    <Input
+                      id="community_organization_type_other"
+                      className="mt-1"
+                      value={data.community_organization_type_other || ""}
+                      onChange={(e) => setData("community_organization_type_other", e.target.value)}
+                    />
+                    <InputError message={errors.community_organization_type_other} className="mt-1" />
+                  </div>
+                )}
               </div>
                         )}
 
@@ -1244,6 +1355,44 @@ const getCroppedImage = async (
                       </Card>
 
                     )}
+
+          {showFamilyReunionExtension && (
+            <FamilyReunionProfileSection
+              data={{
+                family_name: data.family_name || "",
+                family_motto: data.family_motto || "",
+                family_history: data.family_history || "",
+                reunion_established: data.reunion_established || "",
+                reunion_frequency: data.reunion_frequency || "annual",
+                reunion_location: data.reunion_location || "",
+                tree_visibility: data.tree_visibility || "family_members_only",
+                allow_members_add_children: data.allow_members_add_children ?? true,
+                allow_members_invite_relatives: data.allow_members_invite_relatives ?? true,
+                require_member_approval: data.require_member_approval ?? false,
+                allow_branch_administrators: data.allow_branch_administrators ?? true,
+                grandfather_name: data.grandfather_name || "",
+                grandmother_name: data.grandmother_name || "",
+              }}
+              setData={(key, value) => setData(key as keyof ProfileForm, value as never)}
+              errors={errors as Record<string, string>}
+              branches={familyReunion?.branches || []}
+              canManageBranches={!!familyReunion?.is_family_reunion}
+            />
+          )}
+
+          {showChurchExtension && (
+            <ChurchProfileSection
+              data={{
+                denomination: data.denomination || "",
+                senior_pastor_name: data.senior_pastor_name || "",
+                service_times: data.service_times || "",
+                ministries: data.ministries || "",
+                worship_location: data.worship_location || "",
+              }}
+              setData={(key, value) => setData(key as keyof ProfileForm, value as never)}
+              errors={errors as Record<string, string>}
+            />
+          )}
 
           {/* Save Button */}
           <div className="flex justify-end">

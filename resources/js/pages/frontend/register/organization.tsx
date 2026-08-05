@@ -19,6 +19,7 @@ import {
 import { Link, router, usePage } from "@inertiajs/react"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import { PageHead } from "@/components/frontend/PageHead"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { Button } from "@/components/frontend/ui/button"
 import { Card, CardContent, CardDescription, CardTitle } from "@/components/frontend/ui/card"
 import { Input } from "@/components/frontend/ui/input"
@@ -38,6 +39,8 @@ const MEMBERSHIP_JOIN_METHODS = [
   { value: "request_to_join", label: "Request to Join" },
   { value: "invitation_only", label: "Invitation Only" },
 ] as const
+
+type CommunityOrgTypeOption = { id: number; slug: string; name: string; label: string }
 
 interface EINLookupResponse {
   success: boolean
@@ -59,6 +62,7 @@ interface OrganizationRegisterPageProps {
   inviteToken?: string
   organizationName?: string
   csrf_token?: string
+  communityOrganizationTypes?: CommunityOrgTypeOption[]
 }
 
 export default function OrganizationRegisterPage({
@@ -67,6 +71,7 @@ export default function OrganizationRegisterPage({
   ein: prefilledEin,
   inviteToken,
   organizationName,
+  communityOrganizationTypes = [],
 }: OrganizationRegisterPageProps) {
   const { csrf_token } = usePage<{ csrf_token?: string }>().props
   const [step, setStep] = useState(1)
@@ -82,10 +87,22 @@ export default function OrganizationRegisterPage({
     prefilledEin ? prefilledEin.replace(/\D/g, "").slice(0, 9) : ""
   )
   const [lookupStatus, setLookupStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [turnstileToken, setTurnstileToken] = useState("")
+  const { turnstileBlocksSubmit } = useTurnstileGate(turnstileToken)
 
   const [form, setForm] = useState({
     has_ein: true,
     ein: "",
+    community_organization_type_id: "",
+    community_organization_type_other: "",
+    grandfather_name: "",
+    grandmother_name: "",
+    grandfather_birth_year: "",
+    grandfather_death_year: "",
+    grandmother_birth_year: "",
+    grandmother_death_year: "",
+    grandfather_photo: null as File | null,
+    grandmother_photo: null as File | null,
     has_members: null as boolean | null,
     memberships_enabled: false,
     membership_type: "free" as "free" | "paid",
@@ -115,6 +132,12 @@ export default function OrganizationRegisterPage({
     ntee_code: "",
     has_edited_irs_data: false,
   })
+
+  const selectedOrgType = communityOrganizationTypes.find(
+    (t) => String(t.id) === String(form.community_organization_type_id)
+  )
+  const isFamilyReunion = selectedOrgType?.slug === "family_reunion"
+  const isOtherOrgType = selectedOrgType?.slug === "other"
 
   useEffect(() => {
     if (referralCode) {
@@ -168,7 +191,16 @@ export default function OrganizationRegisterPage({
       return true
     }
     if (n === 3) {
+      const typeOk =
+        !!form.community_organization_type_id &&
+        (!isOtherOrgType || form.community_organization_type_other.trim().length > 0)
+      const familyOk =
+        !isFamilyReunion ||
+        (form.grandfather_name.trim().length > 0 && form.grandmother_name.trim().length > 0)
+
       return !!(
+        typeOk &&
+        familyOk &&
         form.name.trim() &&
         form.street.trim() &&
         form.city.trim() &&
@@ -295,6 +327,23 @@ export default function OrganizationRegisterPage({
     payload.append("attestation_officer_on_990", "1")
     payload.append("legal_name_confirmation", form.name)
     payload.append("has_edited_irs_data", form.has_edited_irs_data ? "1" : "0")
+    payload.append("community_organization_type_id", form.community_organization_type_id)
+    if (isOtherOrgType && form.community_organization_type_other.trim()) {
+      payload.append("community_organization_type_other", form.community_organization_type_other.trim())
+    }
+    if (isFamilyReunion) {
+      payload.append("grandfather_name", form.grandfather_name.trim())
+      payload.append("grandmother_name", form.grandmother_name.trim())
+      if (form.grandfather_birth_year) payload.append("grandfather_birth_year", form.grandfather_birth_year)
+      if (form.grandfather_death_year) payload.append("grandfather_death_year", form.grandfather_death_year)
+      if (form.grandmother_birth_year) payload.append("grandmother_birth_year", form.grandmother_birth_year)
+      if (form.grandmother_death_year) payload.append("grandmother_death_year", form.grandmother_death_year)
+      if (form.grandfather_photo) payload.append("grandfather_photo", form.grandfather_photo)
+      if (form.grandmother_photo) payload.append("grandmother_photo", form.grandmother_photo)
+    }
+    if (turnstileToken) {
+      payload.append("cf_turnstile_response", turnstileToken)
+    }
     ;[
       "ico",
       "classification",
@@ -738,6 +787,169 @@ export default function OrganizationRegisterPage({
                       </Alert>
                     )}
 
+                    <div>
+                      <Label className="text-sm font-semibold">What kind of organization are you? *</Label>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        This helps us show the right tools. Family Reunion unlocks founding couple, branches, and family tree.
+                      </p>
+                      <div className="mt-3">
+                        <Select
+                          value={form.community_organization_type_id || undefined}
+                          onValueChange={(value) => {
+                            setField("community_organization_type_id", value)
+                            const next = communityOrganizationTypes.find((t) => String(t.id) === value)
+                            if (next?.slug !== "other") {
+                              setField("community_organization_type_other", "")
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Select organization type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {communityOrganizationTypes.map((type) => (
+                              <SelectItem key={type.id} value={String(type.id)}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {errors.community_organization_type_id && (
+                        <p className="mt-1 text-sm text-red-600">{errors.community_organization_type_id}</p>
+                      )}
+                    </div>
+
+                    {isOtherOrgType && (
+                      <div>
+                        <Label htmlFor="community_organization_type_other">Please describe your organization type *</Label>
+                        <Input
+                          id="community_organization_type_other"
+                          className="mt-1.5 h-11"
+                          value={form.community_organization_type_other}
+                          onChange={(e) => setField("community_organization_type_other", e.target.value)}
+                          placeholder="e.g. Neighborhood association"
+                        />
+                        {errors.community_organization_type_other && (
+                          <p className="mt-1 text-sm text-red-600">{errors.community_organization_type_other}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {isFamilyReunion && (
+                      <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-800 dark:bg-blue-950/30">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">Founding Couple *</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Add the founding grandfather and grandmother. They become the top of your family tree.
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-3 rounded-lg border border-border bg-card p-3">
+                            <p className="text-sm font-medium">Founding Grandfather</p>
+                            <div>
+                              <Label htmlFor="grandfather_name">Full name *</Label>
+                              <Input
+                                id="grandfather_name"
+                                className="mt-1.5"
+                                value={form.grandfather_name}
+                                onChange={(e) => setField("grandfather_name", e.target.value)}
+                                placeholder="e.g. John Matthews"
+                              />
+                              {errors.grandfather_name && (
+                                <p className="mt-1 text-sm text-red-600">{errors.grandfather_name}</p>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label htmlFor="grandfather_birth_year">Birth year</Label>
+                                <Input
+                                  id="grandfather_birth_year"
+                                  type="number"
+                                  className="mt-1.5"
+                                  value={form.grandfather_birth_year}
+                                  onChange={(e) => setField("grandfather_birth_year", e.target.value)}
+                                  placeholder="1920"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="grandfather_death_year">Death year</Label>
+                                <Input
+                                  id="grandfather_death_year"
+                                  type="number"
+                                  className="mt-1.5"
+                                  value={form.grandfather_death_year}
+                                  onChange={(e) => setField("grandfather_death_year", e.target.value)}
+                                  placeholder="Optional"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label htmlFor="grandfather_photo">Photo (optional)</Label>
+                              <Input
+                                id="grandfather_photo"
+                                type="file"
+                                accept="image/*"
+                                className="mt-1.5"
+                                onChange={(e) => setField("grandfather_photo", e.target.files?.[0] ?? null)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-3 rounded-lg border border-border bg-card p-3">
+                            <p className="text-sm font-medium">Founding Grandmother</p>
+                            <div>
+                              <Label htmlFor="grandmother_name">Full name *</Label>
+                              <Input
+                                id="grandmother_name"
+                                className="mt-1.5"
+                                value={form.grandmother_name}
+                                onChange={(e) => setField("grandmother_name", e.target.value)}
+                                placeholder="e.g. Mary Matthews"
+                              />
+                              {errors.grandmother_name && (
+                                <p className="mt-1 text-sm text-red-600">{errors.grandmother_name}</p>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label htmlFor="grandmother_birth_year">Birth year</Label>
+                                <Input
+                                  id="grandmother_birth_year"
+                                  type="number"
+                                  className="mt-1.5"
+                                  value={form.grandmother_birth_year}
+                                  onChange={(e) => setField("grandmother_birth_year", e.target.value)}
+                                  placeholder="1922"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="grandmother_death_year">Death year</Label>
+                                <Input
+                                  id="grandmother_death_year"
+                                  type="number"
+                                  className="mt-1.5"
+                                  value={form.grandmother_death_year}
+                                  onChange={(e) => setField("grandmother_death_year", e.target.value)}
+                                  placeholder="Optional"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <Label htmlFor="grandmother_photo">Photo (optional)</Label>
+                              <Input
+                                id="grandmother_photo"
+                                type="file"
+                                accept="image/*"
+                                className="mt-1.5"
+                                onChange={(e) => setField("grandmother_photo", e.target.files?.[0] ?? null)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       {form.has_ein && form.ein && (
                         <div className="sm:col-span-2">
@@ -903,13 +1115,18 @@ export default function OrganizationRegisterPage({
                       <p className="text-sm text-red-600">{errors.agree_to_terms}</p>
                     )}
 
+                    <TurnstileField
+                      onToken={setTurnstileToken}
+                      error={errors.cf_turnstile_response}
+                    />
+
                     <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                       <Button type="button" variant="outline" className="h-11 cursor-pointer" onClick={() => setStep(2)}>
                         Back
                       </Button>
                       <Button
                         type="button"
-                        disabled={!validateStep(3) || isLoading}
+                        disabled={!validateStep(3) || isLoading || turnstileBlocksSubmit}
                         onClick={submitRegistration}
                         className="h-11 cursor-pointer bg-gradient-to-r from-emerald-600 to-green-700 font-bold text-white"
                       >

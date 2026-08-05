@@ -8,6 +8,7 @@ use App\Models\SupporterPosition;
 use App\Models\User;
 use App\Services\BridgeService;
 use App\Services\SupporterPrimaryOrganizationService;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,14 +46,14 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $request->validate(array_merge([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'agreeToTerms' => 'required|accepted',
             'positions' => 'required|array|min:1',
             'positions.*' => 'exists:supporter_positions,id',
-        ]);
+        ], TurnstileService::rules()));
 
         $referredBy = null;
         $referrer = null;

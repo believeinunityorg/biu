@@ -18,6 +18,11 @@ type PageProps = {
         roles?: string[];
         user?: {
             care_alliance?: { slug?: string; name?: string } | null;
+            organization?: {
+                is_family_reunion?: boolean;
+                community_organization_type_id?: number | null;
+                community_organization_type_slug?: string | null;
+            } | null;
         };
     };
     url: string;
@@ -113,6 +118,18 @@ export function NavMain({ items = [] }: NavMainProps) {
     const hasDirectAccess = (entry: NavEntry): boolean => {
         if ('excludeCareAllianceHub' in entry && entry.excludeCareAllianceHub === true) {
             if (userRoles.some((ur) => ur.toLowerCase() === 'care_alliance') || careAllianceHubPayload) {
+                return false;
+            }
+        }
+
+        if ('familyReunionOnly' in entry && entry.familyReunionOnly === true) {
+            if (!page.props.auth?.user?.organization?.is_family_reunion) {
+                return false;
+            }
+        }
+
+        if ('excludeFamilyReunion' in entry && entry.excludeFamilyReunion === true) {
+            if (page.props.auth?.user?.organization?.is_family_reunion) {
                 return false;
             }
         }

@@ -14,6 +14,7 @@ use App\Enums\MembershipJoinMethod;
 use App\Services\CauseGroupChatService;
 use App\Services\MembershipAccountService;
 use App\Services\SeoService;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -85,7 +86,7 @@ class CareAllianceRegisterController extends Controller
 
         $membershipsEnabled = filter_var($request->input('memberships_enabled', false), FILTER_VALIDATE_BOOLEAN);
 
-        $validator = Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), array_merge([
             'contact_name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
             'password' => 'required|string|confirmed|min:8',
@@ -132,7 +133,7 @@ class CareAllianceRegisterController extends Controller
             ],
             'primary_action_category_ids' => ['required', 'array', 'min:1', 'max:8'],
             'primary_action_category_ids.*' => ['integer', 'distinct', Rule::exists('primary_action_categories', 'id')->where('is_active', true)],
-        ]);
+        ], TurnstileService::rules()));
 
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();

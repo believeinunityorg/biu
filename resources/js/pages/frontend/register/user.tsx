@@ -12,6 +12,7 @@ import { Label } from "@/components/frontend/ui/label"
 import { Checkbox } from "@/components/frontend/ui/checkbox"
 import { Link, useForm, usePage } from "@inertiajs/react"
 import InputError from "@/components/input-error";
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { MultiSelect } from "@/components/ui/multi-select"
 import { PageHead } from "@/components/frontend/PageHead"
 
@@ -23,6 +24,7 @@ type RegisterForm = {
     agreeToTerms: boolean;
     referralCode: string;
     positions: number[];
+    cf_turnstile_response: string;
 };
 
 interface UserRegisterPageProps {
@@ -54,7 +56,10 @@ export default function UserRegisterPage({
     agreeToTerms: false,
       referralCode: referralCode,
     positions: [] as number[],
+    cf_turnstile_response: '',
   });
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response);
 
   const submit: FormEventHandler = (e) => {
     e.preventDefault();
@@ -356,10 +361,15 @@ export default function UserRegisterPage({
                   </div> */}
                   </div>
 
+                  <TurnstileField
+                    onToken={(token) => setData('cf_turnstile_response', token)}
+                    error={errors.cf_turnstile_response}
+                  />
+
                   <Button
                     type="submit"
                     className="w-full h-12 sm:h-14 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-base sm:text-lg rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
-                    disabled={processing}
+                    disabled={processing || turnstileBlocksSubmit}
                   >
                     {processing ? (
                       <>

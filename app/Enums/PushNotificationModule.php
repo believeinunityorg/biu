@@ -25,6 +25,8 @@ enum PushNotificationModule: string
     case MerchantHub = 'merchant_hub';
     case SupportTicket = 'support_ticket';
     case Fundraiser = 'fundraiser';
+    case Announcements = 'announcements';
+    case Discussions = 'discussions';
 
     /**
      * @return list<string>
@@ -61,6 +63,8 @@ enum PushNotificationModule: string
             self::MerchantHub->value => 'Merchant Hub',
             self::SupportTicket->value => 'Support Ticket',
             self::Fundraiser->value => 'Fundraiser',
+            self::Announcements->value => 'Announcement',
+            self::Discussions->value => 'Discussion',
         ];
     }
 

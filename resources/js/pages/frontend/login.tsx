@@ -12,12 +12,14 @@ import { Separator } from "@/components/frontend/ui/separator"
 import { Switch } from "@/components/frontend/ui/switch"
 import { Link, useForm, usePage } from "@inertiajs/react"
 import InputError from "@/components/input-error"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { PageHead } from "@/components/frontend/PageHead"
 
 type LoginForm = {
     email: string;
     password: string;
     remember: boolean;
+    cf_turnstile_response: string;
 };
 
 interface LoginProps {
@@ -33,7 +35,10 @@ export default function LoginPage({ seo, status, canResetPassword }: LoginProps)
             email: '',
             password: '',
             remember: true,
+            cf_turnstile_response: '',
         });
+
+    const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
@@ -161,10 +166,15 @@ export default function LoginPage({ seo, status, canResetPassword }: LoginProps)
                   )}
                 </div>
 
+                <TurnstileField
+                  onToken={(token) => setData('cf_turnstile_response', token)}
+                  error={errors.cf_turnstile_response}
+                />
+
                 <Button
                   type="submit"
                   className="w-full h-12 sm:h-14 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-base sm:text-lg rounded-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-300"
-                  disabled={processing}
+                  disabled={processing || turnstileBlocksSubmit}
                 >
                   {processing ? (
                     <>

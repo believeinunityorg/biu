@@ -349,6 +349,11 @@ return [
         'redirect_uri' => env('YOUTUBE_REDIRECT_URI', env('APP_URL').'/integrations/youtube/callback'),
     ],
 
+    'turnstile' => [
+        'site_key' => env('TURNSTILE_SITE_KEY'),
+        'secret_key' => env('TURNSTILE_SECRET_KEY', env('TURNSTILE_SECRET')),
+    ],
+
     'phaze' => [
         'api_key' => env('PHAZE_API_KEY'),
         'api_secret' => env('PHAZE_API_SECRET'),

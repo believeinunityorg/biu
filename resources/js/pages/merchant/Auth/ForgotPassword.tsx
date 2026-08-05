@@ -5,6 +5,7 @@ import { MerchantInput } from '@/components/merchant-ui'
 import { MerchantLabel } from '@/components/merchant-ui'
 import { MerchantCard, MerchantCardContent } from '@/components/merchant-ui'
 import InputError from '@/components/input-error'
+import TurnstileField, { useTurnstileGate } from '@/components/TurnstileField'
 import { LoaderCircle, ArrowLeft } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { MerchantHeader } from '@/components/merchant'
@@ -23,7 +24,10 @@ export default function MerchantForgotPassword({
 }: ForgotPasswordProps) {
   const { data, setData, post, processing, errors } = useForm({
     email: '',
+    cf_turnstile_response: '',
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
   const { isCoolingDown, countdownLabel, cooldownEmail } = usePasswordResetCooldown(
     data.email,
@@ -107,10 +111,16 @@ export default function MerchantForgotPassword({
                   {! isCoolingDown && <InputError message={errors.email} />}
                 </div>
 
+                <TurnstileField
+                  onToken={(token) => setData('cf_turnstile_response', token)}
+                  error={errors.cf_turnstile_response}
+                  theme="dark"
+                />
+
                 <MerchantButton
                   type="submit"
                   className="w-full"
-                  disabled={processing || isCoolingDown}
+                  disabled={processing || isCoolingDown || turnstileBlocksSubmit}
                 >
                   {processing ? (
                     <>

@@ -1,0 +1,118 @@
+# Family Reunion Upgrade
+
+## Cursor Development Specification
+
+Family Reunion organizations will continue using all existing BIU features. Only add the following custom features.
+
+## 1. Founding Couple
+
+Allow the Family Reunion creator to add:
+
+* Founding grandfather
+* Founding grandmother
+* Photos, optional
+* Birth and death years, optional
+
+They become the top level of the family tree.
+
+## 2. Family Branches
+
+The creator adds the children of the founding couple.
+
+Each child becomes a selectable family branch.
+
+Example:
+
+* John Matthews Branch
+* Sarah Matthews Branch
+* William Matthews Branch
+
+## 3. Family Profile Setup
+
+When someone joins the Family Reunion, ask them to select:
+
+* Family branch
+* Father
+* Mother
+
+Use searchable dropdowns populated from existing family records.
+
+Include:
+
+* *Parent not listed*
+* *Add parent*
+
+## 4. Add Children
+
+Members can add children using:
+
+* Full name
+* Email, optional
+
+If the child has no BIU account, create an unclaimed family record.
+
+When the child later registers with the matching email, allow them to claim the existing record.
+
+## 5. Family Tree
+
+Add a visual Family Tree that:
+
+* Starts with the founding couple
+* Displays the main branches
+* Shows parents and children
+* Expands and collapses branches
+* Filters by branch
+* Opens a family member’s profile
+
+## 6. Family Directory
+
+Add a searchable directory showing:
+
+* Member name
+* Family branch
+* Generation
+* Claimed or unclaimed status
+
+## 7. Family Relationships
+
+Store only the direct relationships:
+
+* Father
+* Mother
+* Child
+* Spouse
+
+Use those relationships to place members correctly in the tree.
+
+## 8. Family Administration
+
+Family Reunion admins can:
+
+* Add or edit the founding couple
+* Add family branches
+* Correct parent and child relationships
+* Merge duplicate family records
+* Assign a branch administrator
+
+## 9. Important Rules
+
+* Do not create duplicate versions of existing BIU features.
+* Continue using BIU’s existing Announcements, Discussions, Events, Media, Files, Marketplace, Donations, Membership, and Notifications.
+* Do not permanently delete family records.
+* Use statuses such as Active, Unclaimed, Merged, Deceased, or Archived.
+* Keep a record of important family relationship changes.
+
+## Phase 1 Only
+
+Build:
+
+* Founding couple
+* Family branches
+* Parent dropdowns
+* Add children
+* Claim by email
+* Family Tree
+* Family Directory
+* Basic administration
+
+Everything else can wait until a later phase.

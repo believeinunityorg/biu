@@ -15,9 +15,11 @@ use App\Services\BridgeService;
 use App\Services\CauseGroupChatService;
 use App\Enums\MembershipJoinMethod;
 use App\Services\EINLookupService;
+use App\Services\FamilyReunion\FamilyReunionService;
 use App\Services\MembershipAccountService;
 use App\Services\OrgClaim990Service;
 use App\Services\TaxComplianceService;
+use App\Services\TurnstileService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
@@ -31,6 +33,8 @@ use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use App\Services\SeoService;
+use App\Models\CommunityOrganizationType;
+use App\Support\CommunityOrganizationTypes;
 
 class OrganizationRegisterController extends Controller
 {
@@ -78,6 +82,7 @@ class OrganizationRegisterController extends Controller
                 'organizationName' => $invite->organization_name,
                 'officers_for_ein_url' => route('register.organization.officers-for-ein'),
                 'primaryActionCategories' => $primaryActionCategories,
+                'communityOrganizationTypes' => CommunityOrganizationTypes::forSelect(),
             ]);
         }
 
@@ -95,6 +100,7 @@ class OrganizationRegisterController extends Controller
                 'referralCode' => $user->referral_code,
                 'officers_for_ein_url' => route('register.organization.officers-for-ein'),
                 'primaryActionCategories' => $primaryActionCategories,
+                'communityOrganizationTypes' => CommunityOrganizationTypes::forSelect(),
             ]);
         }
 
@@ -102,6 +108,7 @@ class OrganizationRegisterController extends Controller
             'seo' => $seo,
             'officers_for_ein_url' => route('register.organization.officers-for-ein'),
             'primaryActionCategories' => $primaryActionCategories,
+            'communityOrganizationTypes' => CommunityOrganizationTypes::forSelect(),
         ]);
     }
 
@@ -257,7 +264,7 @@ class OrganizationRegisterController extends Controller
             ]);
 
             // Manual validation — simplified 3-step registration (docs / officer ID optional)
-            $validator = Validator::make($request->all(), [
+            $validator = Validator::make($request->all(), array_merge([
                 'ein' => 'required|string|size:9|unique:organizations,ein',
                 'has_ein' => 'required|boolean',
                 'has_members' => 'required|boolean',
@@ -289,8 +296,35 @@ class OrganizationRegisterController extends Controller
                 'tax_period' => 'nullable|string|max:255',
                 'filing_req' => 'nullable|string|max:255',
                 'ntee_code' => 'nullable|string|max:255',
-                'community_organization_type' => 'nullable|string|max:64',
-                'community_organization_type_other' => 'nullable|string|max:255',
+                'community_organization_type_id' => [
+                    'required',
+                    'integer',
+                    Rule::exists('community_organization_types', 'id')->where('is_active', true),
+                ],
+                'community_organization_type_other' => [
+                    Rule::requiredIf(fn () => (int) $request->input('community_organization_type_id') === (int) CommunityOrganizationType::otherId()),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'grandfather_name' => [
+                    Rule::requiredIf(fn () => (int) $request->input('community_organization_type_id') === (int) CommunityOrganizationType::familyReunionId()),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'grandmother_name' => [
+                    Rule::requiredIf(fn () => (int) $request->input('community_organization_type_id') === (int) CommunityOrganizationType::familyReunionId()),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'grandfather_birth_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandfather_death_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandmother_birth_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandmother_death_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandfather_photo' => ['nullable', 'image', 'max:5120'],
+                'grandmother_photo' => ['nullable', 'image', 'max:5120'],
                 'legal_entity_status' => 'nullable|string|max:64',
                 'legal_entity_status_other' => 'nullable|string|max:255',
                 'email' => 'required|email|max:255|unique:users,email',
@@ -319,7 +353,7 @@ class OrganizationRegisterController extends Controller
                 'primary_action_category_ids.*' => ['integer', 'distinct', Rule::exists('primary_action_categories', 'id')->where('is_active', true)],
                 'preferred_payout_method' => 'nullable|string|in:stripe,paypal',
                 'referralCode' => 'nullable|string|max:64',
-            ]);
+            ], TurnstileService::rules()));
 
             if ($validator->fails()) {
                 return response()->json([
@@ -492,8 +526,8 @@ class OrganizationRegisterController extends Controller
                 'tax_period' => $validated['tax_period'] ?? null,
                 'filing_req' => $validated['filing_req'] ?? null,
                 'ntee_code' => $validated['ntee_code'] ?? null,
-                'community_organization_type' => $validated['community_organization_type'] ?? null,
-                'community_organization_type_other' => ($validated['community_organization_type'] ?? null) === 'other'
+                'community_organization_type_id' => $validated['community_organization_type_id'] ?? null,
+                'community_organization_type_other' => (int) ($validated['community_organization_type_id'] ?? 0) === (int) CommunityOrganizationType::otherId()
                     ? ($validated['community_organization_type_other'] ?? null)
                     : null,
                 'legal_entity_status' => $validated['legal_entity_status'] ?? null,
@@ -537,6 +571,23 @@ class OrganizationRegisterController extends Controller
                 'membership_type' => $validated['membership_type'] ?? 'free',
                 'join_method' => $validated['join_method'] ?? MembershipJoinMethod::RequestToJoin->value,
             ]);
+
+            if ((int) ($validated['community_organization_type_id'] ?? 0) === (int) CommunityOrganizationType::familyReunionId()) {
+                app(FamilyReunionService::class)->saveFoundingCouple(
+                    $organization,
+                    [
+                        'grandfather_name' => $validated['grandfather_name'],
+                        'grandmother_name' => $validated['grandmother_name'],
+                        'grandfather_birth_year' => $validated['grandfather_birth_year'] ?? null,
+                        'grandfather_death_year' => $validated['grandfather_death_year'] ?? null,
+                        'grandmother_birth_year' => $validated['grandmother_birth_year'] ?? null,
+                        'grandmother_death_year' => $validated['grandmother_death_year'] ?? null,
+                    ],
+                    $request->file('grandfather_photo'),
+                    $request->file('grandmother_photo'),
+                    $user,
+                );
+            }
 
             $this->syncOrganizationUserRole($user, $organization);
             app(CauseGroupChatService::class)->ensureForUser($user->fresh());

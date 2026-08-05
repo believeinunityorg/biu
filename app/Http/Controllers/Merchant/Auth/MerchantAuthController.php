@@ -8,11 +8,15 @@ use App\Models\User;
 use App\Services\ParticipationActivityService;
 use App\Support\BrpParticipationModule;
 use App\Services\TurnstileService;
+use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -114,7 +118,22 @@ class MerchantAuthController extends Controller
             'password' => ['required', 'string'],
         ], TurnstileService::rules()));
 
+        $throttleKey = Str::transliterate(Str::lower($request->string('email')).'|'.$request->ip());
+
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            event(new Lockout($request));
+            $seconds = RateLimiter::availableIn($throttleKey);
+
+            throw ValidationException::withMessages([
+                'email' => __('auth.throttle', [
+                    'seconds' => $seconds,
+                    'minutes' => ceil($seconds / 60),
+                ]),
+            ]);
+        }
+
         if (Auth::guard('merchant')->attempt($request->only('email', 'password'), $request->boolean('remember', true))) {
+            RateLimiter::clear($throttleKey);
             $request->session()->regenerate();
 
             // Do not use intended(): it may point at the main app and breaks subdomain auth.
@@ -124,7 +143,9 @@ class MerchantAuthController extends Controller
             return redirect()->route('merchant.dashboard', [], 303);
         }
 
-        throw \Illuminate\Validation\ValidationException::withMessages([
+        RateLimiter::hit($throttleKey);
+
+        throw ValidationException::withMessages([
             'email' => __('The provided credentials do not match our records.'),
         ]);
     }

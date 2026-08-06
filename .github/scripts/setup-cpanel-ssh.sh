@@ -25,8 +25,13 @@ if [ "${SSH_SELF_HOSTED}" = "true" ]; then
   mkdir -p "${SSH_DIR}"
   chmod 700 "${SSH_DIR}"
 
-  identity_file="${SERVER_INNER_KEY}"
-  if [ -n "${SSH_PRIVATE_KEY:-}" ]; then
+  # Prefer the VPS-local inner key for same-machine hops (127.0.0.1).
+  # GitHub secrets often hold a different key that is not in the target user's authorized_keys.
+  identity_file=""
+  if [ -f "${SERVER_INNER_KEY}" ]; then
+    identity_file="${SERVER_INNER_KEY}"
+    echo "Self-hosted VPS runner -> ${DEPLOY_USER}@127.0.0.1:${SSH_PORT} (inner key ${SERVER_INNER_KEY})"
+  elif [ -n "${SSH_PRIVATE_KEY:-}" ]; then
     if printf '%s' "${SSH_PRIVATE_KEY}" | grep -q '\\n'; then
       printf '%b\n' "${SSH_PRIVATE_KEY}" | tr -d '\r' > "${SSH_DIR}/cpanel_deploy"
     else
@@ -40,11 +45,8 @@ if [ "${SSH_SELF_HOSTED}" = "true" ]; then
     identity_file="${SSH_DIR}/cpanel_deploy"
     echo "Self-hosted VPS runner -> ${DEPLOY_USER}@127.0.0.1:${SSH_PORT} (deploy secret key)"
   else
-    if [ ! -f "${SERVER_INNER_KEY}" ]; then
-      echo "::error::Missing deploy key on VPS: ${SERVER_INNER_KEY}"
-      exit 1
-    fi
-    echo "Self-hosted VPS runner -> ${DEPLOY_USER}@127.0.0.1:${SSH_PORT} (inner key)"
+    echo "::error::Missing deploy key on VPS: ${SERVER_INNER_KEY} (and no SSH_PRIVATE_KEY secret)."
+    exit 1
   fi
 
   printf '%s\n' \

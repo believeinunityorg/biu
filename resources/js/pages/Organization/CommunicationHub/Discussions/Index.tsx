@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { Head, Link, router } from '@inertiajs/react'
 import { MessageSquare, Plus } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
+import FrontendLayout from '@/layouts/frontend/frontend-layout'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import DiscussionCard from '@/components/communication-hub/DiscussionCard'
 import SearchBar from '@/components/communication-hub/SearchBar'
 import CategorySelect from '@/components/communication-hub/CategorySelect'
 import HubEmptyState from '@/components/communication-hub/HubEmptyState'
-import { type HubCategory, type HubDiscussion } from '@/components/communication-hub/types'
+import StartDiscussionModal from '@/components/communication-hub/StartDiscussionModal'
+import { type HubCategory, type HubContext, type HubDiscussion } from '@/components/communication-hub/types'
+import { hubRoute } from '@/lib/communication-hub-routes'
 import { ch } from '../theme'
 import { cn } from '@/lib/utils'
 import type { BreadcrumbItem } from '@/types'
@@ -26,11 +29,12 @@ type Paginated<T> = {
 }
 
 type Props = {
-  organization: { id: number; name: string }
+  organization: { id: number; name: string; slug?: string }
   discussions: Paginated<HubDiscussion>
   categories: HubCategory[]
   filters: { tab: string; search: string; sort: string; category_id?: string | number | null }
   can: { create: boolean; moderate: boolean }
+  hubContext?: HubContext
 }
 
 const TABS = [
@@ -56,8 +60,11 @@ function activeTabKey(filters: Props['filters']): string {
   return 'all'
 }
 
-export default function DiscussionsIndex({ organization, discussions, categories, filters, can }: Props) {
+export default function DiscussionsIndex({ organization, discussions, categories, filters, can, hubContext }: Props) {
   const [search, setSearch] = useState(filters.search)
+  const [startDiscussionOpen, setStartDiscussionOpen] = useState(false)
+  const ctx: HubContext = hubContext ?? { mode: 'manage', org_slug: organization.slug ?? null }
+  const isCommunity = ctx.mode === 'community'
 
   useEffect(() => {
     setSearch(filters.search)
@@ -73,13 +80,13 @@ export default function DiscussionsIndex({ organization, discussions, categories
   }, [search])
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Communication Hub', href: route('org.communication-hub.index') },
-    { title: 'Discussions', href: route('org.communication-hub.discussions.index') },
+    { title: 'A&D Board', href: hubRoute('index', ctx) },
+    { title: 'Discussions', href: hubRoute('discussions.index', ctx) },
   ]
 
   const updateQuery = (patch: Record<string, string | number | undefined | null>) => {
     router.get(
-      route('org.communication-hub.discussions.index'),
+      hubRoute('discussions.index', ctx),
       {
         tab: filters.tab,
         search: filters.search || undefined,
@@ -92,13 +99,14 @@ export default function DiscussionsIndex({ organization, discussions, categories
   }
 
   const moderate = (slug: string, action: string) => {
+    if (isCommunity) return
     router.post(route('org.communication-hub.discussions.moderate', slug), { action }, { preserveScroll: true })
   }
 
   const active = activeTabKey(filters)
 
-  return (
-    <AppLayout breadcrumbs={breadcrumbs}>
+  const content = (
+    <>
       <Head title={`Discussions — ${organization.name}`} />
 
       <div className={ch.pageMedium}>
@@ -107,14 +115,24 @@ export default function DiscussionsIndex({ organization, discussions, categories
             <h1 className={ch.heading}>Discussion Board</h1>
             <p className={ch.subheading}>Conversations for {organization.name}</p>
           </div>
-          {can.create && (
-            <Button asChild className={cn(ch.btn, 'gap-1.5 rounded-lg')}>
-              <Link href={route('org.communication-hub.discussions.create')}>
+          {can.create &&
+            (isCommunity ? (
+              <Button
+                type="button"
+                className={cn(ch.btn, 'gap-1.5 rounded-xl')}
+                onClick={() => setStartDiscussionOpen(true)}
+              >
                 <Plus className="h-4 w-4" />
                 New Discussion
-              </Link>
-            </Button>
-          )}
+              </Button>
+            ) : (
+              <Button asChild className={cn(ch.btn, 'gap-1.5 rounded-xl')}>
+                <Link href={hubRoute('discussions.create', ctx)}>
+                  <Plus className="h-4 w-4" />
+                  New Discussion
+                </Link>
+              </Button>
+            ))}
         </div>
 
         <div className={cn(ch.card, 'p-4 sm:p-5')}>
@@ -168,9 +186,9 @@ export default function DiscussionsIndex({ organization, discussions, categories
                 <DiscussionCard
                   key={item.id}
                   discussion={item}
-                  href={route('org.communication-hub.discussions.show', item.slug)}
+                  href={hubRoute('discussions.show', ctx, item.slug)}
                   actions={
-                    can.moderate
+                    can.moderate && !isCommunity
                       ? [
                           { label: item.is_pinned ? 'Unpin' : 'Pin', onClick: () => moderate(item.slug, item.is_pinned ? 'unpin' : 'pin') },
                           { label: item.is_locked ? 'Unlock' : 'Lock', onClick: () => moderate(item.slug, item.is_locked ? 'unlock' : 'lock') },
@@ -210,6 +228,22 @@ export default function DiscussionsIndex({ organization, discussions, categories
           </div>
         )}
       </div>
-    </AppLayout>
+
+      {isCommunity && (
+        <StartDiscussionModal
+          open={startDiscussionOpen}
+          onOpenChange={setStartDiscussionOpen}
+          organizationName={organization.name}
+          categories={categories}
+          hubContext={ctx}
+        />
+      )}
+    </>
   )
+
+  if (isCommunity) {
+    return <FrontendLayout>{content}</FrontendLayout>
+  }
+
+  return <AppLayout breadcrumbs={breadcrumbs}>{content}</AppLayout>
 }

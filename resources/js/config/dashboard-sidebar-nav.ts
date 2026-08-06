@@ -463,7 +463,7 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 role: ['organization', 'care_alliance', 'user'],
             },
             {
-                title: 'Communication Hub',
+                title: 'Announcements & Discussion',
                 href: '/organization/communication-hub',
                 icon: MessagesSquare,
                 role: ['organization', 'care_alliance'],

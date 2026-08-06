@@ -9,10 +9,12 @@ import {
   User as UserIcon,
 } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
+import FrontendLayout from '@/layouts/frontend/frontend-layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import ModerationMenu, { type ModerationAction } from '@/components/communication-hub/ModerationMenu'
-import { type HubAnnouncement, type HubAuthor, authorInitials, formatHubDate, formatHubRelative } from '@/components/communication-hub/types'
+import { type HubAnnouncement, type HubAuthor, type HubContext, authorInitials, formatHubDate, formatHubRelative } from '@/components/communication-hub/types'
+import { hubRoute } from '@/lib/communication-hub-routes'
 import { ch } from '../theme'
 import { cn } from '@/lib/utils'
 import type { BreadcrumbItem } from '@/types'
@@ -39,33 +41,38 @@ type HubHistoryEntry = {
 }
 
 type Props = {
-  organization: { id: number; name: string }
+  organization: { id: number; name: string; slug?: string }
   announcement: HubAnnouncement
   comments: HubComment[]
   history: HubHistoryEntry[]
   can: { manage: boolean; comment: boolean }
+  hubContext?: HubContext
 }
 
 type LocalPageProps = {
   auth?: { user?: { id: number } }
 } & Record<string, unknown>
 
-export default function AnnouncementShow({ organization, announcement, comments, history, can }: Props) {
+export default function AnnouncementShow({ organization, announcement, comments, history, can, hubContext }: Props) {
   const { auth } = usePage<LocalPageProps>().props
   const currentUserId = auth?.user?.id
+  const ctx: HubContext = hubContext ?? { mode: 'manage', org_slug: organization.slug ?? null }
+  const isCommunity = ctx.mode === 'community'
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Communication Hub', href: route('org.communication-hub.index') },
-    { title: 'Announcements', href: route('org.communication-hub.announcements.index') },
-    { title: announcement.title, href: route('org.communication-hub.announcements.show', announcement.slug) },
+    { title: 'A&D Board', href: hubRoute('index', ctx) },
+    { title: 'Announcements', href: isCommunity ? hubRoute('index', ctx) : route('org.communication-hub.announcements.index') },
+    { title: announcement.title, href: hubRoute('announcements.show', ctx, announcement.slug) },
   ]
 
   const moderate = (action: string) => {
+    if (isCommunity) return
     router.post(route('org.communication-hub.announcements.moderate', announcement.slug), { action }, { preserveScroll: true })
   }
 
   const destroy = () => {
     if (!confirm('Delete this announcement?')) return
+    if (isCommunity) return
     router.delete(route('org.communication-hub.announcements.destroy', announcement.slug))
   }
 
@@ -73,7 +80,7 @@ export default function AnnouncementShow({ organization, announcement, comments,
 
   const submitComment = (e: React.FormEvent) => {
     e.preventDefault()
-    commentForm.post(route('org.communication-hub.announcements.comments.store', announcement.slug), {
+    commentForm.post(hubRoute('announcements.comments.store', ctx, announcement.slug), {
       preserveScroll: true,
       onSuccess: () => commentForm.reset('body'),
     })
@@ -93,8 +100,8 @@ export default function AnnouncementShow({ organization, announcement, comments,
       ]
     : []
 
-  return (
-    <AppLayout breadcrumbs={breadcrumbs}>
+  const content = (
+    <>
       <Head title={`${announcement.title} — ${organization.name}`} />
 
       <div className={ch.pageNarrow}>
@@ -215,6 +222,7 @@ export default function AnnouncementShow({ organization, announcement, comments,
                   key={comment.id}
                   comment={comment}
                   announcementSlug={announcement.slug}
+                  hubContext={ctx}
                   canManage={can.manage}
                   canComment={can.comment && announcement.allow_comments}
                   currentUserId={currentUserId}
@@ -246,13 +254,20 @@ export default function AnnouncementShow({ organization, announcement, comments,
           </section>
         )}
       </div>
-    </AppLayout>
+    </>
   )
+
+  if (isCommunity) {
+    return <FrontendLayout>{content}</FrontendLayout>
+  }
+
+  return <AppLayout breadcrumbs={breadcrumbs}>{content}</AppLayout>
 }
 
 function CommentItem({
   comment,
   announcementSlug,
+  hubContext,
   canManage,
   canComment,
   currentUserId,
@@ -260,6 +275,7 @@ function CommentItem({
 }: {
   comment: HubComment
   announcementSlug: string
+  hubContext: HubContext
   canManage: boolean
   canComment: boolean
   currentUserId?: number
@@ -274,7 +290,7 @@ function CommentItem({
 
   const submitReply = (e: React.FormEvent) => {
     e.preventDefault()
-    replyForm.post(route('org.communication-hub.announcements.comments.store', announcementSlug), {
+    replyForm.post(hubRoute('announcements.comments.store', hubContext, announcementSlug), {
       preserveScroll: true,
       onSuccess: () => {
         replyForm.reset('body')
@@ -397,6 +413,7 @@ function CommentItem({
                   key={child.id}
                   comment={child}
                   announcementSlug={announcementSlug}
+                  hubContext={hubContext}
                   canManage={canManage}
                   canComment={canComment}
                   currentUserId={currentUserId}

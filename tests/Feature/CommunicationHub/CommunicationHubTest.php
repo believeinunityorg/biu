@@ -116,6 +116,123 @@ class CommunicationHubTest extends TestCase
         $this->assertFalse($permissions->canCreateDiscussion($outsider, $org->fresh()));
     }
 
+    public function test_view_audience_restricts_announcements_and_discussions(): void
+    {
+        [, $org] = $this->makeOrgUser();
+        $org->update([
+            'communication_settings' => array_merge(
+                config('communication_hub.default_settings'),
+                [
+                    'announcement_visibility' => 'followers',
+                    'discussion_visibility' => 'members',
+                ]
+            ),
+        ]);
+
+        $permissions = app(CommunicationHubPermissionService::class);
+        $outsider = User::factory()->create(['role' => 'user']);
+        $follower = User::factory()->create(['role' => 'user']);
+
+        \App\Models\UserFavoriteOrganization::query()->create([
+            'user_id' => $follower->id,
+            'organization_id' => $org->id,
+        ]);
+
+        $org = $org->fresh();
+
+        $this->assertFalse($permissions->canViewAnnouncements($outsider, $org));
+        $this->assertTrue($permissions->canViewAnnouncements($follower, $org));
+        $this->assertFalse($permissions->canViewDiscussions($follower, $org));
+        $this->assertFalse($permissions->canViewDiscussions(null, $org));
+
+        $org->update([
+            'communication_settings' => array_merge(
+                config('communication_hub.default_settings'),
+                ['announcement_visibility' => 'public', 'discussion_visibility' => 'public']
+            ),
+        ]);
+
+        $this->assertTrue($permissions->canViewAnnouncements(null, $org->fresh()));
+        $this->assertTrue($permissions->canViewDiscussions(null, $org->fresh()));
+    }
+
+    public function test_follower_can_open_community_discussion_create_page(): void
+    {
+        [$owner, $org] = $this->makeOrgUser();
+        $owner->update(['slug' => 'test-org-hub-'.uniqid()]);
+        $org->update([
+            'communication_settings' => array_merge(
+                config('communication_hub.default_settings'),
+                [
+                    'discussion_visibility' => 'followers',
+                    'allow_followers_to_post' => true,
+                ]
+            ),
+        ]);
+
+        $follower = User::factory()->create([
+            'role' => 'user',
+            'email_verified_at' => now(),
+            'onboarding_completed_at' => now(),
+            'city' => 'Testville',
+            'state' => 'CA',
+            'dob' => '1990-01-15',
+        ]);
+
+        if (method_exists($follower, 'assignRole')) {
+            try {
+                $follower->assignRole('user');
+            } catch (\Throwable) {
+                // Role may not exist in minimal test DB.
+            }
+        }
+
+        \App\Models\UserFavoriteOrganization::query()->create([
+            'user_id' => $follower->id,
+            'organization_id' => $org->id,
+        ]);
+
+        $this->actingAs($follower)
+            ->get(route('organizations.communication-hub.discussions.create', $owner->fresh()->slug))
+            ->assertOk();
+    }
+
+    public function test_supporter_hub_index_lists_followed_orgs(): void
+    {
+        [$owner, $org] = $this->makeOrgUser();
+        $owner->update(['slug' => 'supporter-hub-org-'.uniqid()]);
+
+        $follower = User::factory()->create([
+            'role' => 'user',
+            'email_verified_at' => now(),
+            'onboarding_completed_at' => now(),
+            'city' => 'Testville',
+            'state' => 'CA',
+            'dob' => '1990-01-15',
+        ]);
+
+        if (method_exists($follower, 'assignRole')) {
+            try {
+                $follower->assignRole('user');
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+
+        \App\Models\UserFavoriteOrganization::query()->create([
+            'user_id' => $follower->id,
+            'organization_id' => $org->id,
+        ]);
+
+        $this->actingAs($follower)
+            ->get(route('user.communication-hub.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Supporter/CommunicationHub/Index')
+                ->has('boards', 1)
+            );
+    }
+
     public function test_discussion_soft_delete_only(): void
     {
         [$user, $org] = $this->makeOrgUser();

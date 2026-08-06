@@ -1,4 +1,5 @@
-# Reusable Pest CI suite — GitHub-hosted ubuntu + ephemeral MySQL only (never VPS / production DB).
+# Reusable Pest CI suite — GHA MySQL only (never VPS / production DB).
+# Same setup that works on codinglabe/believe-app.
 name: Pest CI (reusable)
 
 on:

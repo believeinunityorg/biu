@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Job 1 of 2 on merge/push to development: Pest on GitHub-hosted MySQL only.
-  test:
-    name: Tests (before deploy)
-    uses: ./.github/workflows/pest-ci.yml
+  # Tests gate temporarily disabled: GitHub-hosted ubuntu-latest jobs stay queued on biu
+  # and block every deploy. Pest remains available via workflow "Tests" (manual/PR).
+  # test:
+  #   name: Tests (before deploy)
+  #   uses: ./.github/workflows/pest-ci.yml
 
-  # Job 2 of 2: deploy only after tests pass.
   deploy:
-    needs: [test]
+    # needs: [test]
     runs-on: [self-hosted, believe-vps]
 
     env:

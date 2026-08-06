@@ -1,4 +1,3 @@
-// Create new migration: php artisan make:migration add_facebook_app_credentials_to_facebook_accounts_table
 <?php
 
 use Illuminate\Database\Migrations\Migration;

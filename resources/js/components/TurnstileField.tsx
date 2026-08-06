@@ -193,6 +193,21 @@ export default function TurnstileField({
         }
     }, [enabled, turnstile?.siteKey, resolvedTheme, reactId])
 
+    // After a failed submit Cloudflare rejects reused tokens (`timeout-or-duplicate`).
+    // Reset the widget so the user gets a fresh challenge instead of a stuck form.
+    useEffect(() => {
+        if (!error || !enabled || !widgetIdRef.current || !window.turnstile) {
+            return
+        }
+
+        try {
+            window.turnstile.reset(widgetIdRef.current)
+        } catch {
+            // ignore
+        }
+        onTokenRef.current('')
+    }, [error, enabled])
+
     if (!enabled) {
         return null
     }

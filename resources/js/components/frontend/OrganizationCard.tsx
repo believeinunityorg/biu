@@ -12,6 +12,7 @@ import { Badge } from "@/components/frontend/ui/badge"
 import { motion } from "framer-motion"
 import { Link, router, usePage } from "@inertiajs/react"
 import SignInPopup from "@/components/frontend/SignInPopup"
+import { EinVerifiedBadge, isEinVerifiedOrg } from "@/components/frontend/organization/EinVerifiedBadge"
 
 interface Organization {
   id: number
@@ -28,6 +29,8 @@ interface Organization {
   created_at: string
   is_favorited?: boolean
   is_registered?: boolean // Add is_registered field
+  has_ein?: boolean
+  ein_verified?: boolean
 }
 
 interface OrganizationCardProps {
@@ -160,11 +163,14 @@ export default function OrganizationCard({
                       : `${organization.ntee_code}`
                     }
                   </Badge>
-                  <div className="flex items-center gap-2 mt-2">
-                    <div className={`w-2 h-2 rounded-full ${organization.is_registered ? 'bg-green-300' : 'bg-amber-300'}`}></div>
-                    <span className="text-sm font-medium text-white/90">
-                      {organization.is_registered ? "Registered" : "Listed"}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${organization.is_registered ? 'bg-green-300' : 'bg-amber-300'}`}></div>
+                      <span className="text-sm font-medium text-white/90">
+                        {organization.is_registered ? "Registered" : "Listed"}
+                      </span>
+                    </div>
+                    <EinVerifiedBadge verified={isEinVerifiedOrg(organization)} size="sm" className="bg-white/20 hover:bg-white/20" />
                   </div>
                 </div>
               </div>

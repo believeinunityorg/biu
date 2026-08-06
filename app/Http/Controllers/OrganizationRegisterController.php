@@ -15,6 +15,7 @@ use App\Services\BridgeService;
 use App\Services\CauseGroupChatService;
 use App\Enums\MembershipJoinMethod;
 use App\Services\EINLookupService;
+use App\Services\FamilyReunion\FamilyReunionService;
 use App\Services\MembershipAccountService;
 use App\Services\OrgClaim990Service;
 use App\Services\TaxComplianceService;
@@ -32,6 +33,8 @@ use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Role;
 use App\Services\SeoService;
+use App\Models\CommunityOrganizationType;
+use App\Support\CommunityOrganizationTypes;
 
 class OrganizationRegisterController extends Controller
 {
@@ -79,6 +82,7 @@ class OrganizationRegisterController extends Controller
                 'organizationName' => $invite->organization_name,
                 'officers_for_ein_url' => route('register.organization.officers-for-ein'),
                 'primaryActionCategories' => $primaryActionCategories,
+                'communityOrganizationTypes' => CommunityOrganizationTypes::forSelect(),
             ]);
         }
 
@@ -96,6 +100,7 @@ class OrganizationRegisterController extends Controller
                 'referralCode' => $user->referral_code,
                 'officers_for_ein_url' => route('register.organization.officers-for-ein'),
                 'primaryActionCategories' => $primaryActionCategories,
+                'communityOrganizationTypes' => CommunityOrganizationTypes::forSelect(),
             ]);
         }
 
@@ -103,6 +108,7 @@ class OrganizationRegisterController extends Controller
             'seo' => $seo,
             'officers_for_ein_url' => route('register.organization.officers-for-ein'),
             'primaryActionCategories' => $primaryActionCategories,
+            'communityOrganizationTypes' => CommunityOrganizationTypes::forSelect(),
         ]);
     }
 
@@ -290,8 +296,35 @@ class OrganizationRegisterController extends Controller
                 'tax_period' => 'nullable|string|max:255',
                 'filing_req' => 'nullable|string|max:255',
                 'ntee_code' => 'nullable|string|max:255',
-                'community_organization_type' => 'nullable|string|max:64',
-                'community_organization_type_other' => 'nullable|string|max:255',
+                'community_organization_type_id' => [
+                    'required',
+                    'integer',
+                    Rule::exists('community_organization_types', 'id')->where('is_active', true),
+                ],
+                'community_organization_type_other' => [
+                    Rule::requiredIf(fn () => (int) $request->input('community_organization_type_id') === (int) CommunityOrganizationType::otherId()),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'grandfather_name' => [
+                    Rule::requiredIf(fn () => (int) $request->input('community_organization_type_id') === (int) CommunityOrganizationType::familyReunionId()),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'grandmother_name' => [
+                    Rule::requiredIf(fn () => (int) $request->input('community_organization_type_id') === (int) CommunityOrganizationType::familyReunionId()),
+                    'nullable',
+                    'string',
+                    'max:255',
+                ],
+                'grandfather_birth_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandfather_death_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandmother_birth_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandmother_death_year' => ['nullable', 'integer', 'min:1800', 'max:2100'],
+                'grandfather_photo' => ['nullable', 'image', 'max:5120'],
+                'grandmother_photo' => ['nullable', 'image', 'max:5120'],
                 'legal_entity_status' => 'nullable|string|max:64',
                 'legal_entity_status_other' => 'nullable|string|max:255',
                 'email' => 'required|email|max:255|unique:users,email',
@@ -414,7 +447,28 @@ class OrganizationRegisterController extends Controller
             }
             $claimVerificationMetadata['verification_document_paths'] = $verificationDocPaths;
 
-            $taxEvaluation = $this->taxComplianceService->evaluate($validated['tax_period'] ?? null, $validated['ein']);
+            $hasRealEin = (bool) ($validated['has_ein'] ?? true);
+
+            // Non-EIN orgs get full module access; IRS tax-period lock only applies to real-EIN orgs.
+            if ($hasRealEin) {
+                $taxEvaluation = $this->taxComplianceService->evaluate($validated['tax_period'] ?? null, $validated['ein']);
+            } else {
+                $checkedAt = now();
+                $taxEvaluation = [
+                    'status' => 'not_applicable',
+                    'normalized_tax_period' => null,
+                    'parsed_tax_period_date' => null,
+                    'months_since_tax_period' => null,
+                    'is_expired' => false,
+                    'checked_at' => $checkedAt,
+                    'meta' => [
+                        'status' => 'not_applicable',
+                        'reason' => 'organization_registered_without_ein',
+                        'checked_at' => $checkedAt->toIso8601String(),
+                    ],
+                    'should_lock' => false,
+                ];
+            }
 
             $referrerUserId = null;
             if (! empty($validated['referralCode'])) {
@@ -426,13 +480,15 @@ class OrganizationRegisterController extends Controller
 
             DB::beginTransaction();
 
-            // Check if IRS data was edited / no real EIN — keep pending until verified
-            $hasEditedIRS = $request->boolean('has_edited_irs_data', false) || ! ($validated['has_ein'] ?? true);
-            $initialRole = ($hasEditedIRS || $taxEvaluation['should_lock'] || $simplifiedRegistration) ? 'organization_pending' : 'organization';
+            // Track edited/missing IRS data for optional Form 1023 later — do not use it to block modules.
+            $hasEditedIRS = $request->boolean('has_edited_irs_data', false) || ! $hasRealEin;
+            // Only tax-compliance lock keeps an org in pending / limited role.
+            $shouldLockAccess = (bool) ($taxEvaluation['should_lock'] ?? false);
+            $initialRole = $shouldLockAccess ? 'organization_pending' : 'organization';
 
-            // Store original IRS data if edited
+            // Store original IRS data if edited (skip lookup for synthetic non-EIN placeholders)
             $originalIRSData = null;
-            if ($hasEditedIRS) {
+            if ($hasEditedIRS && $hasRealEin) {
                 $originalIRSData = $this->einLookupService->lookupEIN($validated['ein']);
             }
 
@@ -493,8 +549,8 @@ class OrganizationRegisterController extends Controller
                 'tax_period' => $validated['tax_period'] ?? null,
                 'filing_req' => $validated['filing_req'] ?? null,
                 'ntee_code' => $validated['ntee_code'] ?? null,
-                'community_organization_type' => $validated['community_organization_type'] ?? null,
-                'community_organization_type_other' => ($validated['community_organization_type'] ?? null) === 'other'
+                'community_organization_type_id' => $validated['community_organization_type_id'] ?? null,
+                'community_organization_type_other' => (int) ($validated['community_organization_type_id'] ?? 0) === (int) CommunityOrganizationType::otherId()
                     ? ($validated['community_organization_type_other'] ?? null)
                     : null,
                 'legal_entity_status' => $validated['legal_entity_status'] ?? null,
@@ -514,9 +570,7 @@ class OrganizationRegisterController extends Controller
                 'description' => $validated['description'],
                 'mission' => $validated['mission'],
                 'registered_user_image' => $imagePath,
-                'registration_status' => ($hasEditedIRS || $simplifiedRegistration || $taxEvaluation['should_lock'])
-                    ? 'pending'
-                    : 'approved',
+                'registration_status' => $shouldLockAccess ? 'pending' : 'approved',
                 'verification_source' => $verificationSource,
                 'claim_verification_metadata' => $claimVerificationMetadata,
                 'has_edited_irs_data' => $hasEditedIRS,
@@ -524,7 +578,7 @@ class OrganizationRegisterController extends Controller
                 'tax_compliance_status' => $taxEvaluation['status'],
                 'tax_compliance_checked_at' => $taxEvaluation['checked_at'],
                 'tax_compliance_meta' => $taxEvaluation['meta'],
-                'is_compliance_locked' => $taxEvaluation['should_lock'],
+                'is_compliance_locked' => $shouldLockAccess,
                 'preferred_payout_method' => $validated['preferred_payout_method'] ?? null,
             ]);
 
@@ -538,6 +592,23 @@ class OrganizationRegisterController extends Controller
                 'membership_type' => $validated['membership_type'] ?? 'free',
                 'join_method' => $validated['join_method'] ?? MembershipJoinMethod::RequestToJoin->value,
             ]);
+
+            if ((int) ($validated['community_organization_type_id'] ?? 0) === (int) CommunityOrganizationType::familyReunionId()) {
+                app(FamilyReunionService::class)->saveFoundingCouple(
+                    $organization,
+                    [
+                        'grandfather_name' => $validated['grandfather_name'],
+                        'grandmother_name' => $validated['grandmother_name'],
+                        'grandfather_birth_year' => $validated['grandfather_birth_year'] ?? null,
+                        'grandfather_death_year' => $validated['grandfather_death_year'] ?? null,
+                        'grandmother_birth_year' => $validated['grandmother_birth_year'] ?? null,
+                        'grandmother_death_year' => $validated['grandmother_death_year'] ?? null,
+                    ],
+                    $request->file('grandfather_photo'),
+                    $request->file('grandmother_photo'),
+                    $user,
+                );
+            }
 
             $this->syncOrganizationUserRole($user, $organization);
             app(CauseGroupChatService::class)->ensureForUser($user->fresh());
@@ -614,7 +685,7 @@ class OrganizationRegisterController extends Controller
             // Return success response
             return response()->json([
                 'success' => true,
-                'message' => $hasEditedIRS
+                'message' => $shouldLockAccess
                     ? 'Application submitted successfully! We will review it within 3-5 business days.'
                     : 'Organization registered successfully!',
                 'organization' => $organization

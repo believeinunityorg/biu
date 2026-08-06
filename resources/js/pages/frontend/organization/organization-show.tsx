@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import toast from "react-hot-toast"
 import { Link, router, usePage, useForm } from "@inertiajs/react"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
+import { EinVerifiedBadge, isEinVerifiedOrg } from "@/components/frontend/organization/EinVerifiedBadge"
 import {
   ChevronDown,
   MapPin,
@@ -40,9 +41,15 @@ import {
   TrendingUp,
   ExternalLink,
   UsersRound,
-  Megaphone,
-  MessageSquare,
+  MessagesSquare,
 } from "lucide-react"
+import CommunicationHubPanel from "@/components/communication-hub/CommunicationHubPanel"
+import type {
+  HubAnnouncement,
+  HubCategory,
+  HubDiscussion,
+  HubPermissions,
+} from "@/components/communication-hub/types"
 import { Button } from "@/components/frontend/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/frontend/ui/avatar"
 import { Badge } from "@/components/frontend/ui/badge"
@@ -58,8 +65,7 @@ import MembershipJoinCard, {
   type MembershipJoinPayload,
   MembershipJoinButton,
 } from "@/components/membership/MembershipJoinCard"
-import CommunityComposer from "@/components/community/CommunityComposer"
-import CommunityFeedList, { type CommunityFeedItem } from "@/components/community/CommunityFeedList"
+import { type CommunityFeedItem } from "@/components/community/CommunityFeedList"
 
 function supporterIsOrganizationAccount(supporter: {
   is_organization_follower?: boolean
@@ -181,6 +187,14 @@ interface OrganizationPageProps {
   communityParentType?: string | null
   communityParentId?: number | null
   communityReportReasons?: Record<string, string>
+  communicationHub?: {
+    announcements?: HubAnnouncement[]
+    announcementsTotal?: number
+    discussions?: HubDiscussion[]
+    discussionsTotal?: number
+    categories?: HubCategory[]
+    permissions?: Partial<HubPermissions>
+  } | null
   seo?: { title?: string; description?: string }
 }
 
@@ -226,6 +240,7 @@ export default function OrganizationPage({
   communityParentType = null,
   communityParentId = null,
   communityReportReasons = {},
+  communicationHub = null,
   seo: seoProp,
 }: OrganizationPageProps) {
   const { url } = usePage()
@@ -308,10 +323,8 @@ export default function OrganizationPage({
         tab = "Membership"
       } else if (tabParam === "groups") {
         tab = "Groups"
-      } else if (tabParam === "discussion") {
-        tab = "Discussion"
-      } else if (tabParam === "announcements") {
-        tab = "Announcements"
+      } else if (tabParam === "discussion" || tabParam === "announcements" || tabParam === "communication-hub" || tabParam === "communication_hub") {
+        tab = "Communication Hub"
       }
     }
     if (pageType === 'products') tab = "Products"
@@ -404,11 +417,12 @@ export default function OrganizationPage({
         case "Groups":
           routePath = `${route('alliances.show', alliancePublicSlug)}?tab=groups`
           break
-        case "Discussion":
-          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=discussion`
+        case "Communication Hub":
+          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=communication-hub`
           break
+        case "Discussion":
         case "Announcements":
-          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=announcements`
+          routePath = `${route('alliances.show', alliancePublicSlug)}?tab=communication-hub`
           break
         default:
           routePath = route('alliances.show', alliancePublicSlug)
@@ -439,11 +453,12 @@ export default function OrganizationPage({
         case "Groups":
           routePath = `${route('organizations.show', slug)}?tab=groups`
           break
-        case "Discussion":
-          routePath = `${route('organizations.show', slug)}?tab=discussion`
+        case "Communication Hub":
+          routePath = `${route('organizations.show', slug)}?tab=communication-hub`
           break
+        case "Discussion":
         case "Announcements":
-          routePath = `${route('organizations.show', slug)}?tab=announcements`
+          routePath = `${route('organizations.show', slug)}?tab=communication-hub`
           break
         default:
           routePath = route('organizations.show', slug)
@@ -790,8 +805,7 @@ export default function OrganizationPage({
   const registeredOrgTabs = [
     { name: "Community Feed", count: postsCount || 0 },
     { name: "About", count: null },
-    { name: "Discussion", count: null },
-    { name: "Announcements", count: null },
+    { name: "Communication Hub", count: null },
     { name: "Groups", count: communityGroups.length || null },
     { name: "Events", count: eventsCount },
     { name: "Opportunities", count: jobsCount || 0 },
@@ -805,8 +819,7 @@ export default function OrganizationPage({
     { name: "Members", count: partnerOrganizationsCount || 0 },
     { name: "Followers", count: supportersCount || 0 },
     { name: "About", count: null },
-    { name: "Discussion", count: null },
-    { name: "Announcements", count: null },
+    { name: "Communication Hub", count: null },
     { name: "Groups", count: communityGroups.length || null },
     { name: "Events", count: eventsCount },
     { name: "Opportunities", count: jobsCount || 0 },
@@ -948,6 +961,11 @@ export default function OrganizationPage({
                         <CheckCircle className="w-5 h-5 text-white" />
                       </div>
                     )}
+                    {isEinVerifiedOrg(organization) && !organization.is_care_alliance_public && (
+                      <div className="absolute -top-1 -right-1 w-7 h-7 bg-emerald-600 rounded-full border-3 border-[#0a0f1a] flex items-center justify-center" title="EIN Verified">
+                        <ShieldCheck className="w-4 h-4 text-white" />
+                      </div>
+                    )}
                 </div>
 
                   <div className="text-center sm:text-left flex-1 w-full sm:w-auto">
@@ -971,12 +989,7 @@ export default function OrganizationPage({
                           Registered
                         </Badge>
                       )}
-                      {organization.is_registered && organization.registered_organization?.user?.email && (
-                        <Badge className="bg-green-600 hover:bg-green-600 text-white text-xs px-2 py-0.5 flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3" />
-                          Verified
-                        </Badge>
-                      )}
+                      <EinVerifiedBadge verified={isEinVerifiedOrg(organization) && !organization.is_care_alliance_public} />
                       {!organization.is_registered && (
                         <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-0.5 flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" />
@@ -1142,8 +1155,7 @@ export default function OrganizationPage({
                         {tab.name === "Followers" && <UserPlus className="w-5 h-5" />}
                         {tab.name === "Members" && <UsersRound className="w-5 h-5" />}
                         {tab.name === "Groups" && <UsersRound className="w-5 h-5" />}
-                        {tab.name === "Discussion" && <MessageSquare className="w-5 h-5" />}
-                        {tab.name === "Announcements" && <Megaphone className="w-5 h-5" />}
+                        {tab.name === "Communication Hub" && <MessagesSquare className="w-5 h-5" />}
                         {tab.name === "Membership" && <BadgeCheck className="w-5 h-5" />}
                         {tab.name === "Products" && <ShoppingBag className="w-5 h-5" />}
                         {tab.name === "Contact" && <Phone className="w-5 h-5" />}
@@ -2096,44 +2108,29 @@ export default function OrganizationPage({
                   </div>
                 )}
 
-                {(activeTab === "Discussion" || activeTab === "Announcements") &&
-                  (organization.is_registered || organization.is_care_alliance_public) &&
-                  communityParentType &&
-                  communityParentId != null && (
-                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-4">
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        {activeTab === "Announcements" ? "Announcements" : "Discussion"}
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        {activeTab === "Announcements"
-                          ? "Official updates from this community."
-                          : "Community conversations for this organization."}
-                      </p>
-                    </div>
-                    <CommunityComposer
-                      parentType={communityParentType}
-                      parentId={communityParentId}
-                      type={activeTab === "Announcements" ? "announcement" : "discussion"}
-                      canCreate={
-                        activeTab === "Announcements"
-                          ? canCreateCommunityAnnouncement
-                          : canCreateCommunityDiscussion
+                {(activeTab === "Communication Hub" || activeTab === "Discussion" || activeTab === "Announcements") &&
+                  (organization.is_registered || organization.is_care_alliance_public) && (
+                  <CommunicationHubPanel
+                    organization={{
+                      id: organization.id,
+                      name: organization.name,
+                      slug: organization.registered_organization?.user?.slug || organization.user?.slug || undefined,
+                    }}
+                    announcements={communicationHub?.announcements ?? []}
+                    announcementsTotal={communicationHub?.announcementsTotal ?? 0}
+                    discussions={communicationHub?.discussions ?? []}
+                    discussionsTotal={communicationHub?.discussionsTotal ?? 0}
+                    categories={communicationHub?.categories ?? []}
+                    permissions={
+                      communicationHub?.permissions ?? {
+                        can_create_announcement: canCreateCommunityAnnouncement,
+                        can_create_discussion: canCreateCommunityDiscussion,
+                        can_manage_announcements: canModerateCommunity,
+                        can_moderate_discussions: canModerateCommunity,
                       }
-                    />
-                    <CommunityFeedList
-                      items={
-                        activeTab === "Announcements"
-                          ? communityAnnouncements
-                          : communityDiscussions
-                      }
-                      emptyLabel={
-                        activeTab === "Announcements" ? "announcements" : "discussions"
-                      }
-                      reportReasons={communityReportReasons}
-                      canModerate={canModerateCommunity}
-                    />
-                  </div>
+                    }
+                    manageMode={Boolean(organization.is_own_organization)}
+                  />
                 )}
 
                 {/* Community Groups Tab */}

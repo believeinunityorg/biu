@@ -463,6 +463,26 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 role: ['organization', 'care_alliance', 'user'],
             },
             {
+                title: 'Communication Hub',
+                href: '/organization/communication-hub',
+                icon: MessagesSquare,
+                role: ['organization', 'care_alliance'],
+            },
+            {
+                title: 'Family Reunion',
+                href: '/organization/family-reunion',
+                icon: Network,
+                role: 'organization',
+                familyReunionOnly: true,
+            },
+            {
+                title: 'Family Reunion Upgrade',
+                href: '/organization/family-reunion/upgrade',
+                icon: Network,
+                role: 'organization',
+                excludeFamilyReunion: true,
+            },
+            {
                 title: 'Followers',
                 href: route('organization.followers.index'),
                 icon: UserCheck,
@@ -501,7 +521,7 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 icon: MessageSquare,
                 role: 'organization',
             },
-           
+
 
             {
                 title: 'Chat',

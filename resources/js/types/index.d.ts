@@ -21,6 +21,10 @@ export interface NavGroup {
     organizationOnlyNav?: boolean;
     /** Hide for users with Spatie role care_alliance (use separate Alliance Settings link). */
     excludeCareAllianceHub?: boolean;
+    /** Show only when auth.user.organization.is_family_reunion is true. */
+    familyReunionOnly?: boolean;
+    /** Hide when the organization is already a Family Reunion. */
+    excludeFamilyReunion?: boolean;
 }
 
 export interface NavItem {
@@ -34,6 +38,10 @@ export interface NavItem {
     organizationOnlyNav?: boolean;
     /** Hide for users with Spatie role care_alliance (use separate Alliance Settings link). */
     excludeCareAllianceHub?: boolean;
+    /** Show only when auth.user.organization.is_family_reunion is true. */
+    familyReunionOnly?: boolean;
+    /** Hide when the organization is already a Family Reunion. */
+    excludeFamilyReunion?: boolean;
 }
 
 export interface SharedData {

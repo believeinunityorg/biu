@@ -4,6 +4,7 @@ import { FormEventHandler } from "react"
 import { Head, Link, useForm, usePage } from "@inertiajs/react"
 import { Building2, Copy, ExternalLink, LoaderCircle, Lock, User } from "lucide-react"
 import InputError from "@/components/input-error"
+import TurnstileField, { useTurnstileGate } from "@/components/TurnstileField"
 import { PageHead } from "@/components/frontend/PageHead"
 import type { SharedData } from "@/types"
 
@@ -11,6 +12,7 @@ type LoginForm = {
   email: string
   password: string
   remember: boolean
+  cf_turnstile_response: string
 }
 
 interface DevLoginProps {
@@ -35,12 +37,15 @@ export default function DevLoginPage({
     email: "",
     password: "",
     remember: true,
+    cf_turnstile_response: "",
   })
+
+  const { turnstileBlocksSubmit } = useTurnstileGate(data.cf_turnstile_response)
 
   const submit: FormEventHandler = (e) => {
     e.preventDefault()
     post("/login", {
-      onFinish: () => reset("password"),
+      onFinish: () => reset("password", "cf_turnstile_response"),
     })
   }
 
@@ -176,9 +181,15 @@ export default function DevLoginPage({
               <InputError message={errors.password} className="mt-1.5 text-red-300" />
             </div>
 
+            <TurnstileField
+              theme="dark"
+              onToken={(token) => setData("cf_turnstile_response", token)}
+              error={errors.cf_turnstile_response}
+            />
+
             <button
               type="submit"
-              disabled={processing}
+              disabled={processing || turnstileBlocksSubmit}
               className="flex h-12 w-full items-center justify-center rounded-lg bg-purple-600 text-base font-semibold text-white transition hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {processing ? (

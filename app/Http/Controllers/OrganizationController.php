@@ -346,7 +346,10 @@ class OrganizationController extends BaseController
                 'is_registered' => $isRegistered,
                 'is_favorited' => $isFavorited,
                 'logo_url' => $logoUrl,
+                // Platform-registered vs EIN-verified (real IRS EIN) — badge uses has_ein / ein_verified
                 'verified' => $isRegistered,
+                'has_ein' => $isRegistered ? (bool) $registeredOrg->has_ein : false,
+                'ein_verified' => $isRegistered ? (bool) $registeredOrg->has_ein : false,
                 'primary_action_categories' => $primaryCauseRows,
             ];
         });
@@ -763,18 +766,17 @@ class OrganizationController extends BaseController
                 ->with('user:id,slug,name,email,image,cover_img')
                 ->first();
         } else {
-            // Fallback: Try by user slug (less common)
+            // Fallback: Try by user slug (less common) — supports non-EIN orgs with no excel_data row
             $user = User::where('slug', $id)->select('id', 'slug')->first();
 
             if ($user) {
                 $registeredOrg = Organization::where('user_id', $user->id)
                     ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                     ->with('user:id,slug,name,email,image,cover_img')
-                    ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                     ->first();
 
                 if ($registeredOrg) {
-                    // Find ExcelData by EIN - use limit 1 for speed
+                    // Find ExcelData by EIN - use limit 1 for speed (may be absent for non-EIN orgs)
                     $organization = ExcelData::where('ein', $registeredOrg->ein)
                         ->where('status', 'complete')
                         ->select('id', 'ein', 'row_data', 'created_at', 'updated_at')
@@ -785,30 +787,20 @@ class OrganizationController extends BaseController
             }
         }
 
-        if (! $organization) {
+        if (! $organization && ! $registeredOrg) {
             abort(404, 'Organization not found');
         }
-
-        $rowData = $organization->row_data;
-        $transformedData = ExcelDataTransformer::transform($rowData);
-
-        // Get any Organization record for mission (only if not already found)
-        $anyOrgRecord = $registeredOrg ?: Organization::where('ein', $organization->ein)->first();
 
         $isFav = false;
         $notificationsEnabled = false;
 
         if (Auth::check()) {
             if ($registeredOrg) {
-                // Check favorite by organization_id for registered organizations
                 $favorite = UserFavoriteOrganization::where('user_id', Auth::id())
                     ->where('organization_id', $registeredOrg->id)
                     ->first();
             } else {
-                // Check favorite by excel_data_id for unregistered organizations
                 $excelDataId = (int) $organization->id;
-
-                // Query with explicit integer binding to ensure type matching
                 $favorite = UserFavoriteOrganization::where('user_id', Auth::id())
                     ->where('excel_data_id', $excelDataId)
                     ->first();
@@ -820,52 +812,69 @@ class OrganizationController extends BaseController
             }
         }
 
-        // User already loaded above with eager loading
         $isOwnOrganization = false;
         if (Auth::check()) {
             $authUserOrg = Auth::user()->organization ?? Organization::where('user_id', Auth::id())->first();
             if ($authUserOrg) {
-                $isOwnOrganization = $authUserOrg->ein === $organization->ein
+                $isOwnOrganization = ($organization && $authUserOrg->ein === $organization->ein)
                     || ($registeredOrg && $authUserOrg->id === $registeredOrg->id);
             }
         }
 
-        $transformedOrganization = [
-            'id' => $organization->id,
-            'ein' => $organization->ein,
-            'is_own_organization' => $isOwnOrganization,
-            'name' => $transformedData[1] ?? $rowData[1] ?? '',
-            'ico' => $transformedData[2] ?? $rowData[2] ?? '',
-            'street' => $transformedData[3] ?? $rowData[3] ?? '',
-            'city' => $transformedData[4] ?? $rowData[4] ?? '',
-            'state' => $transformedData[5] ?? $rowData[5] ?? '',
-            'zip' => $transformedData[6] ?? $rowData[6] ?? '',
-            'classification' => $transformedData[10] ?? $rowData[10] ?? '',
-            'ntee_code' => $transformedData[26] ?? $rowData[26] ?? '',
-            'created_at' => $registeredOrg?->created_at ?? $organization->created_at,
-            'is_registered' => (bool) $registeredOrg,
-            'is_favorited' => $isFav,
-            'notifications_enabled' => $notificationsEnabled,
-            'registered_organization' => $registeredOrg ? [
-                'id' => $registeredOrg->id,
-                'name' => $registeredOrg->name,
-                'user' => $registeredOrg->user ? [
-                    'id' => $registeredOrg->user->id,
-                    'slug' => $registeredOrg->user->slug,
-                    'name' => $registeredOrg->user->name,
-                    'email' => $registeredOrg->user->email,
-                    'image' => $registeredOrg->user->image,
-                    'cover_img' => $registeredOrg->user->cover_img,
+        if (! $organization && $registeredOrg) {
+            $transformedOrganization = $this->transformRegisteredOrganizationForPublic(
+                $registeredOrg,
+                $isOwnOrganization,
+                $isFav,
+                $notificationsEnabled
+            );
+        } else {
+            $rowData = $organization->row_data;
+            $transformedData = ExcelDataTransformer::transform($rowData);
+
+            // Get any Organization record for mission (only if not already found)
+            $anyOrgRecord = $registeredOrg ?: Organization::where('ein', $organization->ein)->first();
+
+            $transformedOrganization = [
+                'id' => $organization->id,
+                'ein' => $organization->ein,
+                'is_own_organization' => $isOwnOrganization,
+                'name' => $transformedData[1] ?? $rowData[1] ?? '',
+                'ico' => $transformedData[2] ?? $rowData[2] ?? '',
+                'street' => $transformedData[3] ?? $rowData[3] ?? '',
+                'city' => $transformedData[4] ?? $rowData[4] ?? '',
+                'state' => $transformedData[5] ?? $rowData[5] ?? '',
+                'zip' => $transformedData[6] ?? $rowData[6] ?? '',
+                'classification' => $transformedData[10] ?? $rowData[10] ?? '',
+                'ntee_code' => $transformedData[26] ?? $rowData[26] ?? '',
+                'created_at' => $registeredOrg?->created_at ?? $organization->created_at,
+                'is_registered' => (bool) $registeredOrg,
+                'has_ein' => $registeredOrg ? (bool) $registeredOrg->has_ein : false,
+                'ein_verified' => $registeredOrg ? (bool) $registeredOrg->has_ein : false,
+                'is_favorited' => $isFav,
+                'notifications_enabled' => $notificationsEnabled,
+                'registered_organization' => $registeredOrg ? [
+                    'id' => $registeredOrg->id,
+                    'name' => $registeredOrg->name,
+                    'has_ein' => (bool) $registeredOrg->has_ein,
+                    'user' => $registeredOrg->user ? [
+                        'id' => $registeredOrg->user->id,
+                        'slug' => $registeredOrg->user->slug,
+                        'name' => $registeredOrg->user->name,
+                        'email' => $registeredOrg->user->email,
+                        'image' => $registeredOrg->user->image,
+                        'cover_img' => $registeredOrg->user->cover_img,
+                    ] : null,
                 ] : null,
-            ] : null,
-            'description' => $registeredOrg ? $registeredOrg->description : ($anyOrgRecord ? $anyOrgRecord->description : 'This organization is listed in our database but has not yet registered for additional features.'),
-            'mission' => $anyOrgRecord && $anyOrgRecord->mission && trim($anyOrgRecord->mission) !== ''
-                ? $anyOrgRecord->mission
-                : 'Mission statement not available for unregistered organizations.',
-            'website' => $registeredOrg && $registeredOrg->website ? $registeredOrg->website : ($anyOrgRecord && $anyOrgRecord->website ? $anyOrgRecord->website : null),
-            'wefunder_project_url' => $registeredOrg && $registeredOrg->wefunder_project_url ? $registeredOrg->wefunder_project_url : ($anyOrgRecord && $anyOrgRecord->wefunder_project_url ? $anyOrgRecord->wefunder_project_url : null),
-            'ruling' => $transformedData[7] ?? $rowData[7] ?? 'N/A', // Ruling year from excel data
-        ];
+                'description' => $registeredOrg ? $registeredOrg->description : ($anyOrgRecord ? $anyOrgRecord->description : 'This organization is listed in our database but has not yet registered for additional features.'),
+                'mission' => $anyOrgRecord && $anyOrgRecord->mission && trim($anyOrgRecord->mission) !== ''
+                    ? $anyOrgRecord->mission
+                    : 'Mission statement not available for unregistered organizations.',
+                'website' => $registeredOrg && $registeredOrg->website ? $registeredOrg->website : ($anyOrgRecord && $anyOrgRecord->website ? $anyOrgRecord->website : null),
+                'wefunder_project_url' => $registeredOrg && $registeredOrg->wefunder_project_url ? $registeredOrg->wefunder_project_url : ($anyOrgRecord && $anyOrgRecord->wefunder_project_url ? $anyOrgRecord->wefunder_project_url : null),
+                'ruling' => $transformedData[7] ?? $rowData[7] ?? 'N/A', // Ruling year from excel data
+            ];
+        }
 
         // Get posts count and supporters count for both registered and unregistered organizations
         $postsCount = 0;
@@ -1139,7 +1148,20 @@ class OrganizationController extends BaseController
             'canCreateCommunityGroup' => $communityGroupsPayload['can_create'],
             'createCommunityGroupUrl' => $communityGroupsPayload['create_url'],
             ...($registeredOrg
-                ? app(CommunityContentService::class)->publicParentFeedProps($registeredOrg, $request->user())
+                ? array_merge(
+                    app(CommunityContentService::class)->publicParentFeedProps($registeredOrg, $request->user()),
+                    [
+                        'communicationHub' => app(\App\Services\CommunicationHub\CommunicationHubPageService::class)->hubProps(
+                            $registeredOrg,
+                            $request->user(),
+                            [
+                                'activeTab' => 'announcements',
+                                'announcementsLimit' => 5,
+                                'discussionsLimit' => 5,
+                            ]
+                        ),
+                    ]
+                )
                 : [
                     'communityDiscussions' => [],
                     'communityAnnouncements' => [],
@@ -1149,6 +1171,7 @@ class OrganizationController extends BaseController
                     'communityParentType' => null,
                     'communityParentId' => null,
                     'communityReportReasons' => config('community.report_reasons'),
+                    'communicationHub' => null,
                 ]),
         ]);
     }
@@ -1996,6 +2019,66 @@ class OrganizationController extends BaseController
     }
 
     /**
+     * Public profile payload for approved orgs that have no excel_data row (typical for non-EIN registration).
+     *
+     * @return array<string, mixed>
+     */
+    private function transformRegisteredOrganizationForPublic(
+        Organization $registeredOrg,
+        bool $isOwnOrganization,
+        bool $isFav,
+        bool $notificationsEnabled
+    ): array {
+        $registeredOrg->loadMissing('user:id,slug,name,email,image,cover_img');
+
+        return [
+            'id' => $registeredOrg->id,
+            'ein' => $registeredOrg->has_ein ? $registeredOrg->ein : null,
+            'is_own_organization' => $isOwnOrganization,
+            'name' => $registeredOrg->name,
+            'ico' => $registeredOrg->ico,
+            'street' => $registeredOrg->street,
+            'city' => $registeredOrg->city,
+            'state' => $registeredOrg->state,
+            'zip' => $registeredOrg->zip,
+            'classification' => $registeredOrg->classification,
+            'ntee_code' => $registeredOrg->ntee_code,
+            'created_at' => $registeredOrg->created_at,
+            'is_registered' => true,
+            'has_ein' => (bool) $registeredOrg->has_ein,
+            'ein_verified' => (bool) $registeredOrg->has_ein,
+            'is_favorited' => $isFav,
+            'notifications_enabled' => $notificationsEnabled,
+            'registered_organization' => [
+                'id' => $registeredOrg->id,
+                'name' => $registeredOrg->name,
+                'has_ein' => (bool) $registeredOrg->has_ein,
+                'user' => $registeredOrg->user ? [
+                    'id' => $registeredOrg->user->id,
+                    'slug' => $registeredOrg->user->slug,
+                    'name' => $registeredOrg->user->name,
+                    'email' => $registeredOrg->user->email,
+                    'image' => $registeredOrg->user->image,
+                    'cover_img' => $registeredOrg->user->cover_img,
+                ] : null,
+            ],
+            'description' => $registeredOrg->description,
+            'mission' => $registeredOrg->mission && trim($registeredOrg->mission) !== ''
+                ? $registeredOrg->mission
+                : 'Mission statement not available.',
+            'website' => $registeredOrg->website,
+            'wefunder_project_url' => $registeredOrg->wefunder_project_url,
+            'ruling' => $registeredOrg->ruling ?? 'N/A',
+            'phone' => $registeredOrg->phone,
+            'email' => $registeredOrg->email,
+            'contact_name' => $registeredOrg->contact_name,
+            'contact_title' => $registeredOrg->contact_title,
+            'social_accounts' => $registeredOrg->social_accounts ?? [],
+            '_registered_org' => $registeredOrg,
+        ];
+    }
+
+    /**
      * Get full organization data for tab pages
      */
     private function getOrganizationData(string $id): array
@@ -2013,17 +2096,15 @@ class OrganizationController extends BaseController
             $registeredOrg = Organization::where('ein', $organization->ein)
                 ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                 ->with('user:id,slug,name,email,image,cover_img')
-                ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                 ->first();
         } else {
-            // Fallback: Try by user slug
+            // Fallback: Try by user slug (supports non-EIN orgs without excel_data)
             $user = User::where('slug', $id)->select('id', 'slug')->first();
 
             if ($user) {
                 $registeredOrg = Organization::where('user_id', $user->id)
                     ->where('registration_status', 'approved')->excludingCareAllianceHubs()
                     ->with('user:id,slug,name,email,image,cover_img')
-                    ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
                     ->first();
 
                 if ($registeredOrg) {
@@ -2037,37 +2118,15 @@ class OrganizationController extends BaseController
             }
         }
 
-        if (! $organization) {
+        if (! $organization && ! $registeredOrg) {
             abort(404, 'Organization not found');
         }
 
-        $rowData = $organization->row_data;
-        $transformedData = ExcelDataTransformer::transform($rowData);
-
-        // Reuse registeredOrg if already loaded, otherwise query once with select for speed
-        if (! $registeredOrg) {
-            $registeredOrg = Organization::where('ein', $organization->ein)
-                ->where('registration_status', 'approved')->excludingCareAllianceHubs()
-                ->with('user:id,slug,name,email,image,cover_img')
-                ->select('id', 'ein', 'user_id', 'name', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state', 'memberships_enabled', 'has_members', 'membership_type')
-                ->first();
-        }
-
-        // Get any org record only if registeredOrg not found (for mission/description fallback)
-        $anyOrgRecord = $registeredOrg;
-        if (! $anyOrgRecord) {
-            $anyOrgRecord = Organization::where('ein', $organization->ein)
-                ->select('id', 'ein', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state')
-                ->first();
-        }
-
-        // Check favorite status only if user is authenticated (optimized)
         $isFav = false;
         $notificationsEnabled = false;
 
         if (Auth::check()) {
             if ($registeredOrg) {
-                // Check favorite by organization_id for registered organizations
                 $favorite = UserFavoriteOrganization::where('user_id', Auth::id())
                     ->where('organization_id', $registeredOrg->id)
                     ->select('id', 'notifications')
@@ -2077,8 +2136,7 @@ class OrganizationController extends BaseController
                     $isFav = true;
                     $notificationsEnabled = $favorite->notifications;
                 }
-            } else {
-                // Check favorite by excel_data_id for unregistered organizations
+            } elseif ($organization) {
                 $excelDataId = (int) $organization->id;
                 $favorite = UserFavoriteOrganization::where('user_id', Auth::id())
                     ->where('excel_data_id', $excelDataId)
@@ -2092,14 +2150,41 @@ class OrganizationController extends BaseController
             }
         }
 
-        // User already loaded with eager loading above, no need to reload
         $isOwnOrganization = false;
         if (Auth::check()) {
             $authUserOrg = Auth::user()->organization ?? Organization::where('user_id', Auth::id())->first();
             if ($authUserOrg) {
-                $isOwnOrganization = $authUserOrg->ein === $organization->ein
+                $isOwnOrganization = ($organization && $authUserOrg->ein === $organization->ein)
                     || ($registeredOrg && $authUserOrg->id === $registeredOrg->id);
             }
+        }
+
+        if (! $organization && $registeredOrg) {
+            return $this->transformRegisteredOrganizationForPublic(
+                $registeredOrg,
+                $isOwnOrganization,
+                $isFav,
+                $notificationsEnabled
+            );
+        }
+
+        $rowData = $organization->row_data;
+        $transformedData = ExcelDataTransformer::transform($rowData);
+
+        // Reuse registeredOrg if already loaded, otherwise query once
+        if (! $registeredOrg) {
+            $registeredOrg = Organization::where('ein', $organization->ein)
+                ->where('registration_status', 'approved')->excludingCareAllianceHubs()
+                ->with('user:id,slug,name,email,image,cover_img')
+                ->first();
+        }
+
+        // Get any org record only if registeredOrg not found (for mission/description fallback)
+        $anyOrgRecord = $registeredOrg;
+        if (! $anyOrgRecord) {
+            $anyOrgRecord = Organization::where('ein', $organization->ein)
+                ->select('id', 'ein', 'description', 'mission', 'website', 'wefunder_project_url', 'phone', 'email', 'contact_name', 'contact_title', 'social_accounts', 'city', 'state')
+                ->first();
         }
 
         return [
@@ -2116,11 +2201,14 @@ class OrganizationController extends BaseController
             'ntee_code' => $transformedData[26] ?? $rowData[26] ?? '',
             'created_at' => $registeredOrg?->created_at ?? $organization->created_at,
             'is_registered' => (bool) $registeredOrg,
+            'has_ein' => $registeredOrg ? (bool) $registeredOrg->has_ein : false,
+            'ein_verified' => $registeredOrg ? (bool) $registeredOrg->has_ein : false,
             'is_favorited' => $isFav,
             'notifications_enabled' => $notificationsEnabled,
             'registered_organization' => $registeredOrg ? [
                 'id' => $registeredOrg->id,
                 'name' => $registeredOrg->name,
+                'has_ein' => (bool) $registeredOrg->has_ein,
                 'user' => $registeredOrg->user ? [
                     'id' => $registeredOrg->user->id,
                     'slug' => $registeredOrg->user->slug,

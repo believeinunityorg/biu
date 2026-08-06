@@ -115,9 +115,26 @@ createInertiaApp({
             }
 
             const userId = pageProps?.auth?.user?.id;
+            // Keep user-id meta in sync across Inertia visits (login/logout without full reload).
+            if (typeof document !== 'undefined') {
+                let userMeta = document.querySelector('meta[name="user-id"]');
+                if (userId) {
+                    if (!userMeta) {
+                        userMeta = document.createElement('meta');
+                        userMeta.setAttribute('name', 'user-id');
+                        document.head.appendChild(userMeta);
+                    }
+                    userMeta.setAttribute('content', String(userId));
+                } else if (userMeta) {
+                    userMeta.remove();
+                }
+            }
+
             if (userId && !isLivestockDomain()) {
                 void registerServiceWorker()?.then(async () => {
                     await syncPushTokenWithServer({ prompt: shouldAutoPromptForPushPermission() });
+                }).catch((err) => {
+                    console.warn('[App] Push token sync after navigation failed:', err);
                 });
             }
         });
@@ -184,6 +201,8 @@ createInertiaApp({
                 if (initialUserId) {
                     await syncPushTokenWithServer({ prompt: shouldAutoPromptForPushPermission() });
                 }
+            }).catch((err) => {
+                console.warn('[App] Initial push token sync failed:', err);
             });
             if (initialUserId) {
                 startPushTokenRefreshListeners(() => {

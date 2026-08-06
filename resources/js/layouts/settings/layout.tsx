@@ -249,6 +249,20 @@ export default function SettingsLayout({
                     {(auth.user.role === "organization" || auth.user.role === "care_alliance") && (
                       <>
                         <div className="px-3 py-2 mt-4 mb-2">
+                          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Community</h3>
+                        </div>
+                        <Link
+                          href={route("org.communication-hub.settings")}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
+                            activeTab === "communication-hub"
+                              ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          }`}
+                        >
+                          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">Communication Hub</span>
+                        </Link>
+                        <div className="px-3 py-2 mt-4 mb-2">
                           <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fundraising</h3>
                         </div>
                         <Link
@@ -491,6 +505,20 @@ export default function SettingsLayout({
 
                     {(auth.user.role === "organization" || auth.user.role === "care_alliance") && (
                       <>
+                        <div className="px-3 py-2 mt-4 mb-2">
+                          <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Community</h3>
+                        </div>
+                        <Link
+                          href={route("org.communication-hub.settings")}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all ${
+                            activeTab === "communication-hub"
+                              ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
+                              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          }`}
+                        >
+                          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                          <span className="truncate">Communication Hub</span>
+                        </Link>
                         <div className="px-3 py-2 mt-4 mb-2">
                           <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fundraising</h3>
                         </div>

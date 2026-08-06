@@ -100,6 +100,11 @@ class HandleInertiaRequests extends Middleware
                 if ($organization) {
                     $user->setRelation('organization', $organization);
                 }
+            } elseif (! $user->relationLoaded('organization') || ! $user->organization) {
+                $ownedOrganization = Organization::forAuthUser($user);
+                if ($ownedOrganization) {
+                    $user->setRelation('organization', $ownedOrganization);
+                }
             }
             $user->load('serviceSellerProfile');
         }
@@ -289,7 +294,15 @@ class HandleInertiaRequests extends Middleware
                         'organization' => $user->organization ? [
                             'id' => $user->organization->id,
                             'ein' => $user->organization->ein ?? null,
+                            'has_ein' => (bool) ($user->organization->has_ein ?? false),
+                            'ein_verified' => (bool) ($user->organization->has_ein ?? false),
+                            'registration_status' => $user->organization->registration_status ?? null,
+                            'has_edited_irs_data' => (bool) ($user->organization->has_edited_irs_data ?? false),
                             'name' => $user->organization->name,
+                            'community_organization_type_id' => $user->organization->community_organization_type_id ?? null,
+                            'community_organization_type_slug' => $user->organization->communityOrganizationType?->slug ?? null,
+                            'community_organization_type_other' => $user->organization->community_organization_type_other ?? null,
+                            'is_family_reunion' => $user->organization->isFamilyReunion(),
                             'registered_user_image' => $user->organization->registered_user_image ? '/storage/'.$user->organization->registered_user_image : null,
                             'contact_title' => $user->organization->contact_title,
                             'website' => $user->organization->website,

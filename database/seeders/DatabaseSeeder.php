@@ -69,6 +69,7 @@ class DatabaseSeeder extends Seeder
 
         // Step 5: Seed organization-related data
         $this->callUnlessSeeded(PrimaryActionCategoriesSeeder::class);
+        $this->callUnlessSeeded(CommunityOrganizationTypesSeeder::class);
         $this->callUnlessSeeded(OrganizationBoardMembersSeeder::class);
         $this->callUnlessSeeded(OrganizationRoleSeeder::class);
 

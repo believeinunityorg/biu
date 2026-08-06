@@ -237,6 +237,8 @@ class DonationController extends Controller
                 'raised' => (float) ($org->balance ?? 0),
                 'goal' => 0,
                 'supporters' => $org->donations()->distinct('user_id')->count('user_id'),
+                'has_ein' => (bool) $org->has_ein,
+                'ein_verified' => (bool) $org->has_ein,
             ];
         });
 
@@ -376,6 +378,8 @@ class DonationController extends Controller
                         'goal' => 0,
                         'supporters' => $org->donations()->distinct('user_id')->count('user_id'),
                         'donated_total' => $donatedTotal,
+                        'has_ein' => (bool) $org->has_ein,
+                        'ein_verified' => (bool) $org->has_ein,
                     ];
                 }
             }
@@ -567,6 +571,8 @@ class DonationController extends Controller
                     'raised' => (float) ($org->balance ?? 0),
                     'goal' => 0,
                     'supporters' => $org->donations()->distinct('user_id')->count('user_id'),
+                    'has_ein' => (bool) $org->has_ein,
+                    'ein_verified' => (bool) $org->has_ein,
                 ];
             })
             ->values()

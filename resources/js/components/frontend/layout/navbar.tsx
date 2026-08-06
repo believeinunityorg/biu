@@ -33,6 +33,7 @@ import {
   Store,
   Users,
   MessageSquare,
+  Megaphone,
   Building2,
   Mail,
   Sparkles,
@@ -282,6 +283,9 @@ export default function Navbar() {
     { name: "Unity Loaves", href: route("unity-loaves.index"), icon: Heart },
     ...(isLoggedIn ? [{ name: "Groups", href: route("groups"), icon: Users }] : []),
     ...(isLoggedIn ? [{ name: "Chat", href: route("chat.index"), icon: MessageSquare }] : []),
+    ...(isSupporterUser
+      ? [{ name: "Announcements & Discussion", href: route("user.communication-hub.index"), icon: Megaphone }]
+      : []),
   ]
 
   const giveNavItems: LandingNavItem[] = [

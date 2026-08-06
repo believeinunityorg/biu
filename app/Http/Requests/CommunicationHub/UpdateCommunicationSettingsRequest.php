@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\CommunicationHub;
 
+use App\Services\CommunicationHub\CommunicationHubPermissionService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateCommunicationSettingsRequest extends FormRequest
 {
@@ -19,7 +21,11 @@ class UpdateCommunicationSettingsRequest extends FormRequest
      */
     public function rules(): array
     {
+        $audiences = CommunicationHubPermissionService::VISIBILITY_AUDIENCES;
+
         return [
+            'announcement_visibility' => ['sometimes', 'string', Rule::in($audiences)],
+            'discussion_visibility' => ['sometimes', 'string', Rule::in($audiences)],
             'allow_followers_to_post' => ['sometimes', 'boolean'],
             'allow_members_to_post' => ['sometimes', 'boolean'],
             'require_approval' => ['sometimes', 'boolean'],

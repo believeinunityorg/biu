@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('organizations', function (Blueprint $table) {
             if (! Schema::hasColumn('organizations', 'communication_settings')) {
-                $table->json('communication_settings')->nullable()->after('membership_type');
+                $table->json('communication_settings')->nullable();
             }
         });
     }

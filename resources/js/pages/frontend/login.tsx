@@ -43,7 +43,7 @@ export default function LoginPage({ seo, status, canResetPassword }: LoginProps)
     const submit: FormEventHandler = (e) => {
         e.preventDefault();
         post('/login', {
-            onFinish: () => reset('password'),
+            onFinish: () => reset('password', 'cf_turnstile_response'),
         });
     };
 

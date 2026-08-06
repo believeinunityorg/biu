@@ -3,8 +3,38 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
+         defaultTestSuite="CI"
 >
     <testsuites>
+        <!--
+          CI gate (xlsx Automated Testing): stable suite that does NOT use migrate:fresh.
+          Runs only against GitHub Actions ephemeral MySQL — never production/staging VPS DBs.
+        -->
+        <testsuite name="CI">
+            <file>tests/Feature/HealthEndpointTest.php</file>
+            <file>tests/Unit/ExampleTest.php</file>
+            <file>tests/Unit/MobileClientDetectionTest.php</file>
+            <file>tests/Unit/Services/TurnstileServiceTest.php</file>
+            <file>tests/Unit/Services/TimezoneServiceTest.php</file>
+            <file>tests/Unit/Services/BelievePointsPurchaseCalculationServiceTest.php</file>
+            <file>tests/Unit/Services/StripeBelievePointSettlementScheduleServiceTest.php</file>
+            <file>tests/Unit/Services/BiuGiftCardPlatformFeeTest.php</file>
+            <file>tests/Unit/Services/GiftCardRevenueShareServiceTest.php</file>
+            <file>tests/Unit/Services/GiftCardServicePhazeSignatureTest.php</file>
+            <file>tests/Unit/Services/GiftCardServicePhazeBalanceTest.php</file>
+            <file>tests/Unit/Services/GiftCardServiceTransactionLookupTest.php</file>
+            <file>tests/Unit/Services/GiftCardRedemptionDomainTest.php</file>
+            <file>tests/Unit/Services/PhazeBalanceServiceTest.php</file>
+            <file>tests/Unit/Support/PhazeGiftCardPayloadTest.php</file>
+            <file>tests/Unit/Support/PushNotificationLogMetadataTest.php</file>
+            <file>tests/Unit/Services/AiMediaStudioVideoWatermarkServiceTest.php</file>
+            <file>tests/Unit/Services/Admin/UnifiedLedgerClassificationServiceTest.php</file>
+            <file>tests/Unit/Services/Admin/UnifiedLedgerWalletAmountResolverTest.php</file>
+            <file>tests/Unit/Services/Streaming/StreamingWorkerSourceUrlTest.php</file>
+            <file>tests/Unit/Services/Streaming/StreamingPreflightTest.php</file>
+            <file>tests/Unit/Http/Controllers/Admin/BelievePointsPurchaseLedgerFinancialsTest.php</file>
+            <file>tests/Unit/Notifications/GiftCardRedemptionNotificationsTest.php</file>
+        </testsuite>
         <testsuite name="Unit">
             <directory>tests/Unit</directory>
         </testsuite>
@@ -22,12 +52,18 @@
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+          Do NOT force sqlite here: Windows ForgeStack PHP often lacks pdo_sqlite.
+          - Local: uses .env DB_* (your local Docker/ForgeStack MySQL — not VPS production).
+          - CI: workflow sets DB_* to the ephemeral GitHub Actions MySQL service.
+        -->
         <env name="MAIL_MAILER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="SENTRY_LARAVEL_DSN" value=""/>
+        <env name="BETTER_STACK_SOURCE_TOKEN" value=""/>
+        <env name="BETTER_STACK_UPTIME_API_TOKEN" value=""/>
     </php>
 </phpunit>

@@ -61,7 +61,8 @@ return [
                 'dump_binary_path' => '/usr/bin',
             ],
             // Increase these for large data processing
-            'strict' => false,
+            // Staging: DB_STRICT=true in .env first; keep production false until tested.
+            'strict' => filter_var(env('DB_STRICT', false), FILTER_VALIDATE_BOOL),
             'engine' => 'innoDB',
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA   => env('MYSQL_ATTR_SSL_CA'),

@@ -464,7 +464,7 @@ class DashboardController extends Controller
             return $organization;
         }
 
-        $evaluation = $this->taxComplianceService->evaluate($organization->tax_period, $organization->ein);
+        $evaluation = $this->taxComplianceService->evaluateForOrganization($organization);
 
         $organization->tax_compliance_status = $evaluation['status'];
         $organization->tax_compliance_checked_at = $evaluation['checked_at'];
@@ -480,6 +480,7 @@ class DashboardController extends Controller
             if ($organization->status === 'Inactive') {
                 $organization->status = 'Active';
             }
+            // Non-EIN and tax-current EIN orgs stay/become approved for full module access.
             if ($organization->registration_status === 'pending') {
                 $organization->registration_status = 'approved';
             }

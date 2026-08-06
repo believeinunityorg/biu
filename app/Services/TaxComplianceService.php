@@ -2,11 +2,41 @@
 
 namespace App\Services;
 
+use App\Models\Organization;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class TaxComplianceService
 {
+    /**
+     * Evaluate tax compliance for an organization.
+     * Non-EIN (placeholder EIN) registrations are not locked by missing IRS tax periods.
+     */
+    public function evaluateForOrganization(Organization $organization, int $expirationMonths = 36): array
+    {
+        if (! $organization->isSubjectToIrsTaxCompliance()) {
+            $checkedAt = Carbon::now();
+
+            return [
+                'status' => 'not_applicable',
+                'normalized_tax_period' => null,
+                'parsed_tax_period_date' => null,
+                'months_since_tax_period' => null,
+                'is_expired' => false,
+                'checked_at' => $checkedAt,
+                'meta' => [
+                    'status' => 'not_applicable',
+                    'reason' => 'organization_registered_without_ein',
+                    'checked_at' => $checkedAt->toIso8601String(),
+                    'expiration_threshold_months' => $expirationMonths,
+                ],
+                'should_lock' => false,
+            ];
+        }
+
+        return $this->evaluate($organization->tax_period, $organization->ein, $expirationMonths);
+    }
+
     public function evaluate(?string $taxPeriod, ?string $ein = null, int $expirationMonths = 36): array
     {
         $checkedAt = Carbon::now();

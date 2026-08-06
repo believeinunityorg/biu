@@ -1,0 +1,74 @@
+# Load testing (Production Roadmap → k6)
+#
+# Defaults to STAGING. Never uses migrate/wipe. Read-only HTTP GETs only.
+#
+# Manual:
+#   cd backend && k6 run loadtests/smoke.js
+#   k6 run -e BASE_URL=https://501c3ers.com -e VUS=20 -e DURATION=3m loadtests/smoke.js
+#
+# Optional workflow_dispatch against staging only.
+name: Load test (k6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Target base URL (prefer staging)
+        required: true
+        default: https://501c3ers.com
+      vus:
+        description: Constant VUs for smoke
+        required: true
+        default: '15'
+      duration:
+        description: Smoke duration (e.g. 1m, 2m)
+        required: true
+        default: '1m'
+      script:
+        description: smoke or ramp
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - ramp
+
+concurrency:
+  group: loadtest-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  k6:
+    name: k6 ${{ inputs.script }} → ${{ inputs.base_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard — refuse obviously destructive scripts
+        run: |
+          test -f "loadtests/${{ inputs.script }}.js"
+          # Scripts must remain GET-only for now
+          ! grep -Eiq 'http\.(post|put|patch|del)\(' "loadtests/${{ inputs.script }}.js"
+
+      - name: Setup k6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run k6
+        working-directory: .
+        run: |
+          mkdir -p loadtests/results
+          k6 run \
+            -e BASE_URL="${{ inputs.base_url }}" \
+            -e VUS="${{ inputs.vus }}" \
+            -e DURATION="${{ inputs.duration }}" \
+            -e MAX_VUS="${{ inputs.vus }}" \
+            "loadtests/${{ inputs.script }}.js"
+
+      - name: Upload summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary
+          path: loadtests/results/
+          if-no-files-found: ignore

@@ -94,21 +94,28 @@ Route::middleware('guest')->group(function () {
 
     Route::get('/register/organization', [OrganizationRegisterController::class, 'create'])->name('register.organization');
 
-    Route::post('/register/organization', [OrganizationRegisterController::class, 'register'])->name('register.organization.store');
+    Route::post('/register/organization', [OrganizationRegisterController::class, 'register'])
+        ->middleware('throttle:5,1')
+        ->name('register.organization.store');
 
     Route::post('/register/organization/lookup-ein', [OrganizationRegisterController::class, 'lookupEIN'])
+        ->middleware('throttle:10,1')
         ->name('register.organization.lookup-ein');
 
     Route::get('/register/organization/officers-for-ein', [OrganizationRegisterController::class, 'officersForEin'])
+        ->middleware('throttle:20,1')
         ->name('register.organization.officers-for-ein');
 
     Route::get('/register/care-alliance', [CareAllianceRegisterController::class, 'create'])->name('register.care-alliance');
-    Route::post('/register/care-alliance', [CareAllianceRegisterController::class, 'store'])->name('register.care-alliance.store');
+    Route::post('/register/care-alliance', [CareAllianceRegisterController::class, 'store'])
+        ->middleware('throttle:5,1')
+        ->name('register.care-alliance.store');
 
     // Route::get('register', [RegisteredUserController::class, 'create'])
     //     ->name('register');
 
-    Route::post('register', [RegisteredUserController::class, 'store']);
+    Route::post('register', [RegisteredUserController::class, 'store'])
+        ->middleware('throttle:5,1');
 
     // Route::get('login-old', [AuthenticatedSessionController::class, 'create'])
     //     ->name('login-old');
@@ -125,18 +132,21 @@ Route::middleware('guest')->group(function () {
         ]);
     })->name('login');
 
-    Route::post('login', [AuthenticatedSessionController::class, 'store']);
+    Route::post('login', [AuthenticatedSessionController::class, 'store'])
+        ->middleware('throttle:10,1');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('password.email');
 
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
         ->name('password.reset');
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
+        ->middleware('throttle:5,1')
         ->name('password.store');
 });
 

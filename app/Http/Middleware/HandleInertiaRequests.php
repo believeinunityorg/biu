@@ -294,6 +294,10 @@ class HandleInertiaRequests extends Middleware
                         'organization' => $user->organization ? [
                             'id' => $user->organization->id,
                             'ein' => $user->organization->ein ?? null,
+                            'has_ein' => (bool) ($user->organization->has_ein ?? false),
+                            'ein_verified' => (bool) ($user->organization->has_ein ?? false),
+                            'registration_status' => $user->organization->registration_status ?? null,
+                            'has_edited_irs_data' => (bool) ($user->organization->has_edited_irs_data ?? false),
                             'name' => $user->organization->name,
                             'community_organization_type_id' => $user->organization->community_organization_type_id ?? null,
                             'community_organization_type_slug' => $user->organization->communityOrganizationType?->slug ?? null,

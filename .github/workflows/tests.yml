@@ -1,0 +1,16 @@
+# Pest gate for PRs / manual runs only — NOT on every branch push.
+# Deploy workflows call pest-ci.yml first, so merge→deploy runs: Tests then Deploy (once).
+name: Tests
+
+on:
+  pull_request:
+    branches: [main, development, production]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pest:
+    uses: ./.github/workflows/pest-ci.yml

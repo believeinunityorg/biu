@@ -11,26 +11,26 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\KnowledgeBaseController;
 use App\Http\Controllers\Api\PushNotificationOpenController;
+use App\Http\Controllers\Api\HealthController;
 use Illuminate\Support\Facades\Route;
 
 // Public routes
-Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index']);
-Route::post('/knowledge-base/learn', [KnowledgeBaseController::class, 'learn']);
-Route::get('/organizations/lookup', [OrganizationLookupController::class, 'lookup']);
+Route::get('/knowledge-base', [KnowledgeBaseController::class, 'index'])->middleware('throttle:60,1');
+Route::post('/knowledge-base/learn', [KnowledgeBaseController::class, 'learn'])->middleware('throttle:10,1');
+Route::get('/organizations/lookup', [OrganizationLookupController::class, 'lookup'])->middleware('throttle:30,1');
 
-Route::get('/health', function () {
-    return response()->json(['status' => 'ok', 'timestamp' => now()]);
-});
+// Better Stack / uptime probes (DB + Redis when configured) — also keep Laravel /up as liveness
+Route::get('/health', HealthController::class)->middleware('throttle:60,1');
 
 // Shippo webhook (no auth; Shippo will call it directly)
 Route::post('/webhooks/shippo', [ShippoWebhookController::class, 'handle']);
 Route::post('/streaming/status', StreamingStatusCallbackController::class)->name('api.streaming.status');
 
 // Authentication routes
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail']);
-Route::post('/auth/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
+Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail'])->middleware('throttle:10,1');
+Route::post('/auth/resend-verification-code', [AuthController::class, 'resendVerificationCode'])->middleware('throttle:5,1');
 
 // Protected routes (require authentication via Passport)
 Route::middleware('auth:api')->group(function () {

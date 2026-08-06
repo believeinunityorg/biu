@@ -9,6 +9,7 @@ import {
   Mail,
   Calendar,
   Award,
+  ShieldCheck,
   Share2,
   DollarSign,
   Star,
@@ -106,6 +107,14 @@ export default function OrganizationProfileLayout({
                       <Award className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                     </div>
                   )}
+                  {(organization.has_ein || organization.ein_verified) && (
+                    <div
+                      className="absolute -bottom-1 -right-1 sm:-bottom-2 sm:-right-2 bg-emerald-600 rounded-full p-0.5 sm:p-1"
+                      title="EIN Verified"
+                    >
+                      <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -119,6 +128,12 @@ export default function OrganizationProfileLayout({
                       {organization.city}, {organization.state}
                     </span>
                   </div>
+                  {(organization.has_ein || organization.ein_verified) && (
+                    <div className="flex items-center gap-1 text-emerald-300">
+                      <ShieldCheck className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                      <span className="text-xs sm:text-sm whitespace-nowrap">EIN Verified</span>
+                    </div>
+                  )}
                   {organization.is_registered && (
                     <div className="flex items-center gap-1">
                       <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400 flex-shrink-0" />

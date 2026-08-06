@@ -22,14 +22,17 @@
         "laravel-notification-channels/twilio": "^4.1",
         "laravel/cashier": "^15.7",
         "laravel/framework": "^12.0",
+        "laravel/horizon": "^5.40",
         "laravel/passport": "^13.4",
         "laravel/reverb": "^1.5",
         "laravel/scout": "^10.19",
         "laravel/tinker": "^2.10.1",
         "league/csv": "^9.24",
+        "logtail/monolog-logtail": "^3.3",
         "maatwebsite/excel": "^3.1.68",
         "phpoffice/phpspreadsheet": "^1.30",
         "predis/predis": "^3.0",
+        "sentry/sentry-laravel": "^4.27",
         "simplepie/simplepie": "^1.8",
         "simplesoftwareio/simple-qrcode": "^4.2",
         "spatie/laravel-activitylog": "^4.10",
@@ -89,6 +92,14 @@
             "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --queue=mail,default,irs-import --tries=3\" \"php artisan pail --timeout=0\" \"php artisan inertia:start-ssr\" --names=server,queue,logs,ssr"
         ],
         "test": [
+            "@php artisan config:clear --ansi",
+            "@php artisan test --testsuite=CI"
+        ],
+        "test:ci": [
+            "@php artisan config:clear --ansi",
+            "@php artisan test --testsuite=CI"
+        ],
+        "test:all": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ]

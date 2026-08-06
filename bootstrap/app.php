@@ -127,6 +127,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Soft-bind Sentry when the package is installed (composer install may be incomplete locally).
+        if (class_exists(\Sentry\Laravel\Integration::class)) {
+            \Sentry\Laravel\Integration::handles($exceptions);
+        }
+
         $exceptions->render(function (HttpException $e, $request) {
             if ($request->is('stripe/webhook')) {
                 return response($e->getMessage() ?: 'Forbidden', $e->getStatusCode());

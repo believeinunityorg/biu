@@ -8,60 +8,74 @@ use Illuminate\Support\Facades\Log;
 
 class CleanLogFile extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'log:clean {--size=10 : Maximum file size in MB before deletion}';
+    protected $signature = 'log:clean
+        {--size=10 : Maximum file size in MB before truncation}
+        {--days= : Also delete daily log files older than this many days (default: LOG_DAILY_DAYS)}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Clean Laravel log file when it exceeds the specified size (default: 10MB)';
+    protected $description = 'Truncate oversized Laravel logs and prune old daily log files';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
         $maxSizeMB = (float) $this->option('size');
-        $maxSizeBytes = $maxSizeMB * 1024 * 1024; // Convert MB to bytes
+        $maxSizeBytes = (int) ($maxSizeMB * 1024 * 1024);
+        $days = (int) ($this->option('days') ?: config('logging.channels.daily.days', 14));
+        $logDir = storage_path('logs');
 
-        $logPath = storage_path('logs/laravel.log');
+        if (! File::isDirectory($logDir)) {
+            $this->info('Log directory does not exist. Nothing to clean.');
 
-        // Check if log file exists
-        if (!File::exists($logPath)) {
-            $this->info('Log file does not exist. Nothing to clean.');
-            return Command::SUCCESS;
+            return self::SUCCESS;
         }
 
-        // Get current file size
-        $fileSize = File::size($logPath);
-        $fileSizeMB = round($fileSize / 1024 / 1024, 2);
+        $cleaned = 0;
 
-        $this->info("Current log file size: {$fileSizeMB} MB");
-
-        // Check if file size exceeds the limit
-        if ($fileSize >= $maxSizeBytes) {
-            try {
-                // Delete the log file
-                File::delete($logPath);
-                
-                // Log the cleanup action (this will create a new log file)
-                Log::info("Log file cleaned automatically. Previous size: {$fileSizeMB} MB");
-                
-                $this->info("✓ Log file deleted successfully. Previous size: {$fileSizeMB} MB");
-                return Command::SUCCESS;
-            } catch (\Exception $e) {
-                $this->error("Failed to delete log file: " . $e->getMessage());
-                return Command::FAILURE;
+        foreach (File::files($logDir) as $file) {
+            $name = $file->getFilename();
+            if (! preg_match('/^laravel(-.*)?\.log$/', $name) && $name !== 'laravel.log') {
+                continue;
             }
-        } else {
-            $this->info("Log file size ({$fileSizeMB} MB) is below the limit ({$maxSizeMB} MB). No action needed.");
-            return Command::SUCCESS;
+
+            $size = $file->getSize();
+            if ($size >= $maxSizeBytes) {
+                File::put($file->getPathname(), '');
+                $cleaned++;
+                $this->info(sprintf(
+                    'Truncated %s (was %.2f MB)',
+                    $name,
+                    $size / 1024 / 1024
+                ));
+            }
         }
+
+        $cutoff = now()->subDays(max(1, $days))->startOfDay();
+        foreach (File::files($logDir) as $file) {
+            $name = $file->getFilename();
+            // laravel-2026-08-06.log
+            if (! preg_match('/^laravel-(\d{4}-\d{2}-\d{2})\.log$/', $name, $m)) {
+                continue;
+            }
+            try {
+                $fileDate = \Carbon\Carbon::createFromFormat('Y-m-d', $m[1])->startOfDay();
+            } catch (\Throwable) {
+                continue;
+            }
+            if ($fileDate->lt($cutoff)) {
+                File::delete($file->getPathname());
+                $cleaned++;
+                $this->info("Deleted old daily log {$name}");
+            }
+        }
+
+        if ($cleaned > 0) {
+            Log::channel('daily')->info('Log cleanup completed.', [
+                'actions' => $cleaned,
+                'max_mb' => $maxSizeMB,
+                'retain_days' => $days,
+            ]);
+        } else {
+            $this->info('No log cleanup needed.');
+        }
+
+        return self::SUCCESS;
     }
 }

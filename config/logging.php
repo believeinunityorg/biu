@@ -4,6 +4,7 @@ use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
+use Logtail\Monolog\LogtailHandler;
 
 return [
 
@@ -54,7 +55,9 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', env('LOG_STACK', 'single')),
+            // Production Roadmap: daily rotation locally + Better Stack for centralized logs.
+            // Example: LOG_STACK=daily,betterstack
+            'channels' => array_values(array_filter(array_map('trim', explode(',', env('LOG_STACK', 'daily'))))),
             'ignore_exceptions' => false,
         ],
 
@@ -71,6 +74,19 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
+        ],
+
+        // Better Stack Logs (Logtail) — set BETTER_STACK_SOURCE_TOKEN (+ endpoint from source UI)
+        'betterstack' => [
+            'driver' => 'monolog',
+            'level' => env('BETTER_STACK_LOG_LEVEL', env('LOG_LEVEL', 'warning')),
+            'handler' => filled(env('BETTER_STACK_SOURCE_TOKEN'))
+                ? LogtailHandler::class
+                : NullHandler::class,
+            'handler_with' => array_filter([
+                'sourceToken' => env('BETTER_STACK_SOURCE_TOKEN'),
+                'endpoint' => env('BETTER_STACK_SOURCE_ENDPOINT'),
+            ]),
         ],
 
         'slack' => [

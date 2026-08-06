@@ -3,6 +3,7 @@ import FrontendLayout from "@/layouts/frontend/frontend-layout"
 import { useState, useMemo, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Heart, CreditCard, Shield, Search, X, Loader2, Coins, Lock, ChevronRight, Building2, UtensilsCrossed, Brain, Check, CheckCircle, Gift, Wrench, TrendingUp, Car, Package, FileText, Camera, ArrowLeft, Landmark, Info } from "lucide-react"
+import { EinVerifiedBadge } from "@/components/frontend/organization/EinVerifiedBadge"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
@@ -52,6 +53,8 @@ interface FeePreviewFromServer {
 
 /** Nonprofit or Unity Impact Alliance (donation routes to hub org via organization_id). */
 interface DonateCause {
+  has_ein?: boolean
+  ein_verified?: boolean
   id: string
   kind: "organization" | "care_alliance"
   organization_id: number
@@ -97,17 +100,26 @@ function CauseAvatar({
   )
 }
 
-function CauseKindBadge({ kind }: { kind: DonateCause["kind"] }) {
-  return kind === "care_alliance" ? (
-    <Badge className="inline-flex w-fit items-center gap-1 border-0 px-2 py-0.5 text-xs font-semibold shadow-sm bg-blue-600 text-white hover:bg-blue-600">
-      <Building2 className="h-3 w-3 shrink-0" />
-      Unity Impact Alliance
-    </Badge>
-  ) : (
-    <Badge className="inline-flex w-fit items-center gap-1 border-0 px-2 py-0.5 text-xs font-semibold shadow-sm bg-purple-600 text-white hover:bg-purple-600">
-      <CheckCircle className="h-3 w-3 shrink-0" />
-      Organization
-    </Badge>
+function CauseKindBadge({ cause }: { cause: Pick<DonateCause, "kind" | "has_ein" | "ein_verified"> }) {
+  if (cause.kind === "care_alliance") {
+    return (
+      <Badge className="inline-flex w-fit items-center gap-1 border-0 px-2 py-0.5 text-xs font-semibold shadow-sm bg-blue-600 text-white hover:bg-blue-600">
+        <Building2 className="h-3 w-3 shrink-0" />
+        Unity Impact Alliance
+      </Badge>
+    )
+  }
+
+  const einVerified = cause.ein_verified === true || cause.has_ein === true
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge className="inline-flex w-fit items-center gap-1 border-0 px-2 py-0.5 text-xs font-semibold shadow-sm bg-purple-600 text-white hover:bg-purple-600">
+        <CheckCircle className="h-3 w-3 shrink-0" />
+        Organization
+      </Badge>
+      <EinVerifiedBadge verified={einVerified} size="sm" />
+    </div>
   )
 }
 
@@ -1114,7 +1126,7 @@ export default function DonatePage({
                             <CauseAvatar name={selectedCause.name} src={selectedCause.image} className="h-8 w-8" />
                             <div className="min-w-0 flex flex-col gap-1">
                               <span className="font-medium text-slate-900 truncate dark:text-white">{selectedCause.name}</span>
-                              <CauseKindBadge kind={selectedCause.kind} />
+                              <CauseKindBadge cause={selectedCause} />
                             </div>
                           </div>
                           <Button
@@ -1162,7 +1174,7 @@ export default function DonatePage({
                                   <CauseAvatar name={cause.name} src={cause.image} shape="square" className="h-9 w-9" />
                                   <div className="min-w-0 flex flex-col gap-1">
                                     <div className="font-medium text-sm truncate">{cause.name}</div>
-                                    <CauseKindBadge kind={cause.kind} />
+                                    <CauseKindBadge cause={cause} />
                                   </div>
                                 </button>
                               ))}
@@ -1183,7 +1195,7 @@ export default function DonatePage({
                                   <CauseAvatar name={cause.name} src={cause.image} shape="square" className="h-9 w-9" />
                                   <div className="min-w-0 flex flex-col gap-1">
                                     <div className="font-medium text-sm truncate">{cause.name}</div>
-                                    <CauseKindBadge kind={cause.kind} />
+                                    <CauseKindBadge cause={cause} />
                                   </div>
                                 </button>
                               ))}
@@ -1205,7 +1217,7 @@ export default function DonatePage({
                                   <div className="min-w-0 flex flex-col gap-0.5 flex-1">
                                     <div className="font-medium text-sm truncate">{cause.name}</div>
                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                                      <CauseKindBadge kind={cause.kind} />
+                                      <CauseKindBadge cause={cause} />
                                       {typeof cause.donated_total === "number" && cause.donated_total > 0 && (
                                         <span className="text-xs text-slate-600 dark:text-white/55">
                                           You gave $
@@ -1546,7 +1558,7 @@ export default function DonatePage({
                             <CauseAvatar name={org.name} src={org.image} className="h-8 w-8" />
                             <div className="min-w-0 flex flex-col gap-1">
                               <span className="font-medium text-sm truncate">{org.name}</span>
-                              <CauseKindBadge kind={org.kind} />
+                              <CauseKindBadge cause={org} />
                             </div>
                           </button>
                         ))}

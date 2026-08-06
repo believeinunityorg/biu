@@ -1,0 +1,5 @@
+# Ignore generated k6 output (keep scripts in git)
+results/
+*.json
+!smoke.js
+!ramp.js

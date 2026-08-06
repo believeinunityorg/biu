@@ -62,7 +62,7 @@ jobs:
             ${{ runner.os }}-selfhosted-php8.4-composer-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader
+        run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader --ignore-platform-req=ext-sodium
 
       - name: Prepare application (ephemeral SQLite)
         run: |

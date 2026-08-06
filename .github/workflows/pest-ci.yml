@@ -1,4 +1,5 @@
-# Reusable Pest CI suite — GHA MySQL only (never VPS / production DB).
+# Reusable Pest CI suite — runs on believe-vps (not ubuntu-latest).
+# Uses ephemeral SQLite only — never production/staging MySQL.
 name: Pest CI (reusable)
 
 on:
@@ -6,49 +7,47 @@ on:
 
 jobs:
   pest:
-    name: Pest CI suite (PHP 8.4 / GHA MySQL only)
-    runs-on: ubuntu-latest
+    name: Pest CI suite (PHP 8.4 / SQLite on believe-vps)
+    runs-on: [self-hosted, believe-vps]
     timeout-minutes: 25
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: believe_testing
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
 
     env:
       APP_ENV: testing
-      DB_CONNECTION: mysql
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_DATABASE: believe_testing
-      DB_USERNAME: root
-      DB_PASSWORD: password
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/ci-testing.sqlite
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
       SESSION_DRIVER: array
       MAIL_MAILER: array
       BROADCAST_CONNECTION: log
+      PHP_VERSION: '8.4'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
-          extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, pdo_mysql, mysql, redis, pcntl, posix
-          coverage: none
-          tools: composer:v2
+          fetch-depth: 1
+
+      - name: Use EA-PHP CLI (same as deploy)
+        run: |
+          set -euo pipefail
+          PHP_CLI="/opt/cpanel/ea-php$(echo "${PHP_VERSION}" | tr -d '.')/root/usr/bin/php"
+          if [ ! -x "${PHP_CLI}" ]; then
+            echo "::error::Missing EA PHP CLI at ${PHP_CLI}"
+            exit 1
+          fi
+          mkdir -p "${HOME}/bin"
+          ln -sfn "${PHP_CLI}" "${HOME}/bin/php"
+          export PATH="${HOME}/bin:$(dirname "${PHP_CLI}"):${PATH}"
+          if [ ! -x "${HOME}/bin/composer" ]; then
+            curl -sS https://getcomposer.org/installer | "${PHP_CLI}" -- --install-dir="${HOME}/bin" --filename=composer.phar
+            printf '%s\n' '#!/usr/bin/env bash' "exec \"${PHP_CLI}\" \"\${HOME}/bin/composer.phar\" \"\$@\"" > "${HOME}/bin/composer"
+            chmod +x "${HOME}/bin/composer"
+          fi
+          echo "${HOME}/bin" >> "${GITHUB_PATH}"
+          echo "$(dirname "${PHP_CLI}")" >> "${GITHUB_PATH}"
+          php --version
+          php -m | grep -qi pdo_sqlite || { echo "::error::pdo_sqlite required"; exit 1; }
 
       - name: Get Composer cache dir
         id: composer-cache
@@ -58,18 +57,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php8.4-composer-${{ hashFiles('composer.lock') }}
+          key: ${{ runner.os }}-selfhosted-php8.4-composer-${{ hashFiles('composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php8.4-composer-
+            ${{ runner.os }}-selfhosted-php8.4-composer-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader
 
-      - name: Prepare application
+      - name: Prepare application (ephemeral SQLite)
         run: |
+          set -euo pipefail
           cp .env.example .env
-          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache
-          chmod -R ug+rwx storage bootstrap/cache
+          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database
+          # Empty SQLite file is enough for CI (no migrate:fresh; health check only needs select 1).
+          : > database/ci-testing.sqlite
+          chmod -R ug+rwx storage bootstrap/cache database
           php artisan key:generate --force
           php artisan config:clear
 

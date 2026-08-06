@@ -1,5 +1,4 @@
-# Reusable Pest CI suite — GitHub-hosted ubuntu + ephemeral SQLite only (never VPS MySQL).
-# Kept on ubuntu-latest so Tests are not blocked when the self-hosted runner cannot acquire jobs.
+# Reusable Pest CI suite — GitHub-hosted ubuntu + ephemeral MySQL only (never VPS / production DB).
 name: Pest CI (reusable)
 
 on:
@@ -7,14 +6,32 @@ on:
 
 jobs:
   pest:
-    name: Pest CI suite (PHP 8.4 / SQLite)
+    name: Pest CI suite (PHP 8.4 / GHA MySQL only)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: believe_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
     env:
       APP_ENV: testing
-      DB_CONNECTION: sqlite
-      DB_DATABASE: ${{ github.workspace }}/database/ci-testing.sqlite
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: believe_testing
+      DB_USERNAME: root
+      DB_PASSWORD: password
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
       SESSION_DRIVER: array
@@ -29,7 +46,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, pdo_sqlite, sqlite3, redis, pcntl, posix, sodium
+          extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, pdo_mysql, mysql, redis, pcntl, posix, sodium
           coverage: none
           tools: composer:v2
 
@@ -48,13 +65,12 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader
 
-      - name: Prepare application (ephemeral SQLite)
+      - name: Prepare application
         run: |
           set -euo pipefail
           cp .env.example .env
-          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database
-          : > database/ci-testing.sqlite
-          chmod -R ug+rwx storage bootstrap/cache database
+          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache
+          chmod -R ug+rwx storage bootstrap/cache
           php artisan key:generate --force
           php artisan config:clear
 

@@ -21,6 +21,7 @@ use App\Support\SupporterSubscriptionService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Middleware;
 use Laravel\Cashier\Cashier;
 use Tighten\Ziggy\Ziggy;
@@ -106,7 +107,9 @@ class HandleInertiaRequests extends Middleware
                     $user->setRelation('organization', $ownedOrganization);
                 }
             }
-            $user->load('serviceSellerProfile');
+            if (Schema::hasTable('service_seller_profiles')) {
+                $user->load('serviceSellerProfile');
+            }
         }
         // Only access roles if user is not a LivestockUser or Merchant (User model has roles via Spatie Permission)
         $role = null;
@@ -224,10 +227,12 @@ class HandleInertiaRequests extends Middleware
             } else {
                 // Main app user data (only for regular User models)
                 if (! ($user instanceof LivestockUser) && ! ($user instanceof Merchant)) {
-                    $careAllianceHub = CareAlliance::query()
-                        ->where('creator_user_id', $user->id)
-                        ->where('status', 'active')
-                        ->first(['id', 'slug', 'name']);
+                    $careAllianceHub = Schema::hasTable('care_alliances')
+                        ? CareAlliance::query()
+                            ->where('creator_user_id', $user->id)
+                            ->where('status', 'active')
+                            ->first(['id', 'slug', 'name'])
+                        : null;
 
                     $user->clampAiTokensUsed();
                     $aiTokensIncluded = (int) ($user->ai_tokens_included ?? 0);

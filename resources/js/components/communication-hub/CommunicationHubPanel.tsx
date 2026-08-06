@@ -8,12 +8,14 @@ import SearchBar from '@/components/communication-hub/SearchBar'
 import CategorySelect from '@/components/communication-hub/CategorySelect'
 import HubSegmentedTabs from '@/components/communication-hub/HubSegmentedTabs'
 import HubEmptyState from '@/components/communication-hub/HubEmptyState'
+import StartDiscussionModal from '@/components/communication-hub/StartDiscussionModal'
 import {
   type HubAnnouncement,
   type HubCategory,
   type HubDiscussion,
   type HubPermissions,
 } from '@/components/communication-hub/types'
+import { hubRoute, type HubContext } from '@/lib/communication-hub-routes'
 import { ch } from '@/pages/Organization/CommunicationHub/theme'
 import { cn } from '@/lib/utils'
 
@@ -49,25 +51,19 @@ export default function CommunicationHubPanel({
   const [discussionSearch, setDiscussionSearch] = useState('')
   const [categoryId, setCategoryId] = useState('all')
   const [discussionFilter, setDiscussionFilter] = useState('all')
+  const [startDiscussionOpen, setStartDiscussionOpen] = useState(false)
 
   const selectTab = (next: 'announcements' | 'discussions') => {
     setTab(next)
     localStorage.setItem(TAB_KEY, next)
   }
 
-  const announcementHref = (slug: string) =>
-    manageMode
-      ? route('org.communication-hub.announcements.show', slug)
-      : organization.slug
-        ? route('organizations.communication-hub', organization.slug) + `?tab=announcements`
-        : '#'
+  const hubContext: HubContext = manageMode
+    ? { mode: 'manage', org_slug: null }
+    : { mode: 'community', org_slug: organization.slug ?? null }
 
-  const discussionHref = (slug: string) =>
-    manageMode
-      ? route('org.communication-hub.discussions.show', slug)
-      : organization.slug
-        ? route('organizations.communication-hub', organization.slug) + `?tab=discussions`
-        : '#'
+  const announcementHref = (slug: string) => hubRoute('announcements.show', hubContext, slug)
+  const discussionHref = (slug: string) => hubRoute('discussions.show', hubContext, slug)
 
   const filteredDiscussions = useMemo(() => {
     let items = [...discussions]
@@ -98,13 +94,13 @@ export default function CommunicationHubPanel({
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-            Community
+            A&amp;D Board
           </p>
           <h2 className={ch.heading}>
-            <span className={ch.titleGradient}>Communication Hub</span>
+            <span className={ch.titleGradient}>Announcements &amp; Discussion</span>
           </h2>
           <p className={ch.subheading}>
-            Official announcements and community discussions for {organization.name}
+            Official announcements and supporter Discussion Board for {organization.name}
           </p>
         </div>
         <HubSegmentedTabs value={tab} onChange={selectTab} />
@@ -136,7 +132,7 @@ export default function CommunicationHubPanel({
                 <AnnouncementCard
                   key={item.id}
                   announcement={item}
-                  href={manageMode ? route('org.communication-hub.announcements.show', item.slug) : announcementHref(item.slug)}
+                  href={announcementHref(item.slug)}
                 />
               ))
             )}
@@ -147,9 +143,7 @@ export default function CommunicationHubPanel({
                 href={
                   manageMode
                     ? route('org.communication-hub.announcements.index')
-                    : organization.slug
-                      ? route('organizations.communication-hub', organization.slug)
-                      : '#'
+                    : hubRoute('index', hubContext)
                 }
                 className={cn(ch.link, 'inline-flex items-center gap-1 text-sm')}
               >
@@ -169,12 +163,24 @@ export default function CommunicationHubPanel({
               <h3 className={ch.sectionTitle}>Discussion Board</h3>
             </div>
             {permissions.can_create_discussion && (
-              <Button asChild size="sm" className={cn(ch.btn, 'gap-1.5 rounded-xl')}>
-                <Link href={route('org.communication-hub.discussions.create')}>
+              manageMode ? (
+                <Button asChild size="sm" className={cn(ch.btn, 'gap-1.5 rounded-xl')}>
+                  <Link href={hubRoute('discussions.create', hubContext)}>
+                    <Plus className="h-4 w-4" />
+                    New
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  className={cn(ch.btn, 'gap-1.5 rounded-xl')}
+                  onClick={() => setStartDiscussionOpen(true)}
+                >
                   <Plus className="h-4 w-4" />
                   New
-                </Link>
-              </Button>
+                </Button>
+              )
             )}
           </div>
 
@@ -212,7 +218,7 @@ export default function CommunicationHubPanel({
                 <DiscussionCard
                   key={item.id}
                   discussion={item}
-                  href={manageMode ? route('org.communication-hub.discussions.show', item.slug) : discussionHref(item.slug)}
+                  href={discussionHref(item.slug)}
                 />
               ))
             )}
@@ -224,9 +230,7 @@ export default function CommunicationHubPanel({
                 href={
                   manageMode
                     ? route('org.communication-hub.discussions.index')
-                    : organization.slug
-                      ? route('organizations.communication-hub', organization.slug) + '?tab=discussions'
-                      : '#'
+                    : hubRoute('discussions.index', hubContext)
                 }
                 className={cn(ch.link, 'inline-flex items-center gap-1 text-sm')}
               >
@@ -267,6 +271,16 @@ export default function CommunicationHubPanel({
           </div>
         ))}
       </div>
+
+      {!manageMode && (
+        <StartDiscussionModal
+          open={startDiscussionOpen}
+          onOpenChange={setStartDiscussionOpen}
+          organizationName={organization.name}
+          categories={categories}
+          hubContext={hubContext}
+        />
+      )}
     </div>
   )
 }

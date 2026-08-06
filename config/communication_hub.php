@@ -41,7 +41,25 @@ return [
 
     'reaction_emojis' => ['👍', '❤️', '🙏', '🎉', '😮', '😢', '🔥'],
 
+    /*
+    | Visibility audiences (who can View):
+    | - public: anyone, including guests
+    | - followers: followers, members, and staff
+    | - members: verified members and staff
+    | - staff: organization managers / board staff only
+    */
+    'visibility_audiences' => [
+        'public' => 'Everyone (public)',
+        'followers' => 'Followers & members',
+        'members' => 'Members only',
+        'staff' => 'Staff only',
+    ],
+
     'default_settings' => [
+        // Who can View
+        'announcement_visibility' => 'public',
+        'discussion_visibility' => 'public',
+        // Who can Post (discussions)
         'allow_followers_to_post' => true,
         'allow_members_to_post' => true,
         'require_approval' => false,

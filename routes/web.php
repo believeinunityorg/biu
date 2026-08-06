@@ -922,7 +922,58 @@ Route::get('/organizations/{slug}/supporters', [OrganizationController::class, '
 Route::get('/organizations/{slug}/impact', [OrganizationController::class, 'impact'])->name('organizations.impact');
 Route::get('/organizations/{slug}/details', [OrganizationController::class, 'details'])->name('organizations.details');
 Route::get('/organizations/{slug}/contact', [OrganizationController::class, 'contact'])->name('organizations.contact');
-Route::get('/organizations/{slug}/communication-hub', [\App\Http\Controllers\Organization\CommunicationHubController::class, 'publicShow'])->name('organizations.communication-hub');
+// Public / community A&D (Announcements & Discussion Board) — org resolved by public slug
+Route::prefix('organizations/{slug}/communication-hub')->group(function () {
+    $community = \App\Http\Controllers\Organization\CommunityCommunicationHubController::class;
+
+    Route::get('/', [$community, 'show'])->name('organizations.communication-hub');
+    Route::get('/announcements/{announcement:slug}', [$community, 'showAnnouncement'])
+        ->name('organizations.communication-hub.announcements.show');
+    Route::get('/discussions', [$community, 'discussionsIndex'])
+        ->name('organizations.communication-hub.discussions.index');
+
+    // Static path before {discussion:slug} so "create" is not captured as a slug
+    Route::middleware(['auth', 'EnsureEmailIsVerified'])->group(function () use ($community) {
+        Route::get('/discussions/create', [$community, 'discussionsCreate'])
+            ->name('organizations.communication-hub.discussions.create');
+        Route::post('/discussions', [$community, 'discussionsStore'])
+            ->name('organizations.communication-hub.discussions.store');
+        Route::post('/announcements/{announcement:slug}/comments', [$community, 'storeComment'])
+            ->name('organizations.communication-hub.announcements.comments.store');
+    });
+
+    Route::get('/discussions/{discussion:slug}', [$community, 'discussionsShow'])
+        ->name('organizations.communication-hub.discussions.show');
+
+    Route::middleware(['auth', 'EnsureEmailIsVerified'])->group(function () use ($community) {
+        Route::post('/discussions/{discussion:slug}', [$community, 'discussionsUpdate'])
+            ->name('organizations.communication-hub.discussions.update');
+        Route::delete('/discussions/{discussion:slug}', [$community, 'discussionsDestroy'])
+            ->name('organizations.communication-hub.discussions.destroy');
+        Route::post('/discussions/{discussion:slug}/reply', [$community, 'reply'])
+            ->name('organizations.communication-hub.discussions.reply');
+        Route::put('/discussions/{discussion:slug}/replies/{reply}', [$community, 'updateReply'])
+            ->name('organizations.communication-hub.discussions.replies.update');
+        Route::delete('/discussions/{discussion:slug}/replies/{reply}', [$community, 'destroyReply'])
+            ->name('organizations.communication-hub.discussions.replies.destroy');
+        Route::post('/discussions/{discussion:slug}/react', [$community, 'react'])
+            ->name('organizations.communication-hub.discussions.react');
+        Route::post('/discussions/{discussion:slug}/replies/{reply}/react', [$community, 'reactReply'])
+            ->name('organizations.communication-hub.discussions.replies.react');
+        Route::post('/discussions/{discussion:slug}/follow', [$community, 'follow'])
+            ->name('organizations.communication-hub.discussions.follow');
+        Route::delete('/discussions/{discussion:slug}/follow', [$community, 'unfollow'])
+            ->name('organizations.communication-hub.discussions.unfollow');
+        Route::post('/discussions/{discussion:slug}/mute', [$community, 'mute'])
+            ->name('organizations.communication-hub.discussions.mute');
+        Route::delete('/discussions/{discussion:slug}/mute', [$community, 'unmute'])
+            ->name('organizations.communication-hub.discussions.unmute');
+        Route::post('/discussions/{discussion:slug}/report', [$community, 'report'])
+            ->name('organizations.communication-hub.discussions.report');
+        Route::post('/discussions/{discussion:slug}/replies/{reply}/report', [$community, 'reportReply'])
+            ->name('organizations.communication-hub.discussions.replies.report');
+    });
+});
 
 // Unity Meet â€” public guest join (Connection Hub, invitations; same handler as legacy path)
 Route::get('/unity-meet/join/{roomName}', [LivestreamController::class, 'guestJoin'])
@@ -1024,6 +1075,10 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:user'])->name('user.')
 
     Route::get('/profile/following', [UserProfileController::class, 'favorites'])->name('profile.favorites');
     Route::delete('/profile/following/{id}', [UserProfileController::class, 'removeFavorite'])->name('profile.favorites.remove');
+
+    // Supporter Announcements & Discussion boards for followed organizations
+    Route::get('/supporter/communication-hub', [\App\Http\Controllers\Supporter\SupporterCommunicationHubController::class, 'index'])
+        ->name('communication-hub.index');
     Route::get('/profile/project-applications', [UserProfileController::class, 'profileProjectApplications'])->name('profile.project-applications');
     Route::get('/profile/project-applications/{lead}', [UserProfileController::class, 'profileProjectApplicationShow'])->name('profile.project-applications.show')->where('lead', '[0-9]+');
 

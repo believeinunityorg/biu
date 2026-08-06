@@ -478,6 +478,22 @@ class OrganizationDiscussionService
             ->where('organization_id', $organization->id)
             ->with(['author:id,name,image', 'category:id,name,slug,color']);
 
+        // Public/community lists hide unapproved, hidden, and archived threads.
+        // Authors still see their own pending threads when user_id is provided.
+        if ((bool) ($filters['public_only'] ?? false)) {
+            $viewerId = (int) ($filters['user_id'] ?? 0);
+            $query->where(function (Builder $q) use ($viewerId) {
+                $q->visibleToPublic();
+                if ($viewerId > 0) {
+                    $q->orWhere(function (Builder $own) use ($viewerId) {
+                        $own->where('created_by', $viewerId)
+                            ->where('is_hidden', false)
+                            ->where('is_archived', false);
+                    });
+                }
+            });
+        }
+
         // replies_count column is denormalized on the discussions table; skip withCount for hub previews.
         if (! $lightweight) {
             $query->withCount('replies');

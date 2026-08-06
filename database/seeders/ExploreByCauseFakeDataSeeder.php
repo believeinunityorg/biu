@@ -14,7 +14,9 @@ class ExploreByCauseFakeDataSeeder extends Seeder
         $categories = DB::table('primary_action_categories')->pluck('id', 'slug');
 
         $userId = DB::table('users')->value('id') ?? 1;
-        $orgId  = DB::table('organizations')->value('id') ?? 1;
+        $orgId = DB::table('organizations')->value('id') ?? 1;
+        // courses.organization_id FK references users.id (org owner), not organizations.id
+        $courseOrgOwnerId = DB::table('organizations')->where('id', $orgId)->value('user_id') ?? $userId;
 
         // ── Organizations ─────────────────────────────────────────────────
         $organizations = [
@@ -145,7 +147,7 @@ class ExploreByCauseFakeDataSeeder extends Seeder
             if (! $existingId) {
                 $courseSlug = Str::slug($data['title']) . '-' . Str::random(5);
                 $existingId = DB::table('courses')->insertGetId([
-                    'organization_id' => $orgId,
+                    'organization_id' => $courseOrgOwnerId,
                     'user_id'         => $userId,
                     'name'            => $data['title'],
                     'slug'            => $courseSlug,

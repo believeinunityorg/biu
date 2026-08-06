@@ -148,20 +148,19 @@ class OrganizationDiscussion extends Model
         return $query
             ->where('is_hidden', false)
             ->where('is_archived', false)
-            ->where(function (Builder $q) {
-                $q->whereNotNull('approved_at')->orWhereNull('approved_at');
-            });
+            ->whereNotNull('approved_at');
     }
 
     public function scopeApproved(Builder $query): Builder
     {
-        return $query->where(function (Builder $q) {
-            $q->whereNotNull('approved_at');
-        });
+        return $query->whereNotNull('approved_at');
     }
 
     public function isVisiblePublicly(): bool
     {
-        return ! $this->is_hidden && ! $this->is_archived && ! $this->trashed();
+        return ! $this->is_hidden
+            && ! $this->is_archived
+            && ! $this->trashed()
+            && $this->approved_at !== null;
     }
 }

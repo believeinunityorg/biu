@@ -244,7 +244,10 @@ class User extends Authenticatable implements MustVerifyEmail
                 $user->slug = $slug;
             }
 
-            if ($user->proximity_notifications_enabled === null) {
+            if (
+                \Illuminate\Support\Facades\Schema::hasColumn($user->getTable(), 'proximity_notifications_enabled')
+                && $user->proximity_notifications_enabled === null
+            ) {
                 $user->proximity_notifications_enabled = true;
             }
 
@@ -1546,6 +1549,10 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function processingRewardPointsBalance(): float
     {
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('believe_point_purchases', 'reward_points_awarded')) {
+            return 0.0;
+        }
+
         return round((float) BelievePointPurchase::query()
             ->where('user_id', $this->id)
             ->where('status', 'completed')

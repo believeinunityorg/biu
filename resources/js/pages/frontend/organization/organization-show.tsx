@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import toast from "react-hot-toast"
 import { Link, router, usePage, useForm } from "@inertiajs/react"
 import FrontendLayout from "@/layouts/frontend/frontend-layout"
+import { EinVerifiedBadge, isEinVerifiedOrg } from "@/components/frontend/organization/EinVerifiedBadge"
 import {
   ChevronDown,
   MapPin,
@@ -960,6 +961,11 @@ export default function OrganizationPage({
                         <CheckCircle className="w-5 h-5 text-white" />
                       </div>
                     )}
+                    {isEinVerifiedOrg(organization) && !organization.is_care_alliance_public && (
+                      <div className="absolute -top-1 -right-1 w-7 h-7 bg-emerald-600 rounded-full border-3 border-[#0a0f1a] flex items-center justify-center" title="EIN Verified">
+                        <ShieldCheck className="w-4 h-4 text-white" />
+                      </div>
+                    )}
                 </div>
 
                   <div className="text-center sm:text-left flex-1 w-full sm:w-auto">
@@ -983,12 +989,7 @@ export default function OrganizationPage({
                           Registered
                         </Badge>
                       )}
-                      {organization.is_registered && organization.registered_organization?.user?.email && (
-                        <Badge className="bg-green-600 hover:bg-green-600 text-white text-xs px-2 py-0.5 flex items-center gap-1">
-                          <ShieldCheck className="w-3 h-3" />
-                          Verified
-                        </Badge>
-                      )}
+                      <EinVerifiedBadge verified={isEinVerifiedOrg(organization) && !organization.is_care_alliance_public} />
                       {!organization.is_registered && (
                         <Badge className="bg-orange-500 hover:bg-orange-600 text-white text-xs px-2 py-0.5 flex items-center gap-1">
                           <AlertCircle className="w-3 h-3" />

@@ -436,6 +436,23 @@ class Organization extends Model implements HasPreferredPayoutMethod
     }
 
     /**
+     * True when the organization registered with a real EIN (not a platform placeholder).
+     * Used for the public "EIN Verified" trust badge — independent of module access.
+     */
+    public function hasRealEin(): bool
+    {
+        return (bool) $this->has_ein;
+    }
+
+    /**
+     * Non-EIN orgs are not subject to IRS tax-period compliance locks.
+     */
+    public function isSubjectToIrsTaxCompliance(): bool
+    {
+        return $this->hasRealEin();
+    }
+
+    /**
      * Get the Bridge integration for this organization
      */
     public function bridgeIntegration(): HasOne

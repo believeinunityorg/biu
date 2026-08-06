@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Search, ChevronLeft, ChevronRight, Heart, MapPin, BadgeCheck, Gift, Users, TrendingUp } from "lucide-react"
+import { EinVerifiedBadge, isEinVerifiedOrg } from "@/components/frontend/organization/EinVerifiedBadge"
 import { Button } from "@/components/frontend/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/frontend/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/frontend/ui/avatar"
@@ -38,6 +39,8 @@ interface Organization {
   is_registered?: boolean
   is_favorited?: boolean
   verified?: boolean
+  has_ein?: boolean
+  ein_verified?: boolean
   logo_url?: string | null
   primary_action_categories?: PrimaryActionCategory[]
 }
@@ -123,15 +126,19 @@ function getDisplayCauses(org: Organization): PrimaryActionCategory[] {
 }
 
 function OrgNameMeta({ org }: { org: Organization }) {
+  const einVerified = isEinVerifiedOrg(org)
   return (
     <div className="min-w-0">
       <p className="break-words font-semibold leading-snug text-slate-900 dark:text-white">{org.name || "—"}</p>
-      {org.is_registered && (
-        <p className="mt-1 inline-flex items-center gap-1 text-xs text-sky-700 dark:text-sky-300">
-          <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
-          Verified Organization
-        </p>
-      )}
+      <div className="mt-1 flex flex-wrap items-center gap-2">
+        {org.is_registered && (
+          <p className="inline-flex items-center gap-1 text-xs text-sky-700 dark:text-sky-300">
+            <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
+            Registered on BIU
+          </p>
+        )}
+        <EinVerifiedBadge verified={einVerified} size="sm" />
+      </div>
     </div>
   )
 }

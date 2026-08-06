@@ -1220,6 +1220,26 @@ export default function Dashboard({
       <div className="flex flex-col gap-6 m-3 md:m-6">
         {/* Pending Unity Impact Alliance invites — org dashboard: sign in → /dashboard → this card (also linked from invitation emails) */}
         {showOrgAllianceMembershipUi && <CareAllianceOrgInvitesInline />}
+        {/* Optional Form 1023 path for orgs that registered without a real EIN — does not block modules. */}
+        {isOrgUser &&
+          !isCareAllianceHub &&
+          organization?.has_edited_irs_data &&
+          !organization?.has_ein &&
+          !form1023Application && (
+            <Card className="border-sky-200 bg-sky-50/80 dark:border-sky-900 dark:bg-sky-950/30">
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-medium text-sky-900 dark:text-sky-100">Optional: Apply for 501(c)(3) with Form 1023</p>
+                  <p className="text-sm text-sky-800/80 dark:text-sky-200/80">
+                    You already have full access to Believe modules. If you want help obtaining an EIN / tax-exempt status, you can start Form 1023 anytime.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => router.visit("/dashboard/form1023/apply")}>
+                  Start Form 1023
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         {/* Profile completion: required org onboarding documents — not shown on Unity Impact Alliance dashboard. */}
         {isOrgUser && profileCompletion && profileCompletion.percent < 100 && (
           <ProfileCompletionBanner profileCompletion={profileCompletion} variant="organization" />
@@ -1952,10 +1972,19 @@ export default function Dashboard({
 
                           <div>
                             <span className="text-sm text-gray-600 dark:text-gray-300">Verification Status</span>
-                            <div className="flex items-center gap-2 text-green-600">
-                              <Check className="h-4 w-4" />
-                              <span>Verified Organization</span>
-                            </div>
+                            {organization?.has_ein || organization?.ein_verified ? (
+                              <div className="flex items-center gap-2 text-emerald-600">
+                                <Check className="h-4 w-4" />
+                                <span>EIN Verified</span>
+                              </div>
+                            ) : (
+                              <div className="text-gray-700 dark:text-gray-300">
+                                Registered on BIU
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Add a real EIN later to earn the EIN Verified badge for supporters.
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>

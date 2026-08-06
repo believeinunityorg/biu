@@ -447,7 +447,28 @@ class OrganizationRegisterController extends Controller
             }
             $claimVerificationMetadata['verification_document_paths'] = $verificationDocPaths;
 
-            $taxEvaluation = $this->taxComplianceService->evaluate($validated['tax_period'] ?? null, $validated['ein']);
+            $hasRealEin = (bool) ($validated['has_ein'] ?? true);
+
+            // Non-EIN orgs get full module access; IRS tax-period lock only applies to real-EIN orgs.
+            if ($hasRealEin) {
+                $taxEvaluation = $this->taxComplianceService->evaluate($validated['tax_period'] ?? null, $validated['ein']);
+            } else {
+                $checkedAt = now();
+                $taxEvaluation = [
+                    'status' => 'not_applicable',
+                    'normalized_tax_period' => null,
+                    'parsed_tax_period_date' => null,
+                    'months_since_tax_period' => null,
+                    'is_expired' => false,
+                    'checked_at' => $checkedAt,
+                    'meta' => [
+                        'status' => 'not_applicable',
+                        'reason' => 'organization_registered_without_ein',
+                        'checked_at' => $checkedAt->toIso8601String(),
+                    ],
+                    'should_lock' => false,
+                ];
+            }
 
             $referrerUserId = null;
             if (! empty($validated['referralCode'])) {
@@ -459,13 +480,15 @@ class OrganizationRegisterController extends Controller
 
             DB::beginTransaction();
 
-            // Check if IRS data was edited / no real EIN — keep pending until verified
-            $hasEditedIRS = $request->boolean('has_edited_irs_data', false) || ! ($validated['has_ein'] ?? true);
-            $initialRole = ($hasEditedIRS || $taxEvaluation['should_lock'] || $simplifiedRegistration) ? 'organization_pending' : 'organization';
+            // Track edited/missing IRS data for optional Form 1023 later — do not use it to block modules.
+            $hasEditedIRS = $request->boolean('has_edited_irs_data', false) || ! $hasRealEin;
+            // Only tax-compliance lock keeps an org in pending / limited role.
+            $shouldLockAccess = (bool) ($taxEvaluation['should_lock'] ?? false);
+            $initialRole = $shouldLockAccess ? 'organization_pending' : 'organization';
 
-            // Store original IRS data if edited
+            // Store original IRS data if edited (skip lookup for synthetic non-EIN placeholders)
             $originalIRSData = null;
-            if ($hasEditedIRS) {
+            if ($hasEditedIRS && $hasRealEin) {
                 $originalIRSData = $this->einLookupService->lookupEIN($validated['ein']);
             }
 
@@ -547,9 +570,7 @@ class OrganizationRegisterController extends Controller
                 'description' => $validated['description'],
                 'mission' => $validated['mission'],
                 'registered_user_image' => $imagePath,
-                'registration_status' => ($hasEditedIRS || $simplifiedRegistration || $taxEvaluation['should_lock'])
-                    ? 'pending'
-                    : 'approved',
+                'registration_status' => $shouldLockAccess ? 'pending' : 'approved',
                 'verification_source' => $verificationSource,
                 'claim_verification_metadata' => $claimVerificationMetadata,
                 'has_edited_irs_data' => $hasEditedIRS,
@@ -557,7 +578,7 @@ class OrganizationRegisterController extends Controller
                 'tax_compliance_status' => $taxEvaluation['status'],
                 'tax_compliance_checked_at' => $taxEvaluation['checked_at'],
                 'tax_compliance_meta' => $taxEvaluation['meta'],
-                'is_compliance_locked' => $taxEvaluation['should_lock'],
+                'is_compliance_locked' => $shouldLockAccess,
                 'preferred_payout_method' => $validated['preferred_payout_method'] ?? null,
             ]);
 
@@ -664,7 +685,7 @@ class OrganizationRegisterController extends Controller
             // Return success response
             return response()->json([
                 'success' => true,
-                'message' => $hasEditedIRS
+                'message' => $shouldLockAccess
                     ? 'Application submitted successfully! We will review it within 3-5 business days.'
                     : 'Organization registered successfully!',
                 'organization' => $organization

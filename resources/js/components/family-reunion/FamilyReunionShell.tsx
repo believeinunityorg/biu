@@ -10,6 +10,7 @@ import {
   Users,
   BookUser,
   HeartHandshake,
+  UserPlus,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
@@ -17,6 +18,7 @@ const tabs = [
   { title: 'Family Overview', short: 'Overview', href: '/organization/family-reunion', icon: LayoutDashboard },
   { title: 'Family Tree', short: 'Tree', href: '/organization/family-reunion/tree', icon: Network },
   { title: 'Branches', short: 'Branches', href: '/organization/family-reunion/branches', icon: GitBranch },
+  { title: 'Invite', short: 'Invite', href: '/organization/family-reunion/invite', icon: UserPlus },
   { title: 'Members', short: 'Members', href: '/organization/family-reunion/members', icon: Users },
   { title: 'Directory', short: 'Directory', href: '/organization/family-reunion/directory', icon: BookUser },
   { title: 'Relationships', short: 'Relations', href: '/organization/family-reunion/admin', icon: HeartHandshake },

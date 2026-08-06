@@ -4,6 +4,7 @@ namespace App\Services\FamilyReunion;
 
 use App\Enums\FamilyBranchStatus;
 use App\Enums\FamilyMemberStatus;
+use App\Mail\FamilyMemberInviteMail;
 use App\Models\FamilyBranch;
 use App\Models\FamilyFounder;
 use App\Models\FamilyMember;
@@ -12,7 +13,9 @@ use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class FamilyReunionService
 {
@@ -144,6 +147,7 @@ class FamilyReunionService
                     'father_id' => $grandfatherId,
                     'mother_id' => $grandmotherId,
                     'generation' => 1,
+                    'relationship_label' => 'Child of founders',
                     'status' => $adminUserId ? FamilyMemberStatus::Active : ($adminEmail ? FamilyMemberStatus::Unclaimed : FamilyMemberStatus::Active),
                     'claimed_at' => $adminUserId ? now() : null,
                 ]);
@@ -212,6 +216,7 @@ class FamilyReunionService
             'mother_id' => $data['mother_id'] ?? null,
             'spouse_id' => $data['spouse_id'] ?? null,
             'generation' => $generation,
+            'relationship_label' => $data['relationship_label'] ?? 'Child',
             'status' => $status,
             'claimed_at' => $existingUser ? now() : null,
         ]);
@@ -296,6 +301,7 @@ class FamilyReunionService
             $member->user_id = $user->id;
             $member->status = FamilyMemberStatus::Active;
             $member->claimed_at = now();
+            $member->invite_token = null;
             if (! $member->full_name) {
                 $member->full_name = $user->name;
             }
@@ -375,8 +381,8 @@ class FamilyReunionService
 
         return [
             'founders' => $founder ? [
-                'grandfather_name' => $founder->grandfather_name,
-                'grandmother_name' => $founder->grandmother_name,
+                'grandfather_name' => $founder->grandfatherMember?->full_name ?: $founder->grandfather_name,
+                'grandmother_name' => $founder->grandmotherMember?->full_name ?: $founder->grandmother_name,
                 'grandfather_photo_url' => $founder->grandfather_photo_url,
                 'grandmother_photo_url' => $founder->grandmother_photo_url,
                 'grandfather_birth_year' => $founder->grandfather_birth_year,
@@ -436,6 +442,7 @@ class FamilyReunionService
             'birth_year' => $m->birth_year,
             'death_year' => $m->death_year,
             'generation' => $m->generation,
+            'relationship_label' => $m->relationship_label,
             'status' => $m->status?->value ?? $m->status,
             'branch' => $m->branch?->name,
             'branch_id' => $m->branch_id,
@@ -443,6 +450,8 @@ class FamilyReunionService
             'mother_id' => $m->mother_id,
             'spouse_id' => $m->spouse_id,
             'is_claimed' => $m->is_claimed,
+            'is_founding_grandfather' => (bool) $m->is_founding_grandfather,
+            'is_founding_grandmother' => (bool) $m->is_founding_grandmother,
             'children_ids' => $members
                 ->filter(fn (FamilyMember $c) => $c->father_id === $m->id || $c->mother_id === $m->id)
                 ->pluck('id')
@@ -453,10 +462,10 @@ class FamilyReunionService
         return [
             'founders' => $founder ? [
                 'grandfather' => $founder->grandfather_member_id && $members->has($founder->grandfather_member_id)
-                    ? $mapMember($members[$founder->grandfather_member_id])
+                    ? array_merge($mapMember($members[$founder->grandfather_member_id]), ['relationship_label' => 'Founding Grandfather'])
                     : null,
                 'grandmother' => $founder->grandmother_member_id && $members->has($founder->grandmother_member_id)
-                    ? $mapMember($members[$founder->grandmother_member_id])
+                    ? array_merge($mapMember($members[$founder->grandmother_member_id]), ['relationship_label' => 'Founding Grandmother'])
                     : null,
             ] : null,
             'branches' => $branches->map(function (FamilyBranch $branch) use ($members, $mapMember) {
@@ -508,6 +517,295 @@ class FamilyReunionService
         $member->save();
 
         return $member->fresh(['father', 'mother', 'spouse', 'branch']);
+    }
+
+    /**
+     * @param  array{
+     *     full_name?: string,
+     *     email?: string|null,
+     *     branch_id?: int|null,
+     *     father_id?: int|null,
+     *     mother_id?: int|null,
+     *     spouse_id?: int|null,
+     *     relationship_label?: string|null,
+     *     generation?: int|null,
+     * }  $data
+     */
+    public function updateMember(
+        Organization $organization,
+        FamilyMember $member,
+        array $data,
+        ?User $actor = null,
+    ): FamilyMember {
+        if ((int) $member->organization_id !== (int) $organization->id) {
+            abort(404);
+        }
+
+        $fields = ['full_name', 'email', 'branch_id', 'father_id', 'mother_id', 'spouse_id', 'relationship_label', 'generation'];
+        foreach ($fields as $field) {
+            if (! array_key_exists($field, $data)) {
+                continue;
+            }
+            $old = $member->{$field};
+            $new = $data[$field];
+            if ($field === 'email' && $new) {
+                $new = strtolower(trim((string) $new));
+            }
+            if ((string) $old !== (string) $new) {
+                $this->audit($organization, $member, $field, $old, $new, $actor);
+                $member->{$field} = $new;
+            }
+        }
+
+        if (! isset($data['generation'])) {
+            $member->generation = $this->inferGeneration($member->father_id, $member->mother_id);
+        }
+
+        $member->save();
+
+        return $member->fresh(['father', 'mother', 'spouse', 'branch']);
+    }
+
+    public function archiveMember(Organization $organization, FamilyMember $member, ?User $actor = null): FamilyMember
+    {
+        if ((int) $member->organization_id !== (int) $organization->id) {
+            abort(404);
+        }
+
+        if ($member->is_founding_grandfather || $member->is_founding_grandmother) {
+            abort(422, 'Founding couple members cannot be removed from here. Edit them under Founding Couple.');
+        }
+
+        $member->status = FamilyMemberStatus::Archived;
+        $member->save();
+        $this->audit($organization, $member, 'status', FamilyMemberStatus::Active->value, FamilyMemberStatus::Archived->value, $actor);
+
+        return $member;
+    }
+
+    /**
+     * Invite a family member by email (creates/updates unclaimed record and emails a claim link).
+     *
+     * @param  array{
+     *     email: string,
+     *     full_name?: string|null,
+     *     branch_id?: int|null,
+     *     relationship_label?: string|null,
+     * }  $data
+     */
+    public function inviteMember(Organization $organization, array $data, ?User $actor = null): FamilyMember
+    {
+        $email = strtolower(trim((string) $data['email']));
+        $token = Str::random(48);
+
+        $member = FamilyMember::query()
+            ->forOrganization($organization->id)
+            ->visible()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->first();
+
+        if (! $member) {
+            $member = FamilyMember::query()->create([
+                'organization_id' => $organization->id,
+                'full_name' => $data['full_name'] ?: explode('@', $email)[0],
+                'email' => $email,
+                'branch_id' => $data['branch_id'] ?? null,
+                'relationship_label' => $data['relationship_label'] ?? null,
+                'generation' => 1,
+                'status' => FamilyMemberStatus::Unclaimed,
+                'invite_token' => $token,
+                'invited_at' => now(),
+            ]);
+            $this->audit($organization, $member, 'created', null, 'invite', $actor);
+        } else {
+            $member->invite_token = $token;
+            $member->invited_at = now();
+            $member->status = $member->user_id ? FamilyMemberStatus::Active : FamilyMemberStatus::Unclaimed;
+            if (! empty($data['full_name'])) {
+                $member->full_name = $data['full_name'];
+            }
+            if (! empty($data['branch_id'])) {
+                $member->branch_id = $data['branch_id'];
+            }
+            if (! empty($data['relationship_label'])) {
+                $member->relationship_label = $data['relationship_label'];
+            }
+            $member->save();
+            $this->audit($organization, $member, 'invited', null, $email, $actor);
+        }
+
+        $existingUser = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        if ($existingUser && ! $member->user_id) {
+            $member->user_id = $existingUser->id;
+            $member->status = FamilyMemberStatus::Active;
+            $member->claimed_at = now();
+            $member->save();
+        }
+
+        Mail::to($email)->send(new FamilyMemberInviteMail(
+            organization: $organization,
+            member: $member->fresh(),
+            inviter: $actor,
+            acceptUrl: url('/family/claim/'.$token),
+        ));
+
+        return $member->fresh(['branch']);
+    }
+
+    /**
+     * Add spouse (e.g. mother) and optional maternal grandparents onto a branch head.
+     *
+     * @param  array{
+     *     spouse_name: string,
+     *     maternal_grandfather_name?: string|null,
+     *     maternal_grandmother_name?: string|null,
+     * }  $data
+     */
+    public function addBranchSpouseParents(
+        Organization $organization,
+        FamilyBranch $branch,
+        array $data,
+        ?User $actor = null,
+    ): FamilyMember {
+        return DB::transaction(function () use ($organization, $branch, $data, $actor) {
+            if ((int) $branch->organization_id !== (int) $organization->id) {
+                abort(404);
+            }
+
+            $head = $branch->headMember;
+            if (! $head) {
+                abort(422, 'This branch has no head member.');
+            }
+
+            $maternalGf = null;
+            $maternalGm = null;
+
+            if (! empty($data['maternal_grandfather_name'])) {
+                $maternalGf = FamilyMember::query()->create([
+                    'organization_id' => $organization->id,
+                    'branch_id' => $branch->id,
+                    'full_name' => $data['maternal_grandfather_name'],
+                    'generation' => max(0, ((int) $head->generation) - 1),
+                    'relationship_label' => 'Maternal Grandfather',
+                    'status' => FamilyMemberStatus::Active,
+                ]);
+                $this->audit($organization, $maternalGf, 'created', null, 'maternal_grandfather', $actor);
+            }
+
+            if (! empty($data['maternal_grandmother_name'])) {
+                $maternalGm = FamilyMember::query()->create([
+                    'organization_id' => $organization->id,
+                    'branch_id' => $branch->id,
+                    'full_name' => $data['maternal_grandmother_name'],
+                    'generation' => max(0, ((int) $head->generation) - 1),
+                    'relationship_label' => 'Maternal Grandmother',
+                    'status' => FamilyMemberStatus::Active,
+                ]);
+                $this->audit($organization, $maternalGm, 'created', null, 'maternal_grandmother', $actor);
+            }
+
+            if ($maternalGf && $maternalGm) {
+                $maternalGf->spouse_id = $maternalGm->id;
+                $maternalGm->spouse_id = $maternalGf->id;
+                $maternalGf->save();
+                $maternalGm->save();
+            }
+
+            $spouse = null;
+            if ($head->spouse_id) {
+                $spouse = FamilyMember::query()->forOrganization($organization->id)->find($head->spouse_id);
+            }
+
+            if (! $spouse) {
+                $spouse = FamilyMember::query()->create([
+                    'organization_id' => $organization->id,
+                    'branch_id' => $branch->id,
+                    'full_name' => $data['spouse_name'],
+                    'father_id' => $maternalGf?->id,
+                    'mother_id' => $maternalGm?->id,
+                    'spouse_id' => $head->id,
+                    'generation' => $head->generation,
+                    'relationship_label' => 'Spouse',
+                    'status' => FamilyMemberStatus::Active,
+                ]);
+                $this->audit($organization, $spouse, 'created', null, 'spouse', $actor);
+            } else {
+                $spouse->full_name = $data['spouse_name'];
+                $spouse->branch_id = $branch->id;
+                if ($maternalGf) {
+                    $spouse->father_id = $maternalGf->id;
+                }
+                if ($maternalGm) {
+                    $spouse->mother_id = $maternalGm->id;
+                }
+                $spouse->spouse_id = $head->id;
+                $spouse->relationship_label = $spouse->relationship_label ?: 'Spouse';
+                $spouse->save();
+            }
+
+            $head->spouse_id = $spouse->id;
+            $head->save();
+
+            return $spouse->fresh(['father', 'mother', 'spouse']);
+        });
+    }
+
+    public function findByInviteToken(string $token): ?FamilyMember
+    {
+        return FamilyMember::query()
+            ->where('invite_token', $token)
+            ->visible()
+            ->with(['organization:id,name', 'branch:id,name'])
+            ->first();
+    }
+
+    /**
+     * @param  array{
+     *     full_name?: string|null,
+     *     branch_id?: int|null,
+     *     father_id?: int|null,
+     *     mother_id?: int|null,
+     *     relationship_label?: string|null,
+     * }  $data
+     */
+    public function acceptInvite(FamilyMember $member, User $user, array $data = []): FamilyMember
+    {
+        return DB::transaction(function () use ($member, $user, $data) {
+            if ($member->email && strtolower($member->email) !== strtolower($user->email)) {
+                abort(403, 'This invite was sent to a different email address.');
+            }
+
+            $member->user_id = $user->id;
+            $member->status = FamilyMemberStatus::Active;
+            $member->claimed_at = now();
+            $member->invite_token = null;
+
+            if (! empty($data['full_name'])) {
+                $member->full_name = $data['full_name'];
+            } elseif (! $member->full_name) {
+                $member->full_name = $user->name;
+            }
+
+            if (! empty($data['branch_id'])) {
+                $member->branch_id = $data['branch_id'];
+            }
+            if (array_key_exists('father_id', $data)) {
+                $member->father_id = $data['father_id'];
+            }
+            if (array_key_exists('mother_id', $data)) {
+                $member->mother_id = $data['mother_id'];
+            }
+            if (! empty($data['relationship_label'])) {
+                $member->relationship_label = $data['relationship_label'];
+            }
+
+            $member->generation = $this->inferGeneration($member->father_id, $member->mother_id);
+            $member->save();
+
+            $this->audit($member->organization, $member, 'claimed', null, (string) $user->id, $user);
+
+            return $member->fresh(['branch', 'father', 'mother']);
+        });
     }
 
     private function upsertFounderMember(

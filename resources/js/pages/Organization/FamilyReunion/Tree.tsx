@@ -22,6 +22,7 @@ type TreeMember = {
   birth_year?: number | null
   death_year?: number | null
   generation?: number | null
+  relationship_label?: string | null
   status: string
   branch?: string | null
   branch_id?: number | null
@@ -51,7 +52,8 @@ type Props = {
   branches: { id: number; name: string }[]
 }
 
-function MemberCard({ member, compact = false }: { member: TreeMember; compact?: boolean }) {
+function MemberCard({ member, compact = false, role }: { member: TreeMember; compact?: boolean; role?: string }) {
+  const label = role || member.relationship_label
   return (
     <div className={`min-w-0 rounded-xl border border-border bg-card ${compact ? 'px-3 py-2' : 'px-4 py-3'} shadow-sm`}>
       <div className="flex min-w-0 items-center gap-3">
@@ -65,7 +67,14 @@ function MemberCard({ member, compact = false }: { member: TreeMember; compact?:
           )}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-foreground">{member.full_name}</div>
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <div className="truncate text-sm font-semibold text-foreground">{member.full_name}</div>
+            {label && (
+              <Badge variant="secondary" className="shrink-0 text-[10px]">
+                {label}
+              </Badge>
+            )}
+          </div>
           <div className="truncate text-xs text-muted-foreground">
             {member.birth_year || member.death_year
               ? `${member.birth_year ?? '?'} – ${member.death_year ?? 'Present'}`
@@ -142,8 +151,12 @@ export default function Tree({ organization, tree, filters, branches }: Props) {
               ) : (
                 <>
                   <div className="flex flex-wrap items-center justify-center gap-4">
-                    {tree.founders?.grandfather && <MemberCard member={tree.founders.grandfather} />}
-                    {tree.founders?.grandmother && <MemberCard member={tree.founders.grandmother} />}
+                    {tree.founders?.grandfather && (
+                      <MemberCard member={tree.founders.grandfather} role="Founding Grandfather" />
+                    )}
+                    {tree.founders?.grandmother && (
+                      <MemberCard member={tree.founders.grandmother} role="Founding Grandmother" />
+                    )}
                   </div>
 
                   <div className="mx-auto h-8 w-px bg-slate-300" />
@@ -175,7 +188,7 @@ export default function Tree({ organization, tree, filters, branches }: Props) {
                                   <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                     Branch head
                                   </div>
-                                  <MemberCard member={branch.head} compact />
+                                  <MemberCard member={branch.head} compact role={branch.head.relationship_label || 'Child of founders'} />
                                 </div>
                               )}
                               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -183,15 +196,22 @@ export default function Tree({ organization, tree, filters, branches }: Props) {
                                   .filter((m) => !branch.head || m.id !== branch.head.id)
                                   .map((member) => (
                                     <div key={member.id} className="space-y-2">
-                                      <MemberCard member={member} compact />
+                                      <MemberCard
+                                        member={member}
+                                        compact
+                                        role={member.relationship_label || (member.generation === 2 ? 'Child' : undefined)}
+                                      />
                                       {member.children_ids?.length > 0 && (
                                         <div className="ml-4 space-y-1 border-l border-border pl-3">
                                           {member.children_ids.map((cid) => {
                                             const child = memberMap.get(cid)
                                             if (!child) return null
                                             return (
-                                              <div key={cid} className="text-xs text-muted-foreground">
-                                                → {child.full_name}
+                                              <div key={cid} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                <span>→ {child.full_name}</span>
+                                                <Badge variant="outline" className="text-[10px]">
+                                                  {child.relationship_label || 'Child'}
+                                                </Badge>
                                               </div>
                                             )
                                           })}

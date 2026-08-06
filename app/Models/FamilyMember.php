@@ -24,11 +24,14 @@ class FamilyMember extends Model
         'mother_id',
         'spouse_id',
         'generation',
+        'relationship_label',
         'status',
         'is_founding_grandfather',
         'is_founding_grandmother',
         'merged_into_id',
         'claimed_at',
+        'invite_token',
+        'invited_at',
     ];
 
     protected $casts = [
@@ -39,6 +42,7 @@ class FamilyMember extends Model
         'death_year' => 'integer',
         'generation' => 'integer',
         'claimed_at' => 'datetime',
+        'invited_at' => 'datetime',
     ];
 
     protected $appends = [

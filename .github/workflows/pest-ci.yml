@@ -1,4 +1,5 @@
-# Reusable Pest CI suite — GitHub-hosted ubuntu + ephemeral MySQL only (never VPS / production DB).
+# Reusable Pest CI — runs on believe-vps with ephemeral SQLite only.
+# Never uses production/staging MySQL. GitHub-hosted ubuntu is avoided (private-repo minutes / queue).
 name: Pest CI (reusable)
 
 on:
@@ -6,32 +7,14 @@ on:
 
 jobs:
   pest:
-    name: Pest CI suite (PHP 8.4 / GHA MySQL only)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: believe_testing
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
+    name: Pest CI suite (PHP 8.4 / SQLite on believe-vps)
+    runs-on: [self-hosted, believe-vps]
+    timeout-minutes: 20
 
     env:
       APP_ENV: testing
-      DB_CONNECTION: mysql
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_DATABASE: believe_testing
-      DB_USERNAME: root
-      DB_PASSWORD: password
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
       SESSION_DRIVER: array
@@ -42,28 +25,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, pdo_mysql, mysql, redis, pcntl, posix, sodium
-          coverage: none
-          tools: composer:v2
-
-      - name: Get Composer cache dir
-        id: composer-cache
-        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Composer
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php8.4-composer-${{ hashFiles('composer.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-php8.4-composer-
+      - name: Ensure Composer
+        run: |
+          set -euo pipefail
+          php -v | head -1
+          php -m | grep -qi pdo_sqlite || { echo "::error::pdo_sqlite required for CI SQLite"; exit 1; }
+          mkdir -p "${HOME}/bin"
+          if ! command -v composer >/dev/null 2>&1; then
+            curl -fsSL https://getcomposer.org/installer | php -- --install-dir="${HOME}/bin" --filename=composer
+          fi
+          echo "${HOME}/bin" >> "$GITHUB_PATH"
+          export PATH="${HOME}/bin:${PATH}"
+          composer --version
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader
+        run: |
+          set -euo pipefail
+          export PATH="${HOME}/bin:${PATH}"
+          composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader --ignore-platform-req=ext-sodium
 
       - name: Prepare application
         run: |

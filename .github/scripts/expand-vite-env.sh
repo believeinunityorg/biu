@@ -23,16 +23,12 @@ strip_quotes() {
   echo "$v"
 }
 
-# dotenv requires quotes when a value contains whitespace or shell-ish chars.
+# Always quote so values like "Believe In Unity" stay valid dotenv.
 quote_env_value() {
   local v="$1"
-  if [[ "$v" =~ [[:space:]#\"'=] ]] || [[ "$v" == *'$'* ]]; then
-    v="${v//\\/\\\\}"
-    v="${v//\"/\\\"}"
-    printf '"%s"' "$v"
-  else
-    printf '%s' "$v"
-  fi
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  printf '"%s"' "$v"
 }
 
 resolve() {

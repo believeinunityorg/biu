@@ -64,16 +64,18 @@ RSYNC_RSH="ssh -F ${SSH_DIR}/config -o BatchMode=yes -o ConnectTimeout=30 -4"
 
 if [ -d "${WORK_DIR}/.git" ]; then
   git -C "${WORK_DIR}" fetch --depth 1 origin "${BRANCH}"
-  git -C "${WORK_DIR}" checkout -B "${BRANCH}" "origin/${BRANCH}"
+  # Discard leftover edits from previous failed runs before switching.
+  git -C "${WORK_DIR}" reset --hard HEAD
+  git -C "${WORK_DIR}" clean -fdx
+  git -C "${WORK_DIR}" checkout -f -B "${BRANCH}" "origin/${BRANCH}"
   git -C "${WORK_DIR}" reset --hard "origin/${BRANCH}"
-  git -C "${WORK_DIR}" clean -fd
+  git -C "${WORK_DIR}" clean -fdx
 else
   rm -rf "${WORK_DIR}"
   git clone --depth 1 --branch "${BRANCH}" "${REPO_URL}" "${WORK_DIR}"
 fi
 
 cd "${WORK_DIR}"
-# Leftover Vite .env from a previous run breaks composer (unquoted APP_NAME spaces).
 rm -f .env .env.server
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-ansi --ignore-platform-req=ext-sodium
 mkdir -p resources/views storage/framework/views

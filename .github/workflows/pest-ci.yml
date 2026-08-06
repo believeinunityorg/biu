@@ -1,4 +1,7 @@
-# Reusable Pest CI suite — GitHub-hosted ubuntu + ephemeral MySQL only (never VPS / production DB).
+# Reusable Pest CI suite.
+# Runs on believe-vps (self-hosted) while GitHub-hosted ubuntu runners are unreliable/out.
+# Uses ephemeral SQLite only — never production/staging MySQL.
+# (GHA MySQL service containers need ubuntu-hosted runners + Docker; VPS has neither for CI.)
 name: Pest CI (reusable)
 
 on:
@@ -6,32 +9,15 @@ on:
 
 jobs:
   pest:
-    name: Pest CI suite (PHP 8.4 / GHA MySQL only)
-    runs-on: ubuntu-latest
+    name: Pest CI suite (PHP 8.4 / SQLite on believe-vps)
+    runs-on: [self-hosted, believe-vps]
     timeout-minutes: 25
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: believe_testing
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-
     env:
+      PHP_VERSION: '8.4'
       APP_ENV: testing
-      DB_CONNECTION: mysql
-      DB_HOST: 127.0.0.1
-      DB_PORT: 3306
-      DB_DATABASE: believe_testing
-      DB_USERNAME: root
-      DB_PASSWORD: password
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ${{ github.workspace }}/database/ci-testing.sqlite
       CACHE_STORE: array
       QUEUE_CONNECTION: sync
       SESSION_DRIVER: array
@@ -42,13 +28,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, pdo_mysql, mysql, redis, pcntl, posix, sodium
-          coverage: none
-          tools: composer:v2
+      - name: Use EA-PHP CLI (same as deploy)
+        run: |
+          set -euo pipefail
+          PHP_CLI="/opt/cpanel/ea-php$(echo "${PHP_VERSION}" | tr -d '.')/root/usr/bin/php"
+          if [ ! -x "${PHP_CLI}" ]; then
+            echo "::error::Missing EA PHP CLI at ${PHP_CLI}"
+            exit 1
+          fi
+          mkdir -p "${HOME}/bin"
+          ln -sfn "${PHP_CLI}" "${HOME}/bin/php"
+          printf '%s\n' '#!/usr/bin/env bash' "exec \"${PHP_CLI}\" \"\${HOME}/bin/composer.phar\" \"\$@\"" > "${HOME}/bin/composer"
+          chmod +x "${HOME}/bin/composer"
+          if [ ! -f "${HOME}/bin/composer.phar" ]; then
+            curl -fsSL https://getcomposer.org/download/latest-stable/composer.phar -o "${HOME}/bin/composer.phar"
+          fi
+          echo "${HOME}/bin" >> "${GITHUB_PATH}"
+          echo "$(dirname "${PHP_CLI}")" >> "${GITHUB_PATH}"
+          "${HOME}/bin/php" -m | grep -qi pdo_sqlite || { echo "::error::pdo_sqlite required for CI"; exit 1; }
+          "${HOME}/bin/php" --version
+          "${HOME}/bin/composer" --version
 
       - name: Get Composer cache dir
         id: composer-cache
@@ -58,21 +57,26 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-php8.4-composer-${{ hashFiles('composer.lock') }}
+          key: ${{ runner.os }}-vps-php8.4-composer-${{ hashFiles('composer.lock') }}
           restore-keys: |
-            ${{ runner.os }}-php8.4-composer-
+            ${{ runner.os }}-vps-php8.4-composer-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader
+        run: |
+          # EA-PHP CLI lacks ext-sodium; ignore platform req for CI only (same as deploy).
+          composer install --prefer-dist --no-interaction --no-progress --optimize-autoloader --ignore-platform-req=ext-sodium
 
-      - name: Prepare application
+      - name: Prepare application (ephemeral SQLite)
         run: |
           set -euo pipefail
           cp .env.example .env
-          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache
-          chmod -R ug+rwx storage bootstrap/cache
+          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database
+          : > database/ci-testing.sqlite
+          chmod -R ug+rwx storage bootstrap/cache database
           php artisan key:generate --force
           php artisan config:clear
+          # Create schema for /api/health database check — still not prod DB.
+          php artisan migrate --force --no-interaction
 
       - name: Run Pest CI suite
         run: php artisan test --compact --testsuite=CI

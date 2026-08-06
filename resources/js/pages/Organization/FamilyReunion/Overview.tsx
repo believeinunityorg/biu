@@ -191,7 +191,7 @@ export default function Overview({ organization, founders, branches, stats, dire
                   {[
                     { label: 'Add Branch', href: '/organization/family-reunion/branches', icon: GitBranch },
                     { label: 'Add Member', href: '/organization/family-reunion/members', icon: UserPlus },
-                    { label: 'Invite Family', href: '/email-invite', icon: Plus },
+                    { label: 'Invite Family', href: '/organization/family-reunion/invite', icon: Plus },
                     { label: 'Add Announcement', href: '/campaigns/create', icon: Megaphone },
                     { label: 'Create Event', href: '/events', icon: CalendarPlus },
                   ].map((action) => {

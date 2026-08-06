@@ -1,5 +1,4 @@
-# Pest gate for PRs / manual runs only — NOT on every branch push.
-# Deploy workflows call pest-ci.yml first, so merge→deploy runs: Tests then Deploy (once).
+# Pest for PRs / manual runs only — NOT on branch push deploy.
 name: Tests
 
 on:

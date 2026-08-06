@@ -41,10 +41,14 @@ class DirectoryController extends FamilyReunionController
                 'branch' => $m->branch?->name,
                 'branch_id' => $m->branch_id,
                 'generation' => $m->generation,
+                'relationship_label' => $m->relationship_label,
                 'father' => $m->father?->full_name,
+                'father_id' => $m->father_id,
                 'mother' => $m->mother?->full_name,
+                'mother_id' => $m->mother_id,
                 'status' => $m->status?->value ?? $m->status,
                 'is_claimed' => $m->is_claimed,
+                'is_founding' => $m->is_founding_grandfather || $m->is_founding_grandmother,
             ]);
 
         return Inertia::render('Organization/FamilyReunion/Directory', [

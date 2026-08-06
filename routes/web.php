@@ -2587,9 +2587,14 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
             Route::put('/branches/{branch}', [FamilyReunionBranchController::class, 'update'])->name('branches.update');
             Route::get('/members', [FamilyReunionMemberController::class, 'index'])->name('members.index');
             Route::post('/members', [FamilyReunionMemberController::class, 'store'])->name('members.store');
+            Route::put('/members/{member}', [FamilyReunionMemberController::class, 'update'])->name('members.update');
+            Route::delete('/members/{member}', [FamilyReunionMemberController::class, 'destroy'])->name('members.destroy');
+            Route::get('/invite', [FamilyReunionMemberController::class, 'inviteForm'])->name('invite');
+            Route::post('/invite', [FamilyReunionMemberController::class, 'invite'])->name('invite.store');
             Route::post('/members/setup-profile', [FamilyReunionMemberController::class, 'setupProfile'])->name('members.setup-profile');
             Route::get('/members/search', [FamilyReunionMemberController::class, 'search'])->name('members.search');
             Route::put('/members/{member}/relationships', [FamilyReunionMemberController::class, 'updateRelationships'])->name('members.relationships');
+            Route::post('/branches/{branch}/spouse-parents', [FamilyReunionBranchController::class, 'addSpouseParents'])->name('branches.spouse-parents');
             Route::get('/tree', [FamilyReunionTreeController::class, 'index'])->name('tree');
             Route::get('/directory', [FamilyReunionDirectoryController::class, 'index'])->name('directory');
             Route::get('/admin', [FamilyReunionAdminController::class, 'index'])->name('admin');
@@ -2597,6 +2602,11 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
         });
 });
 
+Route::get('/family/claim/{token}', [\App\Http\Controllers\FamilyReunion\ClaimInviteController::class, 'show'])
+    ->name('family.claim.show');
+Route::post('/family/claim/{token}', [\App\Http\Controllers\FamilyReunion\ClaimInviteController::class, 'store'])
+    ->middleware(['auth', 'EnsureEmailIsVerified'])
+    ->name('family.claim.store');
 Route::get('/community/contents/{content:slug}', [CommunityContentController::class, 'show'])->name('community.contents.show');
 Route::get('/community/{parentType}/{parentId}', [CommunityParentController::class, 'show'])
     ->where(['parentType' => 'Organization|UnityImpactAlliance', 'parentId' => '[0-9]+'])

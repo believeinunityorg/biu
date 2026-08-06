@@ -23,6 +23,14 @@ strip_quotes() {
   echo "$v"
 }
 
+# Always quote so values like "Believe In Unity" stay valid dotenv.
+quote_env_value() {
+  local v="$1"
+  v="${v//\\/\\\\}"
+  v="${v//\"/\\\"}"
+  printf '"%s"' "$v"
+}
+
 resolve() {
   local v="$1"
   if [[ "$v" =~ \$\{([A-Za-z_][A-Za-z0-9_]*)\} ]]; then
@@ -41,20 +49,20 @@ reverb_host="$(resolve "${vars[VITE_REVERB_HOST]:-${vars[REVERB_HOST]:-}}")"
 reverb_port="$(resolve "${vars[VITE_REVERB_PORT]:-${vars[REVERB_PORT]:-443}}")"
 reverb_scheme="$(resolve "${vars[VITE_REVERB_SCHEME]:-${vars[REVERB_SCHEME]:-https}}")"
 
-[[ -n "$app_url" ]] && echo "APP_URL=$app_url"
-[[ -n "$app_name" ]] && echo "VITE_APP_NAME=$app_name"
-[[ -n "${vars[APP_VERSION]:-}" ]] && echo "VITE_APP_VERSION=${vars[APP_VERSION]}"
+[[ -n "$app_url" ]] && echo "APP_URL=$(quote_env_value "$app_url")"
+[[ -n "$app_name" ]] && echo "VITE_APP_NAME=$(quote_env_value "$app_name")"
+[[ -n "${vars[APP_VERSION]:-}" ]] && echo "VITE_APP_VERSION=$(quote_env_value "${vars[APP_VERSION]}")"
 
 if [[ -z "$reverb_key" ]]; then
   echo "::error::REVERB_APP_KEY missing — cannot build Echo/Reverb client" >&2
   exit 1
 fi
 
-echo "VITE_REVERB_APP_KEY=$reverb_key"
-echo "VITE_REVERB_HOST=$reverb_host"
-echo "VITE_REVERB_PORT=$reverb_port"
-echo "VITE_REVERB_SCHEME=$reverb_scheme"
+echo "VITE_REVERB_APP_KEY=$(quote_env_value "$reverb_key")"
+echo "VITE_REVERB_HOST=$(quote_env_value "$reverb_host")"
+echo "VITE_REVERB_PORT=$(quote_env_value "$reverb_port")"
+echo "VITE_REVERB_SCHEME=$(quote_env_value "$reverb_scheme")"
 
 for key in VITE_YOUTUBE_API_KEY VITE_GOOGLE_API_KEY VITE_GOOGLE_MAPS_API_KEY VITE_STRIPE_PUBLIC_KEY VITE_MERCHANT_DOMAIN VITE_LIVESTOCK_DOMAIN; do
-  [[ -n "${vars[$key]:-}" ]] && echo "$key=$(resolve "${vars[$key]}")"
+  [[ -n "${vars[$key]:-}" ]] && echo "$key=$(quote_env_value "$(resolve "${vars[$key]}")")"
 done

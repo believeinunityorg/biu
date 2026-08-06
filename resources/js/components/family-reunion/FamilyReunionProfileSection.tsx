@@ -186,7 +186,7 @@ export function FamilyReunionProfileSection({
           </h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="grandfather_name">Great-Grandfather *</Label>
+              <Label htmlFor="grandfather_name">Founding Grandfather *</Label>
               <Input
                 id="grandfather_name"
                 className="mt-1.5"
@@ -197,7 +197,7 @@ export function FamilyReunionProfileSection({
               <InputError message={errors.grandfather_name} className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="grandmother_name">Great-Grandmother *</Label>
+              <Label htmlFor="grandmother_name">Founding Grandmother *</Label>
               <Input
                 id="grandmother_name"
                 className="mt-1.5"

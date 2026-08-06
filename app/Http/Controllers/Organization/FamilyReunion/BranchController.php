@@ -18,7 +18,13 @@ class BranchController extends FamilyReunionController
 
         $branches = FamilyBranch::query()
             ->forOrganization($organization->id)
-            ->with(['headMember:id,full_name,photo', 'adminUser:id,name,email'])
+            ->with([
+                'headMember:id,full_name,photo,spouse_id',
+                'headMember.spouse:id,full_name,father_id,mother_id',
+                'headMember.spouse.father:id,full_name',
+                'headMember.spouse.mother:id,full_name',
+                'adminUser:id,name,email',
+            ])
             ->withCount(['members' => fn ($q) => $q->visible()])
             ->orderBy('sort_order')
             ->get()
@@ -32,6 +38,12 @@ class BranchController extends FamilyReunionController
                     'id' => $b->headMember->id,
                     'full_name' => $b->headMember->full_name,
                     'photo_url' => $b->headMember->photo_url,
+                ] : null,
+                'spouse' => $b->headMember?->spouse ? [
+                    'id' => $b->headMember->spouse->id,
+                    'full_name' => $b->headMember->spouse->full_name,
+                    'father_name' => $b->headMember->spouse->father?->full_name,
+                    'mother_name' => $b->headMember->spouse->mother?->full_name,
                 ] : null,
                 'admin_user' => $b->adminUser ? [
                     'id' => $b->adminUser->id,
@@ -94,6 +106,22 @@ class BranchController extends FamilyReunionController
         $branch->fill($validated)->save();
 
         return back()->with('success', 'Branch updated.');
+    }
+
+    public function addSpouseParents(Request $request, FamilyBranch $branch): RedirectResponse
+    {
+        $organization = $this->organization($request);
+        $this->assertBranch($organization->id, $branch);
+
+        $validated = $request->validate([
+            'spouse_name' => ['required', 'string', 'max:255'],
+            'maternal_grandfather_name' => ['nullable', 'string', 'max:255'],
+            'maternal_grandmother_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->familyReunion->addBranchSpouseParents($organization, $branch, $validated, $request->user());
+
+        return back()->with('success', 'Spouse and parents saved for this branch.');
     }
 
     private function assertBranch(int $organizationId, FamilyBranch $branch): void

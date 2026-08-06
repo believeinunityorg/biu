@@ -1,5 +1,4 @@
-# Pest for PRs / manual runs only — NOT on every branch push.
-# Deploy workflows also call pest-ci.yml in parallel (non-blocking); PR checks stay here.
+# Pest for PRs / manual runs only — NOT on branch push deploy.
 name: Tests
 
 on:

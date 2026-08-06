@@ -146,6 +146,8 @@ class CommunicationHubPresenter
     {
         return [
             'organization_id' => $organization->id,
+            'announcement_visibility' => (string) ($settings['announcement_visibility'] ?? 'public'),
+            'discussion_visibility' => (string) ($settings['discussion_visibility'] ?? 'public'),
             'allow_followers_to_post' => (bool) ($settings['allow_followers_to_post'] ?? true),
             'allow_members_to_post' => (bool) ($settings['allow_members_to_post'] ?? true),
             'require_approval' => (bool) ($settings['require_approval'] ?? false),
@@ -155,6 +157,7 @@ class CommunicationHubPresenter
             'enable_comments' => (bool) ($settings['enable_comments'] ?? true),
             'enable_reporting' => (bool) ($settings['enable_reporting'] ?? true),
             'auto_archive_days' => $settings['auto_archive_days'] ?? null,
+            'visibility_audiences' => config('communication_hub.visibility_audiences', []),
             'reaction_emojis' => config('communication_hub.reaction_emojis', []),
             'report_reasons' => config('communication_hub.report_reasons', []),
             'announcement_categories' => config('communication_hub.announcement_categories', []),

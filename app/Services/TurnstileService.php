@@ -13,6 +13,12 @@ class TurnstileService
 
     public function isEnabled(): bool
     {
+        // Local APP_ENV skips Turnstile so hostname allowlist / spent tokens never block
+        // everyday development sign-in (keys may still be present in .env).
+        if (app()->environment('local')) {
+            return false;
+        }
+
         // Staging (501c3ers.com) uses a developer login shell — skip Turnstile there so
         // hostname allowlist / missing widget never blocks sign-in during deploy testing.
         if (function_exists('is_development_site') && is_development_site()) {

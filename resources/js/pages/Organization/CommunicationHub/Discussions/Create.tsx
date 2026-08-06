@@ -1,24 +1,30 @@
 import { Head } from '@inertiajs/react'
 import AppLayout from '@/layouts/app-layout'
+import FrontendLayout from '@/layouts/frontend/frontend-layout'
 import DiscussionEditor from '@/components/communication-hub/DiscussionEditor'
-import { type HubCategory } from '@/components/communication-hub/types'
+import { type HubCategory, type HubContext } from '@/components/communication-hub/types'
+import { hubRoute } from '@/lib/communication-hub-routes'
 import { ch } from '../theme'
 import type { BreadcrumbItem } from '@/types'
 
 type Props = {
-  organization: { id: number; name: string }
+  organization: { id: number; name: string; slug?: string }
   categories: HubCategory[]
+  hubContext?: HubContext
 }
 
-export default function DiscussionsCreate({ organization, categories }: Props) {
+export default function DiscussionsCreate({ organization, categories, hubContext }: Props) {
+  const ctx: HubContext = hubContext ?? { mode: 'manage', org_slug: organization.slug ?? null }
+  const isCommunity = ctx.mode === 'community'
+
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Communication Hub', href: route('org.communication-hub.index') },
-    { title: 'Discussions', href: route('org.communication-hub.discussions.index') },
-    { title: 'New Discussion', href: route('org.communication-hub.discussions.create') },
+    { title: 'A&D Board', href: hubRoute('index', ctx) },
+    { title: 'Discussions', href: hubRoute('discussions.index', ctx) },
+    { title: 'New Discussion', href: hubRoute('discussions.create', ctx) },
   ]
 
-  return (
-    <AppLayout breadcrumbs={breadcrumbs}>
+  const content = (
+    <>
       <Head title={`New Discussion — ${organization.name}`} />
 
       <div className={ch.pageNarrow}>
@@ -28,11 +34,17 @@ export default function DiscussionsCreate({ organization, categories }: Props) {
         </div>
 
         <DiscussionEditor
-          action={route('org.communication-hub.discussions.store')}
+          action={hubRoute('discussions.store', ctx)}
           categories={categories}
           submitLabel="Post Discussion"
         />
       </div>
-    </AppLayout>
+    </>
   )
+
+  if (isCommunity) {
+    return <FrontendLayout>{content}</FrontendLayout>
+  }
+
+  return <AppLayout breadcrumbs={breadcrumbs}>{content}</AppLayout>
 }

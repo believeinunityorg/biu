@@ -19,16 +19,28 @@ class OrganizationDiscussionPolicy
      */
     public function viewAny(?User $user, Organization $organization): bool
     {
-        return true;
+        return $this->permissions->canViewDiscussions($user, $organization);
     }
 
     /**
-     * Staff can always view; everyone else only sees discussions that aren't hidden/archived/deleted.
+     * Staff can always view; everyone else only sees discussions that aren't hidden/archived/deleted,
+     * and only when the org's discussion visibility audience allows them.
      */
     public function view(?User $user, OrganizationDiscussion $discussion): bool
     {
-        if ($user && $this->permissions->canModerateDiscussions($user, $this->organizationOf($discussion))) {
+        $organization = $this->organizationOf($discussion);
+
+        if ($user && $this->permissions->canModerateDiscussions($user, $organization)) {
             return true;
+        }
+
+        if (! $this->permissions->canViewDiscussions($user, $organization)) {
+            return false;
+        }
+
+        // Authors can see their own pending (unapproved) threads.
+        if ($user && (int) $discussion->created_by === (int) $user->id) {
+            return ! $discussion->trashed();
         }
 
         return $discussion->isVisiblePublicly();
@@ -85,7 +97,11 @@ class OrganizationDiscussionPolicy
             return false;
         }
 
-        return $isModerator || $this->isFollowerOrMember($user, $organization);
+        if (! $discussion->isVisiblePublicly() && ! $isModerator && (int) $discussion->created_by !== (int) $user->id) {
+            return false;
+        }
+
+        return $isModerator || $this->permissions->canReplyToDiscussions($user, $organization);
     }
 
     public function react(User $user, OrganizationDiscussion $discussion): bool
@@ -97,6 +113,10 @@ class OrganizationDiscussionPolicy
             return false;
         }
 
+        if (! $this->permissions->canViewDiscussions($user, $organization)) {
+            return false;
+        }
+
         return $this->permissions->canModerateDiscussions($user, $organization)
             || $this->isFollowerOrMember($user, $organization);
     }
@@ -104,6 +124,10 @@ class OrganizationDiscussionPolicy
     public function follow(User $user, OrganizationDiscussion $discussion): bool
     {
         $organization = $this->organizationOf($discussion);
+
+        if (! $this->permissions->canViewDiscussions($user, $organization)) {
+            return false;
+        }
 
         return $this->permissions->canModerateDiscussions($user, $organization)
             || $this->isFollowerOrMember($user, $organization);
@@ -120,6 +144,10 @@ class OrganizationDiscussionPolicy
         $settings = $this->permissions->getSettings($organization);
 
         if (! ($settings['enable_reporting'] ?? true)) {
+            return false;
+        }
+
+        if (! $this->permissions->canViewDiscussions($user, $organization)) {
             return false;
         }
 

@@ -9,23 +9,27 @@ import SearchBar from '@/components/communication-hub/SearchBar'
 import CategorySelect from '@/components/communication-hub/CategorySelect'
 import HubSegmentedTabs from '@/components/communication-hub/HubSegmentedTabs'
 import HubEmptyState from '@/components/communication-hub/HubEmptyState'
+import StartDiscussionModal from '@/components/communication-hub/StartDiscussionModal'
 import {
   type HubAnnouncement,
   type HubCategory,
+  type HubContext,
   type HubDiscussion,
   type HubPermissions,
 } from '@/components/communication-hub/types'
+import { hubRoute } from '@/lib/communication-hub-routes'
 import { ch } from './theme'
 import { cn } from '@/lib/utils'
 
 type Props = {
-  organization: { id: number; name: string }
+  organization: { id: number; name: string; slug?: string }
   announcements: HubAnnouncement[]
   announcementsTotal: number
   discussions: HubDiscussion[]
   discussionsTotal: number
   categories: HubCategory[]
   permissions: HubPermissions
+  hubContext?: HubContext
   activeTab: 'announcements' | 'discussions'
 }
 
@@ -37,11 +41,21 @@ export default function CommunicationHubPublicIndex({
   discussionsTotal,
   categories,
   permissions,
+  hubContext: hubContextProp,
   activeTab: initialTab,
 }: Props) {
+  const hubContext: HubContext = hubContextProp ?? {
+    mode: 'community',
+    org_slug: organization.slug ?? null,
+  }
+
   const [tab, setTab] = useState<'announcements' | 'discussions'>(initialTab)
   const [discussionSearch, setDiscussionSearch] = useState('')
   const [categoryId, setCategoryId] = useState('all')
+  const [startDiscussionOpen, setStartDiscussionOpen] = useState(false)
+
+  const canViewAnnouncements = permissions.can_view_announcements !== false
+  const canViewDiscussions = permissions.can_view_discussions !== false
 
   const filteredDiscussions = useMemo(() => {
     let items = [...discussions]
@@ -62,18 +76,20 @@ export default function CommunicationHubPublicIndex({
 
   return (
     <FrontendLayout>
-      <Head title={`Communication Hub — ${organization.name}`} />
+      <Head title={`Announcements & Discussion — ${organization.name}`} />
 
       <div className={ch.page}>
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-              Community
+              A&amp;D Board
             </p>
             <h1 className={ch.heading}>
-              <span className={ch.titleGradient}>Communication Hub</span>
+              <span className={ch.titleGradient}>Announcements &amp; Discussion</span>
             </h1>
-            <p className={ch.subheading}>Announcements and discussions for {organization.name}</p>
+            <p className={ch.subheading}>
+              Official updates from {organization.name} and a community Discussion Board for supporters.
+            </p>
           </div>
           <HubSegmentedTabs value={tab} onChange={setTab} />
         </header>
@@ -98,7 +114,14 @@ export default function CommunicationHubPublicIndex({
             </div>
 
             <div className="space-y-3">
-              {announcements.length === 0 ? (
+              {!canViewAnnouncements ? (
+                <HubEmptyState
+                  icon={Shield}
+                  title="Announcements are restricted"
+                  description="This organization limits who can view announcements. Follow or become a member to request access."
+                  className="py-10"
+                />
+              ) : announcements.length === 0 ? (
                 <HubEmptyState
                   icon={Megaphone}
                   title="No announcements yet"
@@ -110,16 +133,16 @@ export default function CommunicationHubPublicIndex({
                   <AnnouncementCard
                     key={item.id}
                     announcement={item}
-                    href={route('org.communication-hub.announcements.show', item.slug)}
+                    href={hubRoute('announcements.show', hubContext, item.slug)}
                   />
                 ))
               )}
             </div>
 
-            {announcementsTotal > announcements.length && (
+            {canViewAnnouncements && announcementsTotal > announcements.length && (
               <div className="mt-4 text-center">
                 <Link
-                  href={route('org.communication-hub.announcements.index')}
+                  href={hubRoute('index', hubContext) + '?tab=announcements'}
                   className={cn(ch.link, 'inline-flex items-center gap-1 text-sm')}
                 >
                   View all announcements
@@ -138,27 +161,39 @@ export default function CommunicationHubPublicIndex({
                 <h2 className={ch.sectionTitle}>Discussion Board</h2>
               </div>
               {permissions.can_create_discussion && (
-                <Button asChild size="sm" className={cn(ch.btn, 'gap-1.5 rounded-xl')}>
-                  <Link href={route('org.communication-hub.discussions.create')}>
-                    <Plus className="h-4 w-4" />
-                    New
-                  </Link>
+                <Button
+                  type="button"
+                  size="sm"
+                  className={cn(ch.btn, 'gap-1.5 rounded-xl')}
+                  onClick={() => setStartDiscussionOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  New
                 </Button>
               )}
             </div>
 
-            <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-              <SearchBar
-                value={discussionSearch}
-                onChange={setDiscussionSearch}
-                placeholder="Search discussions…"
-                className="flex-1"
-              />
-              <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} />
-            </div>
+            {canViewDiscussions && (
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+                <SearchBar
+                  value={discussionSearch}
+                  onChange={setDiscussionSearch}
+                  placeholder="Search discussions…"
+                  className="flex-1"
+                />
+                <CategorySelect categories={categories} value={categoryId} onChange={setCategoryId} />
+              </div>
+            )}
 
             <div>
-              {filteredDiscussions.length === 0 ? (
+              {!canViewDiscussions ? (
+                <HubEmptyState
+                  icon={Shield}
+                  title="Discussion Board is restricted"
+                  description="This organization limits who can view discussions. Follow or become a member to join the conversation."
+                  className="py-10"
+                />
+              ) : filteredDiscussions.length === 0 ? (
                 <HubEmptyState
                   icon={MessageSquare}
                   title="No discussions yet"
@@ -170,16 +205,16 @@ export default function CommunicationHubPublicIndex({
                   <DiscussionCard
                     key={item.id}
                     discussion={item}
-                    href={route('org.communication-hub.discussions.show', item.slug)}
+                    href={hubRoute('discussions.show', hubContext, item.slug)}
                   />
                 ))
               )}
             </div>
 
-            {discussionsTotal > discussions.length && (
+            {canViewDiscussions && discussionsTotal > discussions.length && (
               <div className="mt-4 text-center">
                 <Link
-                  href={route('org.communication-hub.discussions.index')}
+                  href={hubRoute('discussions.index', hubContext)}
                   className={cn(ch.link, 'inline-flex items-center gap-1 text-sm')}
                 >
                   View all discussions
@@ -195,17 +230,17 @@ export default function CommunicationHubPublicIndex({
             {
               icon: Megaphone,
               title: 'Announcements',
-              body: 'Official updates, events, and resources shared by organization admins and staff.',
+              body: 'Official updates posted by the organization. Supporters can comment when enabled.',
             },
             {
               icon: MessageSquare,
               title: 'Discussion Board',
-              body: 'Open conversations where followers and members can ask questions and share ideas.',
+              body: 'Supporters start threads and reply when the organization allows posting.',
             },
             {
               icon: Shield,
-              title: 'Respect & Support',
-              body: 'Keep discussions kind and constructive. Report anything that violates community guidelines.',
+              title: 'Audience controls',
+              body: 'Each organization chooses who can view and who can post on their A&D board.',
             },
           ].map((block) => (
             <div key={block.title} className={cn(ch.card, 'flex gap-3 p-4')}>
@@ -220,6 +255,14 @@ export default function CommunicationHubPublicIndex({
           ))}
         </div>
       </div>
+
+      <StartDiscussionModal
+        open={startDiscussionOpen}
+        onOpenChange={setStartDiscussionOpen}
+        organizationName={organization.name}
+        categories={categories}
+        hubContext={hubContext}
+      />
     </FrontendLayout>
   )
 }

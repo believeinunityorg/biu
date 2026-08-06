@@ -73,6 +73,8 @@ else
 fi
 
 cd "${WORK_DIR}"
+# Leftover Vite .env from a previous run breaks composer (unquoted APP_NAME spaces).
+rm -f .env .env.server
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-ansi --ignore-platform-req=ext-sodium
 mkdir -p resources/views storage/framework/views
 
@@ -80,9 +82,9 @@ mkdir -p resources/views storage/framework/views
 chmod +x .github/scripts/expand-vite-env.sh
 {
   ./.github/scripts/expand-vite-env.sh < .env.server | grep -v '^APP_URL='
-  echo "APP_URL=${APP_URL}"
+  echo "APP_URL=\"${APP_URL}\""
 } > .env
-grep -q '^VITE_REVERB_APP_KEY=.\+' .env || { echo "VITE_REVERB_APP_KEY empty after resolve"; exit 1; }
+grep -qE '^VITE_REVERB_APP_KEY=.+' .env || { echo "VITE_REVERB_APP_KEY empty after resolve"; exit 1; }
 
 npm ci --legacy-peer-deps --no-audit --no-fund
 npm run build

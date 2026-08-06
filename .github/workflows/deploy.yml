@@ -15,14 +15,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Job 1 of 2 on merge/push to development: Pest on GitHub-hosted MySQL only.
+  # Pest on GitHub-hosted MySQL only (never VPS/production DB). Runs in parallel —
+  # do NOT gate deploy on it: ubuntu-latest queue outages would block self-hosted deploys.
   test:
-    name: Tests (before deploy)
+    name: Tests (non-blocking)
     uses: ./.github/workflows/pest-ci.yml
 
-  # Job 2 of 2: deploy only after tests pass.
+  # Self-hosted believe-vps — starts immediately (not waiting on GitHub-hosted runners).
   deploy:
-    needs: [test]
     runs-on: [self-hosted, believe-vps]
 
     env:

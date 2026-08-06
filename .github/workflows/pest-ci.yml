@@ -1,5 +1,10 @@
+<<<<<<< Updated upstream
 # Reusable Pest CI suite — runs on believe-vps (not ubuntu-latest).
 # Uses ephemeral SQLite only — never production/staging MySQL.
+=======
+# Reusable Pest CI suite — GitHub-hosted ubuntu + ephemeral SQLite only (never VPS MySQL).
+# Kept on ubuntu-latest so Tests are not blocked when the self-hosted runner cannot acquire jobs.
+>>>>>>> Stashed changes
 name: Pest CI (reusable)
 
 on:
@@ -7,8 +12,13 @@ on:
 
 jobs:
   pest:
+<<<<<<< Updated upstream
     name: Pest CI suite (PHP 8.4 / SQLite on believe-vps)
     runs-on: [self-hosted, believe-vps]
+=======
+    name: Pest CI suite (PHP 8.4 / SQLite)
+    runs-on: ubuntu-latest
+>>>>>>> Stashed changes
     timeout-minutes: 25
 
     env:
@@ -26,6 +36,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+<<<<<<< Updated upstream
           fetch-depth: 1
 
       - name: Use EA-PHP CLI (same as deploy)
@@ -48,6 +59,12 @@ jobs:
           echo "$(dirname "${PHP_CLI}")" >> "${GITHUB_PATH}"
           php --version
           php -m | grep -qi pdo_sqlite || { echo "::error::pdo_sqlite required"; exit 1; }
+=======
+          php-version: '8.4'
+          extensions: mbstring, dom, fileinfo, cURL, bcmath, intl, gd, zip, pdo_sqlite, sqlite3, redis, pcntl, posix, sodium
+          coverage: none
+          tools: composer:v2
+>>>>>>> Stashed changes
 
       - name: Get Composer cache dir
         id: composer-cache
@@ -69,7 +86,10 @@ jobs:
           set -euo pipefail
           cp .env.example .env
           mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache database
+<<<<<<< Updated upstream
           # Empty SQLite file is enough for CI (no migrate:fresh; health check only needs select 1).
+=======
+>>>>>>> Stashed changes
           : > database/ci-testing.sqlite
           chmod -R ug+rwx storage bootstrap/cache database
           php artisan key:generate --force

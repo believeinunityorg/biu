@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 20
 
     env:
+      # Self-hosted runner forces Node 24; allow checkout action Node until runner image catches up.
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
       APP_ENV: testing
       DB_CONNECTION: sqlite
       DB_DATABASE: ':memory:'
@@ -24,6 +26,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: true
 
       - name: Ensure Composer
         run: |

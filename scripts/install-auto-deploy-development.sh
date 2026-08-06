@@ -33,7 +33,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=${SCRIPT_DIR}/auto-deploy-development.sh
+ExecStart=/bin/bash -lc '${SCRIPT_DIR}/auto-deploy-development.sh >>${LOG_DIR}/auto-deploy-development.log 2>&1'
 WorkingDirectory=${HOME}
 Environment=HOME=${HOME}
 Nice=10
@@ -65,5 +65,9 @@ fi
 
 echo "Installed: ${SERVICE_NAME}.timer (every ~1 minute)"
 echo "Status: systemctl --user status ${SERVICE_NAME}.timer --no-pager"
-echo "Logs:   journalctl --user -u ${SERVICE_NAME}.service -n 50 --no-pager"
+echo "Logs:   tail -n 80 ${LOG_DIR}/auto-deploy-development.log"
 systemctl --user --no-pager status "${SERVICE_NAME}.timer" || true
+if [ -f "${LOG_DIR}/auto-deploy-development.log" ]; then
+  echo "---- latest log ----"
+  tail -n 40 "${LOG_DIR}/auto-deploy-development.log" || true
+fi

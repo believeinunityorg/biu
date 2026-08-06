@@ -29,10 +29,21 @@ class testUserSeeder extends Seeder
                 'password' => Hash::make('12345678'),
                 'role' => 'user',
                 'email_verified_at' => now(),
+                'city' => 'Testville',
+                'state' => 'CA',
+                'dob' => '1990-01-15',
             ]
         ];
 
         foreach ($data as $userData) {
+            // Only set onboarding completion when the column exists (local DBs can lag migrations).
+            if (
+                ($userData['role'] ?? null) === 'user'
+                && \Illuminate\Support\Facades\Schema::hasColumn('users', 'onboarding_completed_at')
+            ) {
+                $userData['onboarding_completed_at'] = now();
+            }
+
             $user = \App\Models\User::updateOrCreate(
                 ['email' => $userData['email']],
                 $userData

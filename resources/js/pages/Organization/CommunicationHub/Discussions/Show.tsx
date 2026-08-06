@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { Head, router, useForm, usePage } from '@inertiajs/react'
 import { Bell, BellOff, Calendar, Eye, Flag, Lock, MessageSquare, Paperclip, Pin, User as UserIcon } from 'lucide-react'
 import AppLayout from '@/layouts/app-layout'
+import FrontendLayout from '@/layouts/frontend/frontend-layout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ModerationMenu, { type ModerationAction } from '@/components/communication-hub/ModerationMenu'
 import ReactionPicker from '@/components/communication-hub/ReactionPicker'
 import DiscussionReply from '@/components/communication-hub/DiscussionReply'
-import { type HubAuthor, type HubDiscussion, authorInitials, formatHubDate, formatHubRelative } from '@/components/communication-hub/types'
+import { type HubAuthor, type HubContext, type HubDiscussion, authorInitials, formatHubDate, formatHubRelative } from '@/components/communication-hub/types'
+import { hubRoute } from '@/lib/communication-hub-routes'
 import { ch } from '../theme'
 import { cn } from '@/lib/utils'
 import type { BreadcrumbItem } from '@/types'
@@ -27,7 +29,7 @@ type HubReply = {
 }
 
 type Props = {
-  organization: { id: number; name: string }
+  organization: { id: number; name: string; slug?: string }
   discussion: HubDiscussion
   replies: HubReply[]
   isFollowing: boolean
@@ -35,6 +37,7 @@ type Props = {
   can: { update: boolean; delete: boolean; reply: boolean; react: boolean; moderate: boolean; report: boolean }
   reportReasons: Record<string, string>
   reactionEmojis?: string[]
+  hubContext?: HubContext
 }
 
 type LocalPageProps = { auth?: { user?: { id: number } } } & Record<string, unknown>
@@ -50,50 +53,54 @@ export default function DiscussionShow({
   can,
   reportReasons,
   reactionEmojis,
+  hubContext,
 }: Props) {
   const { auth } = usePage<LocalPageProps>().props
   const currentUserId = auth?.user?.id
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null)
+  const ctx: HubContext = hubContext ?? { mode: 'manage', org_slug: organization.slug ?? null }
+  const isCommunity = ctx.mode === 'community'
 
   const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Communication Hub', href: route('org.communication-hub.index') },
-    { title: 'Discussions', href: route('org.communication-hub.discussions.index') },
-    { title: discussion.title, href: route('org.communication-hub.discussions.show', discussion.slug) },
+    { title: 'A&D Board', href: hubRoute('index', ctx) },
+    { title: 'Discussions', href: hubRoute('discussions.index', ctx) },
+    { title: discussion.title, href: hubRoute('discussions.show', ctx, discussion.slug) },
   ]
 
   const moderate = (action: string) => {
+    if (isCommunity) return
     router.post(route('org.communication-hub.discussions.moderate', discussion.slug), { action }, { preserveScroll: true })
   }
 
   const destroy = () => {
     if (!confirm('Delete this discussion?')) return
-    router.delete(route('org.communication-hub.discussions.destroy', discussion.slug))
+    router.delete(hubRoute('discussions.destroy', ctx, discussion.slug))
   }
 
   const react = (emoji: string) => {
-    router.post(route('org.communication-hub.discussions.react', discussion.slug), { emoji }, { preserveScroll: true })
+    router.post(hubRoute('discussions.react', ctx, discussion.slug), { emoji }, { preserveScroll: true })
   }
 
   const toggleFollow = () => {
     if (isFollowing) {
-      router.delete(route('org.communication-hub.discussions.unfollow', discussion.slug), { preserveScroll: true })
+      router.delete(hubRoute('discussions.unfollow', ctx, discussion.slug), { preserveScroll: true })
     } else {
-      router.post(route('org.communication-hub.discussions.follow', discussion.slug), {}, { preserveScroll: true })
+      router.post(hubRoute('discussions.follow', ctx, discussion.slug), {}, { preserveScroll: true })
     }
   }
 
   const toggleMute = () => {
     if (isMuted) {
-      router.delete(route('org.communication-hub.discussions.unmute', discussion.slug), { preserveScroll: true })
+      router.delete(hubRoute('discussions.unmute', ctx, discussion.slug), { preserveScroll: true })
     } else {
-      router.post(route('org.communication-hub.discussions.mute', discussion.slug), {}, { preserveScroll: true })
+      router.post(hubRoute('discussions.mute', ctx, discussion.slug), {}, { preserveScroll: true })
     }
   }
 
   const canPostReply = can.reply && !discussion.is_locked && !discussion.is_archived
 
   const actions: ModerationAction[] = [
-    ...(can.update && !discussion.is_locked && !discussion.is_archived
+    ...(can.update && !discussion.is_locked && !discussion.is_archived && !isCommunity
       ? [{ label: 'Edit', onClick: () => router.visit(route('org.communication-hub.discussions.edit', discussion.slug)) }]
       : []),
     ...(can.moderate
@@ -112,8 +119,8 @@ export default function DiscussionShow({
     ...(can.delete ? [{ label: 'Delete', destructive: true, onClick: destroy }] : []),
   ]
 
-  return (
-    <AppLayout breadcrumbs={breadcrumbs}>
+  const content = (
+    <>
       <Head title={`${discussion.title} — ${organization.name}`} />
 
       <div className={ch.pageNarrow}>
@@ -236,7 +243,7 @@ export default function DiscussionShow({
 
           {canPostReply ? (
             <div className="mb-6">
-              <DiscussionReply action={route('org.communication-hub.discussions.reply', discussion.slug)} />
+              <DiscussionReply action={hubRoute('discussions.reply', ctx, discussion.slug)} />
             </div>
           ) : discussion.is_locked ? (
             <p className="mb-6 text-sm text-muted-foreground">This discussion is locked and no longer accepting replies.</p>
@@ -253,6 +260,7 @@ export default function DiscussionShow({
                   key={reply.id}
                   reply={reply}
                   discussionSlug={discussion.slug}
+                  hubContext={ctx}
                   canModerate={can.moderate}
                   canReply={canPostReply}
                   canReact={can.react}
@@ -270,16 +278,24 @@ export default function DiscussionShow({
       <ReportDialog
         target={reportTarget}
         discussionSlug={discussion.slug}
+        hubContext={ctx}
         reportReasons={reportReasons}
         onClose={() => setReportTarget(null)}
       />
-    </AppLayout>
+    </>
   )
+
+  if (isCommunity) {
+    return <FrontendLayout>{content}</FrontendLayout>
+  }
+
+  return <AppLayout breadcrumbs={breadcrumbs}>{content}</AppLayout>
 }
 
 function ReplyItem({
   reply,
   discussionSlug,
+  hubContext,
   canModerate,
   canReply,
   canReact,
@@ -291,6 +307,7 @@ function ReplyItem({
 }: {
   reply: HubReply
   discussionSlug: string
+  hubContext: HubContext
   canModerate: boolean
   canReply: boolean
   canReact: boolean
@@ -309,7 +326,7 @@ function ReplyItem({
   const submitEdit = (e: React.FormEvent) => {
     e.preventDefault()
     editForm.transform((data) => ({ ...data, _method: 'put' }))
-    editForm.post(route('org.communication-hub.discussions.replies.update', [discussionSlug, reply.id]), {
+    editForm.post(hubRoute('discussions.replies.update', hubContext, discussionSlug, reply.id), {
       preserveScroll: true,
       onSuccess: () => setEditing(false),
     })
@@ -317,11 +334,11 @@ function ReplyItem({
 
   const destroy = () => {
     if (!confirm('Delete this reply?')) return
-    router.delete(route('org.communication-hub.discussions.replies.destroy', [discussionSlug, reply.id]), { preserveScroll: true })
+    router.delete(hubRoute('discussions.replies.destroy', hubContext, discussionSlug, reply.id), { preserveScroll: true })
   }
 
   const react = (emoji: string) => {
-    router.post(route('org.communication-hub.discussions.replies.react', [discussionSlug, reply.id]), { emoji }, { preserveScroll: true })
+    router.post(hubRoute('discussions.replies.react', hubContext, discussionSlug, reply.id), { emoji }, { preserveScroll: true })
   }
 
   const actions: ModerationAction[] = [
@@ -411,6 +428,7 @@ function ReplyItem({
             <div className="mt-2">
               <NestedReplyForm
                 discussionSlug={discussionSlug}
+                hubContext={hubContext}
                 parentId={reply.id}
                 onDone={() => setReplying(false)}
               />
@@ -424,6 +442,7 @@ function ReplyItem({
                   key={child.id}
                   reply={child}
                   discussionSlug={discussionSlug}
+                  hubContext={hubContext}
                   canModerate={canModerate}
                   canReply={canReply}
                   canReact={canReact}
@@ -442,12 +461,22 @@ function ReplyItem({
   )
 }
 
-function NestedReplyForm({ discussionSlug, parentId, onDone }: { discussionSlug: string; parentId: number; onDone: () => void }) {
+function NestedReplyForm({
+  discussionSlug,
+  hubContext,
+  parentId,
+  onDone,
+}: {
+  discussionSlug: string
+  hubContext: HubContext
+  parentId: number
+  onDone: () => void
+}) {
   const form = useForm({ body: '', parent_id: parentId as number | null })
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
-    form.post(route('org.communication-hub.discussions.reply', discussionSlug), {
+    form.post(hubRoute('discussions.reply', hubContext, discussionSlug), {
       preserveScroll: true,
       onSuccess: () => {
         form.reset('body')
@@ -482,11 +511,13 @@ function NestedReplyForm({ discussionSlug, parentId, onDone }: { discussionSlug:
 function ReportDialog({
   target,
   discussionSlug,
+  hubContext,
   reportReasons,
   onClose,
 }: {
   target: ReportTarget | null
   discussionSlug: string
+  hubContext: HubContext
   reportReasons: Record<string, string>
   onClose: () => void
 }) {
@@ -498,8 +529,8 @@ function ReportDialog({
 
     const action =
       target.type === 'discussion'
-        ? route('org.communication-hub.discussions.report', discussionSlug)
-        : route('org.communication-hub.discussions.replies.report', [discussionSlug, target.replyId])
+        ? hubRoute('discussions.report', hubContext, discussionSlug)
+        : hubRoute('discussions.replies.report', hubContext, discussionSlug, target.replyId)
 
     form.post(action, {
       preserveScroll: true,

@@ -20,11 +20,12 @@ class OrganizationAnnouncementPolicy
      */
     public function viewAny(?User $user, Organization $organization): bool
     {
-        return true;
+        return $this->permissions->canViewAnnouncements($user, $organization);
     }
 
     /**
-     * Staff can always view; everyone else only sees published announcements within their window.
+     * Staff can always view; everyone else only sees published announcements within their window,
+     * and only when the org's announcement visibility audience allows them.
      */
     public function view(?User $user, OrganizationAnnouncement $announcement): bool
     {
@@ -32,6 +33,10 @@ class OrganizationAnnouncementPolicy
 
         if ($user && $this->permissions->canManageAnnouncements($user, $organization)) {
             return true;
+        }
+
+        if (! $this->permissions->canViewAnnouncements($user, $organization)) {
+            return false;
         }
 
         if ($announcement->status !== OrganizationAnnouncementStatus::Published) {

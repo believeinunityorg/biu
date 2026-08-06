@@ -60,11 +60,18 @@ export type HubDiscussion = {
 }
 
 export type HubPermissions = {
+  can_view_announcements?: boolean
+  can_view_discussions?: boolean
   can_manage_announcements: boolean
   can_create_announcement: boolean
   can_moderate_discussions: boolean
   can_create_discussion: boolean
   can_manage_settings?: boolean
+}
+
+export type HubContext = {
+  mode?: 'manage' | 'community'
+  org_slug?: string | null
 }
 
 export function formatHubDate(iso?: string | null): string {

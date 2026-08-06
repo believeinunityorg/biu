@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
-# Manual development upload when GitHub Actions cannot assign jobs to believe-vps.
-# Run on the VPS as believeinunity:
-#   bash /home/believeinunity/public_html/scripts/manual-deploy-development.sh
-# Or from a fresh clone of this repo on the VPS.
+# Development upload engine (501c3ers.com). Used by auto-deploy watcher / emergency runs.
+# Prefer: install-auto-deploy-development.sh so GitHub pushes deploy without Actions.
 set -euo pipefail
 
 if [ "$(id -un)" != "believeinunity" ]; then
   echo "Run as believeinunity (current: $(id -un))"
   exit 1
+fi
+
+LOCK_FILE="${LOCK_FILE:-/home/believeinunity/logs/deploy-development.lock}"
+mkdir -p "$(dirname "${LOCK_FILE}")"
+exec 9>"${LOCK_FILE}"
+if ! flock -n 9; then
+  echo "Another development deploy is already running — skip."
+  exit 0
 fi
 
 REPO_URL="${REPO_URL:-https://github.com/believeinunityorg/biu.git}"

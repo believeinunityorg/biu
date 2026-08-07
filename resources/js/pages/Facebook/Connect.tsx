@@ -21,7 +21,6 @@ import {
 import { toast } from 'sonner';
 import axios from 'axios';
 import FacebookPermissionModal from '@/components/facebook/FacebookPermissionModal';
-import FacebookPageContentPanel from '@/components/facebook/FacebookPageContentPanel';
 
 interface FacebookAccount {
     id: number;
@@ -50,7 +49,7 @@ export default function Connect({
     accounts = [],
     hasConnectedAccounts = false,
     organization = { id: 0, name: 'Your Organization' },
-    requestedScopes = ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'],
+    requestedScopes = ['pages_show_list', 'pages_manage_posts'],
     privacyPolicyUrl = '/privacy-policy',
 }: Props) {
     const [disconnecting, setDisconnecting] = useState<Record<number, boolean>>({});
@@ -183,9 +182,9 @@ export default function Connect({
                                         <span className="font-bold text-primary">4</span>
                                     </div>
                                     <div>
-                                        <h4 className="font-medium">Read content & publish posts</h4>
+                                        <h4 className="font-medium">Publish posts (pages_manage_posts)</h4>
                                         <p className="text-sm text-muted-foreground">
-                                            Read Page posts (pages_read_engagement) and publish when you choose (pages_manage_posts)
+                                            Create, schedule, and publish posts from BIU when you choose
                                         </p>
                                     </div>
                                 </div>
@@ -199,10 +198,7 @@ export default function Connect({
                                         <strong>pages_show_list</strong> — list Pages you manage so you can choose which to connect.
                                     </p>
                                     <p>
-                                        <strong>pages_read_engagement</strong> — read content your Page published (posts, photos, videos, metadata) so you can manage the Page in our app. We do not use this for likes, reactions, or view analytics.
-                                    </p>
-                                    <p>
-                                        <strong>pages_manage_posts</strong> — publish or schedule posts only when you click Publish in our app.
+                                        <strong>pages_manage_posts</strong> — publish or schedule posts only when you click Publish in our app. Posts created in BIU are listed in our app; we do not read your Page&apos;s full Facebook feed.
                                     </p>
                                     <p>
                                         <a href={privacyPolicyUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
@@ -350,15 +346,6 @@ export default function Connect({
                                                             <> • Last synced: {new Date(account.last_synced_at).toLocaleDateString()}</>
                                                         )}
                                                     </p>
-
-                                                    {account.is_connected && (
-                                                        <div className="mt-3">
-                                                            <FacebookPageContentPanel
-                                                                accountId={account.id}
-                                                                pageName={account.facebook_page_name}
-                                                            />
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
 

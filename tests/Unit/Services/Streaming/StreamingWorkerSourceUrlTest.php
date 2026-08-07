@@ -27,11 +27,12 @@ class StreamingWorkerSourceUrlTest extends TestCase
     {
         config([
             'streaming.worker_source_url_template' => '',
-            'streaming.worker_rtmp_pull_base' => 'rtmp://stream.believeinunity.org:1935',
+            // IP skips DNS failover so this asserts only the _aac suffix.
+            'streaming.worker_rtmp_pull_base' => 'rtmp://127.0.0.1:1935',
         ]);
 
         $this->assertSame(
-            'rtmp://stream.believeinunity.org:1935/ls_90_aac',
+            'rtmp://127.0.0.1:1935/ls_90_aac',
             StreamingWorkerSourceUrl::resolve($this->livestream()),
         );
     }
@@ -39,11 +40,11 @@ class StreamingWorkerSourceUrlTest extends TestCase
     public function test_does_not_double_suffix_a_template_that_already_ends_in_aac(): void
     {
         config([
-            'streaming.worker_source_url_template' => 'rtmp://stream.believeinunity.org:1935/{mediamtx_path}_aac',
+            'streaming.worker_source_url_template' => 'rtmp://127.0.0.1:1935/{mediamtx_path}_aac',
         ]);
 
         $this->assertSame(
-            'rtmp://stream.believeinunity.org:1935/ls_90_aac',
+            'rtmp://127.0.0.1:1935/ls_90_aac',
             StreamingWorkerSourceUrl::resolve($this->livestream()),
         );
     }
@@ -51,11 +52,11 @@ class StreamingWorkerSourceUrlTest extends TestCase
     public function test_collapses_an_existing_double_suffix(): void
     {
         config([
-            'streaming.worker_source_url_template' => 'rtmp://stream.believeinunity.org:1935/{mediamtx_path}_aac_aac',
+            'streaming.worker_source_url_template' => 'rtmp://127.0.0.1:1935/{mediamtx_path}_aac_aac',
         ]);
 
         $this->assertSame(
-            'rtmp://stream.believeinunity.org:1935/ls_90_aac',
+            'rtmp://127.0.0.1:1935/ls_90_aac',
             StreamingWorkerSourceUrl::resolve($this->livestream()),
         );
     }
@@ -65,5 +66,28 @@ class StreamingWorkerSourceUrlTest extends TestCase
         // streamPath() is the WHIP publish identity (whipUrl, push, seat paths).
         // The publisher must keep publishing to the un-suffixed path.
         $this->assertSame('ls_90', StreamingWorkerSourceUrl::streamPath($this->livestream()));
+    }
+
+    public function test_falls_back_to_501c3ers_when_believeinunity_bridge_host_is_nxdomain(): void
+    {
+        if (gethostbyname('stream.believeinunity.org') !== 'stream.believeinunity.org') {
+            $this->markTestSkipped('stream.believeinunity.org currently resolves; failover not exercised');
+        }
+
+        config([
+            'streaming.bridge.host' => 'stream.believeinunity.org',
+            'streaming.bridge.whip_port' => 8889,
+            'streaming.bridge.browser_push_enabled' => true,
+            'streaming.bridge.push_on_local' => true,
+            'streaming.worker_source_url_template' => '',
+            'streaming.worker_rtmp_pull_base' => 'rtmp://stream.believeinunity.org:1935',
+            'app.env' => 'production',
+        ]);
+
+        $this->assertSame('stream.501c3ers.com:8889', StreamingWorkerSourceUrl::vdoMediaMtxHost());
+        $this->assertSame(
+            'rtmp://stream.501c3ers.com:1935/ls_90_aac',
+            StreamingWorkerSourceUrl::resolve($this->livestream()),
+        );
     }
 }

@@ -34,8 +34,8 @@ const PERMISSIONS = [
     {
       id: 'pages_manage_posts',
       title: 'Manage Page Posts',
-      description: 'Create, edit, and delete posts on your Facebook Page',
-      detailedDescription: 'This permission allows us to create posts on your behalf, schedule them for specific times, edit existing posts if needed, and remove posts when requested. We use this only when you explicitly schedule or publish a post through our platform. You can view those BIU-created posts in our app; we do not read your full Facebook Page feed.',
+      description: 'Create and publish posts on your Facebook Page',
+      detailedDescription: 'This permission allows us to create and publish posts on your behalf when you choose. We use this only when you explicitly click Publish in our app. You can view those BIU-created posts in our app; we do not read your full Facebook Page feed.',
       icon: <MessageSquare className="h-5 w-5" />,
       required: true,
       color: 'text-blue-500 dark:text-blue-400',
@@ -162,7 +162,7 @@ export default function FacebookPermissionModal({
                 </p>
                 <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
                   These permissions allow our app to list Pages you manage and to
-                  schedule or publish posts to your Facebook Page when you choose.
+                  publish posts to your Facebook Page when you choose.
                 </p>
               </div>
             </div>

@@ -69,6 +69,7 @@ import {
     Puzzle,
     LineChart,
     Facebook,
+    Share2,
     Link as LinkIcon,
     Activity,
     MessageCircle,
@@ -200,18 +201,6 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                 icon: Facebook,
                 role: 'organization',
                 items: [
-                    {
-                        title: 'Social media',
-                        href: route('social-media.index'),
-                        icon: Facebook,
-                        role: 'organization',
-                    },
-                    {
-                        title: 'Connect pages',
-                        href: '/facebook/connect',
-                        icon: LinkIcon,
-                        role: 'organization',
-                    },
                     {
                         title: 'Posts',
                         href: '/facebook/posts',
@@ -1110,31 +1099,32 @@ export const dashboardSidebarNavItems: (NavItem | NavGroup)[] = [
                         role: 'organization',
                     },
                     {
-                        title: 'Social media',
-                        href: route('social-media.index'),
-                        icon: Facebook,
+                        title: 'Social Media',
+                        icon: Share2,
                         role: 'organization',
+                        items: [
+                            {
+                                title: 'Facebook',
+                                href: '/facebook/connect',
+                                icon: Facebook,
+                                role: 'organization',
+                            },
+                            {
+                                title: 'YouTube',
+                                href: route('integrations.youtube'),
+                                icon: Youtube,
+                                role: 'organization',
+                            },
+                        ],
                     },
                     {
-                        title: 'Facebook Connect',
-                        href: '/facebook/connect',
-                        icon: Facebook,
-                        role: 'organization',
-                    },
-                    {
-                        title: 'YouTube',
-                        href: route('integrations.youtube'),
-                        icon: Youtube,
-                        role: 'organization',
-                    },
-                    {
-                        title: 'Stripe payouts (donations)',
+                        title: 'Stripe',
                         href: route('integrations.stripe-connect'),
                         icon: Landmark,
                         role: 'organization',
                     },
                     {
-                        title: 'Dropbox (recordings)',
+                        title: 'Dropbox',
                         href: route('integrations.dropbox'),
                         icon: Cloud,
                         role: 'organization',

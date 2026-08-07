@@ -48,7 +48,7 @@ const PrivacyPolicy = () => {
                                     <li>Email addresses for communication</li>
                                     <li>Name and contact information</li>
                                     <li>Organization details (if applicable)</li>
-                                    <li>Facebook Page connection and related data (only if you connect a page—e.g. page list, Page-published content you choose to view, post and schedule actions)</li>
+                                    <li>Facebook Page connection and related data (only if you connect a page—e.g. page list, Page-published content you choose to view, and publish actions)</li>
                                     <li>Gmail / Google Contacts connection data (only if you connect Gmail for Email Invite—e.g. contact names and emails you choose to sync, OAuth tokens)</li>
                                     <li>YouTube / Google account connection data (only if you connect YouTube—e.g. channel metadata, OAuth tokens, uploaded video references)</li>
                                     <li>IP addresses and browser information</li>
@@ -158,7 +158,7 @@ const PrivacyPolicy = () => {
                                     <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-300 text-sm">
                                         <li>Identifiers and names of Facebook Pages you manage (so you can choose which Page to connect)</li>
                                         <li>Page access tokens and related OAuth / connection metadata</li>
-                                        <li>Content and scheduling details for posts you create or schedule through our app (stored in our database so you can manage those posts in BIU)</li>
+                                        <li>Content for posts you create and publish through our app (stored in our database so you can manage those posts in BIU)</li>
                                     </ul>
                                     <p className="text-gray-600 dark:text-gray-300 text-sm mt-3">
                                         We use this data only to provide Facebook Page features inside Believe In Unity. We do not
@@ -182,7 +182,7 @@ const PrivacyPolicy = () => {
                                         Managing posts (pages_manage_posts)
                                     </h3>
                                     <p className="text-gray-600 dark:text-gray-300 text-sm">
-                                        We use this permission to create and schedule posts on your connected Facebook Page only when you explicitly take action in our app (for example, when you write a post and tap &quot;Publish&quot; or &quot;Schedule&quot;). We do not post to your page without your permission. Every post is created or scheduled only after you confirm it. You remain in full control of what is published and when. We list in our app only posts created through BIU; we do not read your Page&apos;s full Facebook feed, likes, comments, or insights.
+                                        We use this permission to create and publish posts on your connected Facebook Page only when you explicitly take action in our app (for example, when you write a post and tap &quot;Publish&quot;). We do not post to your page without your permission. Every post is published only after you confirm it. You remain in full control of what is published. We list in our app only posts created through BIU; we do not read your Page&apos;s full Facebook feed, likes, comments, or insights.
                                     </p>
                                 </div>
                             </div>

@@ -8,6 +8,12 @@ use App\Models\UserLivestream;
 final class StreamingWorkerSourceUrl
 {
     /**
+     * Same MediaMTX NLB as STREAMING_BRIDGE_HOST=stream.believeinunity.org.
+     * Used when the production CNAME is missing so browser WHIP does not fail NXDOMAIN.
+     */
+    private const BRIDGE_HOST_DNS_FALLBACK = 'stream.501c3ers.com';
+
+    /**
      * Return an FFmpeg-safe source URL for the cloud worker.
      */
     public static function resolve(UserLivestream|OrganizationLivestream $livestream): string
@@ -75,8 +81,46 @@ final class StreamingWorkerSourceUrl
         }
 
         $host = preg_replace('#^https?://#i', '', $host);
+        $host = rtrim((string) $host, '/');
 
-        return rtrim($host, '/');
+        return self::withReachableBridgeHostname($host);
+    }
+
+    /**
+     * If the configured bridge hostname does not resolve (e.g. stream.believeinunity.org
+     * CNAME deleted in Cloudflare), fall back to stream.501c3ers.com — same AWS NLB.
+     * Prevents VDO.Ninja "WHIP out failed" when DNS is NXDOMAIN.
+     */
+    private static function withReachableBridgeHostname(string $hostPort): string
+    {
+        $hostname = $hostPort;
+        $portSuffix = '';
+        if (preg_match('/^(.+):(\d+)$/', $hostPort, $m) === 1) {
+            $hostname = $m[1];
+            $portSuffix = ':'.$m[2];
+        }
+
+        if (self::hostnameResolves($hostname)) {
+            return $hostPort;
+        }
+
+        $fallback = self::BRIDGE_HOST_DNS_FALLBACK;
+        if (strcasecmp($hostname, $fallback) === 0 || self::hostnameResolves($fallback)) {
+            return $fallback.$portSuffix;
+        }
+
+        return $hostPort;
+    }
+
+    private static function hostnameResolves(string $hostname): bool
+    {
+        if ($hostname === '' || filter_var($hostname, FILTER_VALIDATE_IP)) {
+            return true;
+        }
+
+        $resolved = gethostbyname($hostname);
+
+        return $resolved !== $hostname && filter_var($resolved, FILTER_VALIDATE_IP) !== false;
     }
 
     public static function hasBridgeConfigured(): bool
@@ -144,11 +188,29 @@ final class StreamingWorkerSourceUrl
     private static function workerRtmpPullBase(): string
     {
         $explicit = (string) config('streaming.worker_rtmp_pull_base', '');
-        if ($explicit !== '') {
-            return $explicit;
+        if ($explicit === '') {
+            $explicit = (string) config('services.mediamtx.rtmp_public', '');
+        }
+        if ($explicit === '') {
+            return '';
         }
 
-        return (string) config('services.mediamtx.rtmp_public', '');
+        return self::withReachableBridgeHostnameInUrl($explicit);
+    }
+
+    /**
+     * Rewrite rtmp(s)://stream.believeinunity.org/… → stream.501c3ers.com when DNS is dead.
+     */
+    private static function withReachableBridgeHostnameInUrl(string $url): string
+    {
+        // Use ~ delimiter so `#` in the host class is literal (MediaMTX path segments use `#` rarely; ports use `:`).
+        if (preg_match('~^(rtmps?://)([^/?#:]+)(.*)$~i', $url, $m) !== 1) {
+            return $url;
+        }
+
+        $reachable = self::withReachableBridgeHostname($m[2]);
+
+        return $m[1].$reachable.$m[3];
     }
 
     private static function applyTemplate(string $template, UserLivestream|OrganizationLivestream $livestream): string

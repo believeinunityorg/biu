@@ -34,7 +34,6 @@ class AuthService
     {
         $scopes = [
             'pages_show_list',
-            'pages_read_engagement',
             'pages_manage_posts',
         ];
 
@@ -184,7 +183,6 @@ class AuthService
             'state' => $state,
             'scope' => implode(',', [
                 'pages_show_list',
-                'pages_read_engagement',
                 'pages_manage_posts',
             ]),
             'response_type' => 'code',

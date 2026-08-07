@@ -52,7 +52,7 @@ class EnsureSupporterProfileComplete
         }
 
         if (SupporterProfileCompletionService::needsOnboarding($user)) {
-            if ($this->isOnboardingRoute($request)) {
+            if ($this->isOnboardingRoute($request) || $this->isFamilyClaimRoute($request)) {
                 return null;
             }
 
@@ -60,7 +60,7 @@ class EnsureSupporterProfileComplete
         }
 
         if (! SupporterProfileCompletionService::hasRequiredEditFields($user)) {
-            if ($this->isProfileEditRoute($request)) {
+            if ($this->isProfileEditRoute($request) || $this->isFamilyClaimRoute($request)) {
                 return null;
             }
 
@@ -68,6 +68,17 @@ class EnsureSupporterProfileComplete
         }
 
         return null;
+    }
+
+    private function isFamilyClaimRoute(Request $request): bool
+    {
+        $routeName = $request->route()?->getName();
+
+        if (in_array($routeName, ['family.claim.show', 'family.claim.store'], true)) {
+            return true;
+        }
+
+        return $request->is('family/claim', 'family/claim/*');
     }
 
     private function buildRedirect(Request $request, string $url, string $message): Response

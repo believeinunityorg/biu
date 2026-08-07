@@ -298,10 +298,9 @@ class FamilyReunionService
 
         $claimed = [];
         foreach ($members as $member) {
+            // Soft-link only. Leave status/token alone so the invitee can still
+            // open /family/claim/{token} and submit branch/relationship details.
             $member->user_id = $user->id;
-            $member->status = FamilyMemberStatus::Active;
-            $member->claimed_at = now();
-            $member->invite_token = null;
             if (! $member->full_name) {
                 $member->full_name = $user->name;
             }
@@ -634,11 +633,11 @@ class FamilyReunionService
             $this->audit($organization, $member, 'invited', null, $email, $actor);
         }
 
+        // Soft-link an existing account so the directory can show them as invited,
+        // but keep invite_token so they still complete the family claim form.
         $existingUser = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
         if ($existingUser && ! $member->user_id) {
             $member->user_id = $existingUser->id;
-            $member->status = FamilyMemberStatus::Active;
-            $member->claimed_at = now();
             $member->save();
         }
 
@@ -771,13 +770,21 @@ class FamilyReunionService
     public function acceptInvite(FamilyMember $member, User $user, array $data = []): FamilyMember
     {
         return DB::transaction(function () use ($member, $user, $data) {
-            if ($member->email && strtolower($member->email) !== strtolower($user->email)) {
-                abort(403, 'This invite was sent to a different email address.');
+            if ($member->email && strtolower((string) $member->email) !== strtolower((string) $user->email)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'email' => 'This invite was sent to '.$member->email.'. Sign in with that email to join.',
+                ]);
+            }
+
+            if ($member->user_id && (int) $member->user_id !== (int) $user->id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'email' => 'This family invite has already been claimed by another account.',
+                ]);
             }
 
             $member->user_id = $user->id;
             $member->status = FamilyMemberStatus::Active;
-            $member->claimed_at = now();
+            $member->claimed_at = $member->claimed_at ?? now();
             $member->invite_token = null;
 
             if (! empty($data['full_name'])) {
@@ -790,10 +797,10 @@ class FamilyReunionService
                 $member->branch_id = $data['branch_id'];
             }
             if (array_key_exists('father_id', $data)) {
-                $member->father_id = $data['father_id'];
+                $member->father_id = $data['father_id'] ?: null;
             }
             if (array_key_exists('mother_id', $data)) {
-                $member->mother_id = $data['mother_id'];
+                $member->mother_id = $data['mother_id'] ?: null;
             }
             if (! empty($data['relationship_label'])) {
                 $member->relationship_label = $data['relationship_label'];

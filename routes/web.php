@@ -2660,7 +2660,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
 Route::get('/family/claim/{token}', [\App\Http\Controllers\FamilyReunion\ClaimInviteController::class, 'show'])
     ->name('family.claim.show');
 Route::post('/family/claim/{token}', [\App\Http\Controllers\FamilyReunion\ClaimInviteController::class, 'store'])
-    ->middleware(['auth', 'EnsureEmailIsVerified'])
+    ->middleware(['auth'])
     ->name('family.claim.store');
 Route::get('/community/contents/{content:slug}', [CommunityContentController::class, 'show'])->name('community.contents.show');
 Route::get('/community/{parentType}/{parentId}', [CommunityParentController::class, 'show'])

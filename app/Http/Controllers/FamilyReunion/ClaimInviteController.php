@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\FamilyReunion;
 
 use App\Http\Controllers\Controller;
+use App\Http\Helpers\AuthRedirectHelper;
 use App\Models\FamilyBranch;
 use App\Models\FamilyMember;
+use App\Models\User;
 use App\Services\FamilyReunion\FamilyReunionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,10 +28,26 @@ class ClaimInviteController extends Controller
         }
 
         if (! Auth::check()) {
-            return redirect()->guest(route('register', [
+            $inviteEmail = strtolower(trim((string) $member->email));
+            $existingUser = $inviteEmail !== ''
+                && User::query()->whereRaw('LOWER(email) = ?', [$inviteEmail])->exists();
+
+            if ($existingUser) {
+                return redirect()->guest(route('login', [
+                    'redirect' => url('/family/claim/'.$token),
+                    'email' => $member->email,
+                ]));
+            }
+
+            // Guest → supporter registration (not the account-type chooser), with email prefilled.
+            return redirect()->guest(route('register.user', [
                 'email' => $member->email,
-            ]))->with('url.intended', url('/family/claim/'.$token));
+            ]));
         }
+
+        $user = $request->user();
+        $emailMismatch = $member->email
+            && strtolower((string) $member->email) !== strtolower((string) $user->email);
 
         $organization = $member->organization;
         $parents = FamilyMember::query()
@@ -66,6 +84,8 @@ class ClaimInviteController extends Controller
                 ->orderBy('sort_order')
                 ->get(['id', 'name']),
             'parents' => $parents,
+            'emailMismatch' => $emailMismatch,
+            'signedInEmail' => $user->email,
         ]);
     }
 
@@ -91,6 +111,8 @@ class ClaimInviteController extends Controller
 
         foreach (['branch_id', 'father_id', 'mother_id'] as $key) {
             if (empty($validated[$key])) {
+                $validated[$key] = null;
+
                 continue;
             }
             $id = (int) $validated[$key];
@@ -98,13 +120,14 @@ class ClaimInviteController extends Controller
                 ? FamilyBranch::query()->where('organization_id', $member->organization_id)->where('id', $id)->exists()
                 : FamilyMember::query()->where('organization_id', $member->organization_id)->where('id', $id)->exists();
             if (! $ok) {
-                abort(422, 'Invalid '.$key);
+                return back()->withErrors([$key => 'Invalid selection for this family.'])->withInput();
             }
         }
 
         $this->familyReunion->acceptInvite($member, $user, $validated);
 
-        return redirect('/')
+        return redirect()
+            ->to(AuthRedirectHelper::defaultRedirectForUser($user))
             ->with('success', 'Welcome to the family. Your profile has been linked.');
     }
 }

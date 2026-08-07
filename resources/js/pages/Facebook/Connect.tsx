@@ -184,7 +184,7 @@ export default function Connect({
                                     <div>
                                         <h4 className="font-medium">Publish posts (pages_manage_posts)</h4>
                                         <p className="text-sm text-muted-foreground">
-                                            Create, schedule, and publish posts from BIU when you choose
+                                            Create and publish posts from BIU when you choose
                                         </p>
                                     </div>
                                 </div>
@@ -198,7 +198,7 @@ export default function Connect({
                                         <strong>pages_show_list</strong> — list Pages you manage so you can choose which to connect.
                                     </p>
                                     <p>
-                                        <strong>pages_manage_posts</strong> — publish or schedule posts only when you click Publish in our app. Posts created in BIU are listed in our app; we do not read your Page&apos;s full Facebook feed.
+                                        <strong>pages_manage_posts</strong> — Publish posts only when you click Publish in our app. Posts created in BIU are listed in our app; we do not read your Page&apos;s full Facebook feed.
                                     </p>
                                     <p>
                                         <a href={privacyPolicyUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium">
@@ -442,7 +442,7 @@ export default function Connect({
                                     </div>
                                     <h4 className="font-bold mb-2">Create Posts</h4>
                                     <p className="text-sm text-muted-foreground">
-                                        Create and schedule posts to your connected pages
+                                        Create and publish posts to your connected pages
                                     </p>
                                     <Link href="/facebook/posts/create">
                                         <Button variant="link" className="p-0 h-auto mt-2">
@@ -457,7 +457,7 @@ export default function Connect({
                                     </div>
                                     <h4 className="font-bold mb-2">View Posts</h4>
                                     <p className="text-sm text-muted-foreground">
-                                        See all your scheduled and published posts
+                                        See all your published posts
                                     </p>
                                     <Link href="/facebook/posts">
                                         <Button variant="link" className="p-0 h-auto mt-2">

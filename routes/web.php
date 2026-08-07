@@ -1651,7 +1651,6 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|care_alli
         Route::get('/callback', [AuthController::class, 'callback'])->name('facebook.callback');
         Route::get('/select-pages', [AuthController::class, 'selectPages'])->name('facebook.select-pages');
         Route::post('/select-pages', [AuthController::class, 'storeSelectedPages'])->name('facebook.select-pages.store');
-        Route::get('/{id}/content', [AuthController::class, 'pageContent'])->name('facebook.content');
         Route::post('/{id}/disconnect', [AuthController::class, 'disconnect'])->name('facebook.disconnect');
         Route::post('/{id}/refresh', [AuthController::class, 'refresh'])->name('facebook.refresh');
         Route::post('/{id}/set-default', [AuthController::class, 'setDefault'])->name('facebook.set-default');
@@ -2660,7 +2659,7 @@ Route::middleware(['auth', 'EnsureEmailIsVerified', 'role:organization|organizat
 Route::get('/family/claim/{token}', [\App\Http\Controllers\FamilyReunion\ClaimInviteController::class, 'show'])
     ->name('family.claim.show');
 Route::post('/family/claim/{token}', [\App\Http\Controllers\FamilyReunion\ClaimInviteController::class, 'store'])
-    ->middleware(['auth', 'EnsureEmailIsVerified'])
+    ->middleware(['auth'])
     ->name('family.claim.store');
 Route::get('/community/contents/{content:slug}', [CommunityContentController::class, 'show'])->name('community.contents.show');
 Route::get('/community/{parentType}/{parentId}', [CommunityParentController::class, 'show'])

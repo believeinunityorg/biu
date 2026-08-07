@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Facebook;
 
 use App\Http\Controllers\Controller;
 use App\Models\FacebookAccount;
-use App\Services\Facebook\PageContentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -373,28 +372,6 @@ class AuthController extends Controller
 
             return redirect()->route('facebook.select-pages')
                 ->with('error', 'Failed to save selected pages: '.$e->getMessage());
-        }
-    }
-
-    /**
-     * Recent Page posts/content (pages_read_engagement) — content only, no likes/views.
-     */
-    public function pageContent(Request $request, int $id, PageContentService $pageContentService)
-    {
-        $account = FacebookAccount::where('id', $id)
-            ->where('user_id', $request->user()->id)
-            ->firstOrFail();
-
-        try {
-            return response()->json([
-                'success' => true,
-                'data' => $pageContentService->getRecentPagePosts($account),
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
         }
     }
 

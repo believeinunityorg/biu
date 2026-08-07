@@ -158,8 +158,7 @@ const PrivacyPolicy = () => {
                                     <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-300 text-sm">
                                         <li>Identifiers and names of Facebook Pages you manage (so you can choose which Page to connect)</li>
                                         <li>Page access tokens and related OAuth / connection metadata</li>
-                                        <li>Content and scheduling details for posts you create or schedule through our app</li>
-                                        <li>Engagement metrics for connected Pages (for example likes, comments, and shares) to show insights in the app</li>
+                                        <li>Content and scheduling details for posts you create or schedule through our app (stored in our database so you can manage those posts in BIU)</li>
                                     </ul>
                                     <p className="text-gray-600 dark:text-gray-300 text-sm mt-3">
                                         We use this data only to provide Facebook Page features inside Believe In Unity. We do not
@@ -180,18 +179,10 @@ const PrivacyPolicy = () => {
                                 </div>
                                 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                                     <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                                        Reading Page content (pages_read_engagement)
-                                    </h3>
-                                    <p className="text-gray-600 dark:text-gray-300 text-sm">
-                                        We use this permission to read content published by Pages you have connected (such as posts, photos, videos, and related metadata) so you can administer and manage that Page inside our app. We do not use this permission to collect or display likes, reactions, comment counts, or view/reach analytics.
-                                    </p>
-                                </div>
-                                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
                                         Managing posts (pages_manage_posts)
                                     </h3>
                                     <p className="text-gray-600 dark:text-gray-300 text-sm">
-                                        We use this permission to create and schedule posts on your connected Facebook Page only when you explicitly take action in our app (for example, when you write a post and tap &quot;Publish&quot; or &quot;Schedule&quot;). We do not post to your page without your permission. Every post is created or scheduled only after you confirm it. You remain in full control of what is published and when.
+                                        We use this permission to create and schedule posts on your connected Facebook Page only when you explicitly take action in our app (for example, when you write a post and tap &quot;Publish&quot; or &quot;Schedule&quot;). We do not post to your page without your permission. Every post is created or scheduled only after you confirm it. You remain in full control of what is published and when. We list in our app only posts created through BIU; we do not read your Page&apos;s full Facebook feed, likes, comments, or insights.
                                     </p>
                                 </div>
                             </div>
@@ -201,7 +192,7 @@ const PrivacyPolicy = () => {
                                 <a href="/facebook/connect" className="text-blue-600 hover:underline dark:text-blue-400">
                                     /facebook/connect
                                 </a>
-                                ). After disconnection, we stop accessing that page and do not post or read Page content on your behalf.
+                                ). After disconnection, we stop accessing that page and do not post on your behalf.
                                 You can also remove our app&apos;s access in Facebook: Settings → Apps and Websites. For full deletion
                                 steps, see our{" "}
                                 <a href="/data-deletion" className="text-blue-600 hover:underline dark:text-blue-400">

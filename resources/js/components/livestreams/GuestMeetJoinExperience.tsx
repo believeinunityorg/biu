@@ -226,7 +226,7 @@ function JoinCard({
           Join now
         </Button>
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          You can turn your camera and microphone on or off after joining.
+          You can use a camera, a microphone, or both — turn either on or off after joining.
         </p>
       </div>
     </>

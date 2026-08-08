@@ -1396,7 +1396,7 @@ export default function SupporterShowLivestream({
                         {isEndingMeeting
                           ? "Closing the video room and saving your session."
                           : canStartMeeting
-                            ? "Start the meeting to connect your camera and microphone. The video room stays closed until you begin."
+                            ? "Start the meeting to connect your camera or microphone — either one is enough. The video room stays closed until you begin."
                             : "This session has ended. Start a new meeting when you are ready to go live again."}
                       </p>
                     </div>

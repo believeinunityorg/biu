@@ -34,24 +34,13 @@ const PERMISSIONS = [
     {
       id: 'pages_manage_posts',
       title: 'Manage Page Posts',
-      description: 'Create, edit, and delete posts on your Facebook Page',
-      detailedDescription: 'This permission allows us to create posts on your behalf, schedule them for specific times, edit existing posts if needed, and remove posts when requested. We use this only when you explicitly schedule or publish a post through our platform.',
+      description: 'Create and publish posts on your Facebook Page',
+      detailedDescription: 'This permission allows us to create and publish posts on your behalf when you choose. We use this only when you explicitly click Publish in our app. You can view those BIU-created posts in our app; we do not read your full Facebook Page feed.',
       icon: <MessageSquare className="h-5 w-5" />,
       required: true,
       color: 'text-blue-500 dark:text-blue-400',
       bgColor: 'bg-blue-100 dark:bg-blue-900/30',
       borderColor: 'border-blue-200 dark:border-blue-800',
-    },
-    {
-      id: 'pages_read_engagement',
-      title: 'Read Page Content',
-      description: 'Read posts and content published by your Facebook Page',
-      detailedDescription: 'We use this to read content your Page has published (posts, photos, videos, and related metadata) so you can manage that content inside our app. We do not use this permission to show likes, reactions, comment counts, or view analytics.',
-      icon: <FileText className="h-5 w-5" />,
-      required: true,
-      color: 'text-green-500 dark:text-green-400',
-      bgColor: 'bg-green-100 dark:bg-green-900/30',
-      borderColor: 'border-green-200 dark:border-green-800',
     },
     {
       id: 'pages_show_list',
@@ -172,9 +161,8 @@ export default function FacebookPermissionModal({
                   Why we need these permissions?
                 </p>
                 <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                  These permissions allow our app to schedule and publish posts to your
-                  Facebook Page, view analytics, and help you manage your social media
-                  presence effectively.
+                  These permissions allow our app to list Pages you manage and to
+                  publish posts to your Facebook Page when you choose.
                 </p>
               </div>
             </div>

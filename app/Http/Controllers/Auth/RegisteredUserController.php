@@ -116,6 +116,15 @@ class RegisteredUserController extends Controller
             ]);
         }
 
+        // Family reunion invite: finish the claim form before profile/onboarding gates.
+        $intended = $request->session()->pull('url.intended');
+        if (is_string($intended) && str_contains($intended, '/family/claim/')) {
+            $host = parse_url($intended, PHP_URL_HOST);
+            if (! $host || $host === $request->getHost()) {
+                return redirect()->to($intended);
+            }
+        }
+
         // Supporter: complete profile first
         return redirect()->route('user.profile.edit');
     }

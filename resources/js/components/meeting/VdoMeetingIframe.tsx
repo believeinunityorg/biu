@@ -37,51 +37,93 @@ function normalizeMeetingSrc(url: string): string {
   }
 }
 
-async function queryMediaPermissionState(audioOnly = false): Promise<"granted" | "prompt" | "denied" | "unknown"> {
+type PermissionProbe = "granted" | "prompt" | "denied" | "unknown"
+
+async function querySinglePermission(name: "camera" | "microphone"): Promise<PermissionProbe> {
   if (typeof navigator === "undefined" || !navigator.permissions?.query) {
     return "unknown"
   }
 
   try {
-    const microphone = await navigator.permissions.query({ name: "microphone" as PermissionName })
-    if (audioOnly) {
-      if (microphone.state === "denied") {
-        return "denied"
-      }
-      if (microphone.state === "granted") {
-        return "granted"
-      }
-      return "prompt"
+    const result = await navigator.permissions.query({ name: name as PermissionName })
+    if (result.state === "granted" || result.state === "denied" || result.state === "prompt") {
+      return result.state
     }
-
-    const camera = await navigator.permissions.query({ name: "camera" as PermissionName })
-
-    if (camera.state === "denied" || microphone.state === "denied") {
-      return "denied"
-    }
-    if (camera.state === "granted" && microphone.state === "granted") {
-      return "granted"
-    }
-    return "prompt"
+    return "unknown"
   } catch {
     return "unknown"
   }
 }
 
-async function requestCameraAndMicrophone(audioOnly = false): Promise<boolean> {
+/**
+ * Unity Meet: camera and mic are independent — either is enough to enter.
+ * Audio-only calls still require the microphone.
+ */
+async function queryMediaPermissionState(audioOnly = false): Promise<PermissionProbe> {
+  const microphone = await querySinglePermission("microphone")
+
+  if (audioOnly) {
+    if (microphone === "denied") {
+      return "denied"
+    }
+    if (microphone === "granted") {
+      return "granted"
+    }
+    return microphone === "unknown" ? "unknown" : "prompt"
+  }
+
+  const camera = await querySinglePermission("camera")
+
+  // Block the meeting only when both devices are hard-denied.
+  if (camera === "denied" && microphone === "denied") {
+    return "denied"
+  }
+
+  // Join with whichever device is already allowed; VDO can prompt for the other.
+  if (camera === "granted" || microphone === "granted") {
+    return "granted"
+  }
+
+  if (camera === "unknown" && microphone === "unknown") {
+    return "unknown"
+  }
+
+  return "prompt"
+}
+
+async function tryGetUserMedia(constraints: MediaStreamConstraints): Promise<boolean> {
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
     return false
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(
-      audioOnly ? { audio: true } : { video: true, audio: true },
-    )
+    const stream = await navigator.mediaDevices.getUserMedia(constraints)
     stream.getTracks().forEach((track) => track.stop())
     return true
   } catch {
     return false
   }
+}
+
+/**
+ * Request AV independently so a missing/denied camera does not block mic (and vice versa).
+ */
+async function requestMeetingMedia(audioOnly = false): Promise<boolean> {
+  if (audioOnly) {
+    return tryGetUserMedia({ audio: true })
+  }
+
+  // Prefer a single browser prompt when both can be granted together.
+  if (await tryGetUserMedia({ video: true, audio: true })) {
+    return true
+  }
+
+  // Fall back independently — missing/denied camera must not block mic (and vice versa).
+  if (await tryGetUserMedia({ audio: true })) {
+    return true
+  }
+
+  return tryGetUserMedia({ video: true })
 }
 
 function closeVdoSession(frameWindow: Window | null | undefined): void {
@@ -253,7 +295,7 @@ export default function VdoMeetingIframe({
 
   const handleAllowAccess = useCallback(async () => {
     setIsRequestingAccess(true)
-    const allowed = await requestCameraAndMicrophone(audioOnly)
+    const allowed = await requestMeetingMedia(audioOnly)
     setIsRequestingAccess(false)
 
     if (allowed) {
@@ -302,7 +344,7 @@ export default function VdoMeetingIframe({
                 {isRequestingAccess
                   ? audioOnly
                     ? "Waiting for microphone access…"
-                    : "Waiting for camera and microphone access…"
+                    : "Waiting for camera or microphone access…"
                   : "Checking access…"}
               </p>
             </>
@@ -314,12 +356,12 @@ export default function VdoMeetingIframe({
               </div>
               <div className="space-y-2 max-w-sm">
                 <p className="text-base font-semibold text-white">
-                  {audioOnly ? "Microphone required" : "Camera & microphone required"}
+                  {audioOnly ? "Microphone required" : "Camera or microphone"}
                 </p>
                 <p className="text-sm text-white/70">
                   {audioOnly
                     ? "Allow microphone access to join the audio call."
-                    : "Allow access to join the meeting. The room will not load until permission is granted."}
+                    : "Allow access to at least one device to join. You can use audio without a camera, or video without a mic."}
                 </p>
               </div>
               <Button
@@ -328,7 +370,7 @@ export default function VdoMeetingIframe({
                 className="bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700"
               >
                 {!audioOnly ? <Video className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
-                {audioOnly ? "Allow microphone" : "Allow camera & microphone"}
+                {audioOnly ? "Allow microphone" : "Allow camera or microphone"}
               </Button>
             </>
           ) : mediaAccess === "denied" ? (
@@ -339,7 +381,7 @@ export default function VdoMeetingIframe({
                 <p className="text-sm text-white/70">
                   {audioOnly
                     ? "Enable microphone for this site in your browser settings, then try again."
-                    : "Enable camera and microphone for this site in your browser settings, then try again."}
+                    : "Enable at least a camera or microphone for this site in your browser settings, then try again."}
                 </p>
               </div>
               <Button type="button" variant="outline" className="border-white/20 text-white hover:bg-white/10" onClick={handleRetryPermission}>
@@ -357,7 +399,7 @@ export default function VdoMeetingIframe({
               <Loader2 className="h-10 w-10 animate-spin text-purple-400" aria-hidden />
               <p className="text-sm font-medium text-white/90">Connecting to meeting…</p>
               <p className="text-xs text-white/60 max-w-xs">
-                If your browser asks to use your camera or microphone for this meeting, choose Allow.
+                If your browser asks for camera or microphone access, choose Allow for the devices you want to use.
               </p>
             </>
           )}
